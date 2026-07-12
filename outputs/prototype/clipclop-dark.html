@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clip-Clop — Dark Prototype</title>
+<style>
+  :root {
+    --bg-shell: #17181A;
+    --bg-raised: #1E2022;
+    --bg-hover: #242628;
+    --bg-selected: #2A2D30;
+    --hairline: #2C2F32;
+    --text-1: #ECEDEE;
+    --text-2: #9BA1A6;
+    --text-3: #6B7075;
+    --accent: #33363A;
+    --accent-on: #ECEDEE;
+    --accent-hover: #3D4045;
+    --mono: "SF Mono", "JetBrains Mono", "Cascadia Mono", ui-monospace, Menlo, monospace;
+    --ui: -apple-system, "SF Pro", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--ui);
+    background:
+      radial-gradient(120% 120% at 30% 20%, #3a4048 0%, #23262b 45%, #14161a 100%);
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 40px;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* faux blurred desktop texture */
+  body::before {
+    content: ""; position: fixed; inset: 0;
+    background:
+      radial-gradient(40% 30% at 70% 75%, rgba(120,140,170,.25), transparent),
+      radial-gradient(30% 25% at 20% 80%, rgba(90,110,140,.2), transparent);
+    filter: blur(40px); z-index: 0;
+  }
+  .panel {
+    position: relative; z-index: 1;
+    width: 720px; height: 540px;
+    background: var(--bg-shell);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.05);
+    box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: 1fr 48px;
+    overflow: hidden;
+  }
+  /* LEFT COLUMN */
+  .left { border-right: 1px solid var(--hairline); display: flex; flex-direction: column; min-height: 0; }
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--hairline);
+    color: var(--text-3); font-size: 13px;
+  }
+  .search svg { width: 15px; height: 15px; stroke: var(--text-3); }
+  .search .hint { margin-left: auto; font-size: 11px; color: var(--text-3);
+    border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; }
+  .list { flex: 1; padding: 6px; display: flex; flex-direction: column; gap: 1px; min-height: 0; }
+  .row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 8px; border-radius: 8px; cursor: pointer;
+    min-height: 40px;
+  }
+  .row:hover { background: var(--bg-hover); }
+  .row.sel { background: var(--bg-selected); }
+  .row .num { width: 14px; text-align: center; font-family: var(--mono);
+    font-size: 11px; color: var(--text-3); flex: none; }
+  .row.sel .num { color: var(--text-2); }
+  .lead { width: 26px; height: 26px; flex: none; display: flex;
+    align-items: center; justify-content: center; }
+  .snippet { flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px;
+    line-height: 1.5; color: var(--text-1);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row.sel .snippet { color: #fff; }
+  .meta { font-size: 11px; color: var(--text-3); flex: none; }
+  /* lead-slot content types */
+  .sw { width: 20px; height: 20px; border-radius: 5px; border: 1px solid rgba(255,255,255,.12); }
+  .thumb { width: 26px; height: 26px; border-radius: 5px; object-fit: cover;
+    background: #333; display: block; }
+  .ficon { width: 22px; height: 26px; border-radius: 3px; background: #303338;
+    border: 1px solid var(--hairline); position: relative; }
+  .ficon::after { content: attr(data-ext); position: absolute; bottom: 3px; left: 0; right: 0;
+    text-align: center; font-family: var(--mono); font-size: 7px; font-weight: 700;
+    color: var(--text-2); letter-spacing: .3px; }
+  .fav { width: 16px; height: 16px; border-radius: 4px; }
+  /* RIGHT COLUMN */
+  .preview { display: flex; flex-direction: column; min-height: 0; }
+  .pv-body { flex: 1; padding: 20px; overflow: auto; display: flex;
+    flex-direction: column; gap: 12px; min-height: 0; }
+  .pv-body .code { font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    color: var(--text-1); white-space: pre-wrap; word-break: break-word; }
+  .pv-body img.big { max-width: 100%; max-height: 260px; border-radius: 8px;
+    border: 1px solid var(--hairline); object-fit: contain; align-self: flex-start; }
+  .pv-swatch { display: flex; align-items: center; gap: 12px; }
+  .pv-swatch .big-sw { width: 72px; height: 72px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.14); }
+  .pv-file { display: flex; align-items: center; gap: 12px; }
+  .pv-meta { flex: none; padding: 12px 20px; border-top: 1px solid var(--hairline);
+    font-family: var(--mono); font-size: 11px; color: var(--text-3);
+    min-height: 40px; display: flex; align-items: center; }
+  /* STATUS BAR (two cells split by the full-height divider) */
+  .status-l { border-top: 1px solid var(--hairline); border-right: 1px solid var(--hairline);
+    display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+  .status-l .arw { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text-2);
+    border: 1px solid var(--hairline); border-radius: 4px; padding: 2px 7px; cursor: pointer; }
+  .status-l .arw:hover { color: var(--text-1); border-color: var(--text-2); background: var(--bg-hover); }
+  .status-l .arw.off { color: #4a4e52; border-color: #26282b; cursor: default; background: none; }
+  .status-l .pos { color: var(--text-2); font-weight: 500; letter-spacing: .02em; }
+  .footer { border-top: 1px solid var(--hairline);
+    display: flex; align-items: center; justify-content: flex-end; gap: 16px;
+    padding: 0 16px; }
+  .btn-copy { background: var(--accent); color: var(--accent-on);
+    font-size: 12px; font-weight: 600; padding: 7px 15px; border-radius: 6px;
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.08); }
+  .btn-copy:hover { background: var(--accent-hover); }
+  .actions { font-size: 12px; font-weight: 500; color: var(--text-2); display: flex;
+    align-items: center; gap: 7px; }
+  .kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--hairline);
+    border-radius: 4px; padding: 2px 6px; color: var(--text-2); }
+  .empty { flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; color: var(--text-3); font-size: 13px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <div class="left">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+        <span id="searchText">Search your clipboard…</span>
+        <span class="hint">/</span>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="preview">
+      <div class="pv-body" id="pvBody"></div>
+      <div class="pv-meta" id="pvMeta"></div>
+    </div>
+    <div class="status-l" id="pager">
+      <span class="arw off">←</span><span class="pos">1 / 1</span><span class="arw off">→</span>
+    </div>
+    <div class="footer">
+      <div class="actions"><span class="kbd">⌘K</span> Actions</div>
+      <div class="btn-copy"><span class="kbd" style="border-color:rgba(255,255,255,.15)">⏎</span> Copy</div>
+    </div>
+  </div>
+<script>
+const IMG1 = "data:image/svg+xml;utf8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#2b6cb0"/><circle cx="26" cy="26" r="14" fill="#f6e05e"/><path d="M0 80 L34 40 L52 60 L66 46 L80 62 L80 80 Z" fill="#38a169"/></svg>');
+const FAV_GH = "data:image/svg+xml;utf8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" rx="4" fill="#24292e"/><circle cx="8" cy="8" r="4" fill="#fff"/></svg>');
+
+// Embedded copy of mock-data.json (browsers block fetch() of local JSON over file://).
+// Shape == canonical ItemDTO. blob/thumb refs shown via inline SVG placeholders.
+const ITEMS = [
+  {content_type:'text', preview:'git commit -m "fix auth token refresh race"', value:'git commit -m "fix auth token refresh race"', char_count:42, source_app:{name:'Terminal'}, rel:'3m'},
+  {content_type:'link', preview:'https://github.com/p0deje/Maccy/blob/master/README.md', value:'https://github.com/p0deje/Maccy/blob/master/README.md', char_count:54, fav:FAV_GH, link_meta:{host:'github.com'}, source_app:{name:'Safari'}, rel:'8m'},
+  {content_type:'color', preview:'#4C9A2A', value:'#4C9A2A', color_meta:{r:76,g:154,b:42}, source_app:{name:'Figma'}, rel:'22m'},
+  {content_type:'code', preview:'const debounce = (fn, ms) => { let t; return (...a) => {…', value:'const debounce = (fn, ms) => {\n  let t;\n  return (...a) => {\n    clearTimeout(t);\n    t = setTimeout(() => fn(...a), ms);\n  };\n};', char_count:113, source_app:{name:'VS Code'}, rel:'1h'},
+  {content_type:'image', preview:'screenshot 2026-07-10.png', img:IMG1, image_meta:{width:1440,height:900,bytes:284160}, source_app:{name:'CleanShot'}, rel:'2h'},
+  {content_type:'file', preview:'quarterly-report.pdf', files:[{name:'quarterly-report.pdf', ext:'PDF', path:'/Users/dev/Documents/quarterly-report.pdf', bytes:1048576, dangling:false}], source_app:{name:'Finder'}, rel:'3h'},
+  {content_type:'file', preview:'3 files — design-tokens.json, hero@2x.png, notes.md', files:[
+    {name:'design-tokens.json', ext:'JSON', path:'/Users/dev/proj/design-tokens.json', bytes:8192, dangling:false},
+    {name:'hero@2x.png', ext:'PNG', path:'/Users/dev/proj/assets/hero@2x.png', bytes:512000, dangling:false},
+    {name:'notes.md', ext:'MD', path:'/Users/dev/proj/notes.md', bytes:2048, dangling:true}], source_app:{name:'Finder'}, rel:'4h'},
+];
+const DATA = ITEMS; // alias for existing code paths
+
+let sel = 0;
+const listEl = document.getElementById('list');
+const numLabel = i => (i === 9 ? '0' : String(i + 1));
+
+function leadHTML(d) {
+  if (d.content_type === 'color') return `<span class="lead"><span class="sw" style="background:${d.value}"></span></span>`;
+  if (d.content_type === 'image') return `<span class="lead"><img class="thumb" src="${d.img}"></span>`;
+  if (d.content_type === 'file')  return `<span class="lead"><span class="ficon" data-ext="${d.files[0].ext}"></span></span>`;
+  if (d.content_type === 'link')  return `<span class="lead"><img class="fav" src="${d.fav}"></span>`;
+  return `<span class="lead"></span>`; // text / code — empty, aligned
+}
+
+function renderList() {
+  listEl.innerHTML = '';
+  DATA.forEach((d, i) => {
+    const row = document.createElement('div');
+    row.className = 'row' + (i === sel ? ' sel' : '');
+    row.innerHTML =
+      `<span class="num">${numLabel(i)}</span>` +
+      leadHTML(d) +
+      `<span class="snippet">${escapeHtml(d.preview)}</span>` +
+      `<span class="meta">${d.rel}</span>`;
+    row.onclick = () => { sel = i; renderList(); renderPreview(); };
+    listEl.appendChild(row);
+  });
+}
+
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+const typeLabel = {text:'Text', code:'Code', link:'Link', color:'Color', image:'Image', file:'File'};
+
+const fmtBytes = b => b >= 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.round(b/1024)+' KB';
+
+function renderPreview() {
+  const d = DATA[sel];
+  const body = document.getElementById('pvBody');
+  const meta = document.getElementById('pvMeta');
+  let html = '';
+  if (d.content_type === 'image') {
+    html = `<img class="big" src="${d.img}">`;
+  } else if (d.content_type === 'color') {
+    html = `<div class="pv-swatch"><span class="big-sw" style="background:${d.value}"></span>` +
+           `<span class="code">${d.value}</span></div>`;
+  } else if (d.content_type === 'file') {
+    html = d.files.map(f =>
+      `<div class="pv-file"><span class="ficon" data-ext="${f.ext}" style="width:44px;height:52px"></span>` +
+      `<div><div class="code">${escapeHtml(f.name)}${f.dangling?' <span style="color:#c96;">· 源已丢失</span>':''}</div>` +
+      `<div style="color:var(--text-3);font-family:var(--mono);font-size:11px;margin-top:4px">${escapeHtml(f.path)} · ${fmtBytes(f.bytes)}</div></div></div>`
+    ).join('');
+  } else {
+    html = `<div class="code">${escapeHtml(d.value)}</div>`;
+  }
+  body.innerHTML = html;
+  const bits = [typeLabel[d.content_type]];
+  if (d.char_count) bits.push(d.char_count + ' chars');
+  if (d.image_meta) bits.push(d.image_meta.width + '×' + d.image_meta.height);
+  if (d.files) bits.push(d.files.length + (d.files.length>1?' files':' file'));
+  bits.push(d.rel + ' ago');
+  const app = d.source_app ? d.source_app.name : 'Unknown';
+  const appColor = { Terminal:'#2b2b2b', Safari:'#2a7de1', Finder:'#3aa0ff', Figma:'#a259ff',
+    CleanShot:'#ff5d5d', Notes:'#f5c542', 'VS Code':'#2c8fd6' }[app] || '#555';
+  meta.innerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle">` +
+    `<span style="width:14px;height:14px;border-radius:3px;background:${appColor};display:inline-block"></span>` +
+    `${escapeHtml(app)}</span> · ` + bits.join(' · ');
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') sel = Math.min(sel + 1, DATA.length - 1);
+  else if (event.key === 'ArrowUp') sel = Math.max(sel - 1, 0);
+  else if (/^[1-9]$/.test(event.key) && Number(event.key) <= DATA.length) sel = Number(event.key) - 1;
+  else if (event.key === '0' && DATA.length >= 10) sel = 9;
+  else return;
+  event.preventDefault();
+  renderList();
+  renderPreview();
+});
+
+renderList();
+renderPreview();
+</script>
+</body>
+</html>
