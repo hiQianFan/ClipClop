@@ -11,6 +11,10 @@ export function getClip(id: string): Promise<ClipDetail> {
   return invoke("get_clip", { id });
 }
 
+export function getClipAsset(id: string): Promise<{ data_url: string | null }> {
+  return invoke("get_clip_asset", { id });
+}
+
 export function copyClip(id: string, mode: "rich" | "plain"): Promise<void> {
   return invoke("copy_clip", { id, mode });
 }

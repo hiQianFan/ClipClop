@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::{error::AppResult, state::AppState};
 
@@ -67,6 +67,45 @@ pub fn update_settings(state: State<'_, AppState>, settings: Settings) -> AppRes
         ));
     }
     state.database.set_setting(SETTINGS_KEY, &settings)?;
+    Ok(settings)
+}
+
+#[tauri::command]
+pub fn open_settings(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window
+            .show()
+            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+        window
+            .set_focus()
+            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("settings".into()))
+        .title("ClipClop 设置")
+        .inner_size(480.0, 420.0)
+        .min_inner_size(440.0, 380.0)
+        .resizable(false)
+        .build()
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ignore_source(state: State<'_, AppState>, app_id: String) -> AppResult<Settings> {
+    if app_id.trim().is_empty() || app_id.chars().count() > 1024 {
+        return Err(crate::error::AppError::Validation(
+            "app_id must contain between 1 and 1024 characters".into(),
+        ));
+    }
+    let mut settings: Settings = state
+        .database
+        .get_setting(SETTINGS_KEY)?
+        .unwrap_or_default();
+    if !settings.ignored_apps.contains(&app_id) {
+        settings.ignored_apps.push(app_id);
+        state.database.set_setting(SETTINGS_KEY, &settings)?;
+    }
     Ok(settings)
 }
 

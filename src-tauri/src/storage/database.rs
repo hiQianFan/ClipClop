@@ -213,6 +213,21 @@ impl Database {
         Ok(changed as u64)
     }
 
+    pub fn delete_older_than(&self, cutoff: DateTime<Utc>) -> AppResult<u64> {
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM clips_fts WHERE clip_id IN (SELECT id FROM clips WHERE created_at < ?1)",
+            [cutoff.to_rfc3339()],
+        )?;
+        let changed = transaction.execute(
+            "DELETE FROM clips WHERE created_at < ?1",
+            [cutoff.to_rfc3339()],
+        )?;
+        transaction.commit()?;
+        Ok(changed as u64)
+    }
+
     pub fn get_setting<T: serde::de::DeserializeOwned>(&self, key: &str) -> AppResult<Option<T>> {
         let json: Option<String> = self
             .connection()?

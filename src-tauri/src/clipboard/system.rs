@@ -1,5 +1,6 @@
 use std::thread;
 
+use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use clipboard_rs::{
     common::RustImage, Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler,
@@ -11,7 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 
 use crate::{
-    clips::{ContentType, CopyMode, Flavor, NewClip},
+    clips::{ContentType, CopyMode, Flavor, NewClip, SourceApp},
     commands::Settings,
     error::{AppError, AppResult},
     state::AppState,
@@ -63,6 +64,22 @@ impl SystemClipboard {
         }
         context.set(contents).map_err(clipboard_error)
     }
+
+    pub fn preview_asset(flavors: &[Flavor], file_path: Option<&str>) -> AppResult<Option<String>> {
+        let png = if let Some(flavor) = flavors.iter().find(|item| item.format == "image/png") {
+            Some(flavor.payload.clone())
+        } else if let Some(path) = file_path {
+            let path = path.strip_prefix("file://").unwrap_or(path);
+            clipboard_rs::RustImageData::from_path(path)
+                .and_then(|image| image.thumbnail(960, 640))
+                .and_then(|image| image.to_png())
+                .ok()
+                .map(|buffer| buffer.get_bytes().to_vec())
+        } else {
+            None
+        };
+        Ok(png.map(|bytes| format!("data:image/png;base64,{}", STANDARD.encode(bytes))))
+    }
 }
 
 struct CaptureHandler {
@@ -85,9 +102,24 @@ impl CaptureHandler {
         if settings.capture_paused {
             return Ok(());
         }
-        let Some(clip) = read_clip(&self.clipboard)? else {
+        state.clips.prune(settings.retention_days)?;
+        let Some(mut clip) = read_clip(&self.clipboard)? else {
             return Ok(());
         };
+        clip.source_app = active_win_pos_rs::get_active_window()
+            .ok()
+            .filter(|window| window.app_name != "ClipClop")
+            .map(|window| SourceApp {
+                id: window.process_path.to_string_lossy().into_owned(),
+                name: window.app_name,
+            });
+        if clip
+            .source_app
+            .as_ref()
+            .is_some_and(|source| settings.ignored_apps.contains(&source.id))
+        {
+            return Ok(());
+        }
         if let Some(id) = state.clips.capture(&clip)? {
             let _ = self.app.emit("clips_changed", json!({ "latest_id": id }));
         }

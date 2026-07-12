@@ -1,3 +1,4 @@
+pub mod clipboard;
 pub mod clips;
 pub mod commands;
 pub mod error;
@@ -5,7 +6,8 @@ pub mod state;
 pub mod storage;
 
 use commands::{
-    clear_history, copy_clip, delete_clip, get_clip, get_settings, list_clips, update_settings,
+    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_settings, ignore_source,
+    list_clips, open_settings, update_settings,
 };
 use state::AppState;
 use storage::Database;
@@ -66,13 +68,15 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_clips,
             get_clip,
+            get_clip_asset,
             delete_clip,
             clear_history,
             copy_clip,
             get_settings,
-            update_settings
+            update_settings,
+            open_settings,
+            ignore_source
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-pub mod clipboard;

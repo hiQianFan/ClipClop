@@ -47,4 +47,9 @@ impl ClipService {
     pub fn clear(&self) -> AppResult<u64> {
         self.database.clear()
     }
+
+    pub fn prune(&self, retention_days: u32) -> AppResult<u64> {
+        self.database
+            .delete_older_than(Utc::now() - Duration::days(i64::from(retention_days)))
+    }
 }
