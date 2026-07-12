@@ -1,6 +1,6 @@
 # ClipClop v1 实施计划
 
-状态：待实施  
+状态：开发中（核心闭环已实现，发布验收进行中）
 依据：`PRODUCT.md`、`DESIGN.md`、`docs/architecture.md`、PRD 的 2026-07-13 MVP 修订与 `outputs/prototype/clipclop-dark.html`。
 
 ## 1. 规范优先级与冲突裁决
@@ -77,34 +77,34 @@
 
 ### 功能
 
-- [ ] 支持的剪贴板变化会入库并在重启后保留。
-- [ ] 支持文本、富文本、链接、颜色、图片和文件引用；未知格式失败不会停止监听。
-- [ ] concealed/transient 等标记不触发自动过滤；应用不上传或写入日志剪贴板正文。
-- [ ] 短时间重复内容按规范去重。
-- [ ] 全局快捷键打开 Quick Panel，搜索可立即使用。
-- [ ] 历史最新优先、10 条分页和搜索正确；v1 不提供 pin 与类型筛选。
+- [x] 支持的剪贴板变化会入库并在重启后保留。
+- [x] 支持文本、富文本、链接、颜色、图片和文件引用；未知格式失败不会停止监听。
+- [x] concealed/transient 等标记不触发自动过滤；应用不上传或写入日志剪贴板正文。
+- [x] 短时间重复内容按规范去重。
+- [x] 全局快捷键打开 Quick Panel，搜索可立即使用。
+- [x] 历史最新优先、10 条分页和搜索正确；v1 不提供 pin 与类型筛选。
 - [ ] 选择项具有安全且类型匹配的预览与来源/类型/大小/时间元数据。
-- [ ] 默认 rich 写回保留已有 flavor；plain 模式只写纯文本。
-- [ ] 默认 rich 写回与 plain 写回均只更新系统剪贴板，不模拟直接粘贴。
-- [ ] 删除、清空历史、暂停/恢复均持久化且刷新 UI。
-- [ ] 快捷键、开机启动、保留期和 ignored apps 设置重启后保持。
-- [ ] ignored app 的后续复制不被捕获，移除后恢复。
+- [x] 默认 rich 写回保留已有 flavor；plain 模式只写纯文本。
+- [x] 默认 rich 写回与 plain 写回均只更新系统剪贴板，不模拟直接粘贴。
+- [x] 删除、清空历史、暂停/恢复均持久化且刷新 UI。
+- [x] 固定快捷键、开机启动、保留期和 ignored apps 设置重启后保持。
+- [x] ignored app 的后续复制不被捕获，移除后恢复。
 
 ### UI 与交互
 
-- [ ] 默认 720×540、最小 640×480 时无溢出，布局与 `DESIGN.md` 一致。
-- [ ] Light/Dark 使用 `DESIGN.md` 指定 token，信息层级一致且没有额外品牌色。
+- [x] 默认 720×540、最小 640×480 时无溢出，布局与 `DESIGN.md` 一致。
+- [x] Light/Dark 使用 `DESIGN.md` 指定 token，信息层级一致且没有额外品牌色。
 - [ ] 文本/代码无类型图标；颜色、图片、文件和本地 favicon 使用固定内容槽。
 - [ ] hover、selected、focus、active、disabled、loading、error、empty、success 状态完整。
 - [ ] 上下、左右、1–0、Enter、搜索、操作菜单和 Esc 均按规范工作。
 - [ ] 全部交互可由键盘完成，焦点清晰，语义标签与对比度满足 WCAG AA。
-- [ ] 不渲染 HTML、不主动请求复制 URL、不生成摘要或内容解释。
+- [x] 不渲染 HTML、不主动请求复制 URL、不生成摘要或内容解释。
 
 ### 工程、发布与文档
 
-- [ ] `pnpm check`、前端测试、`pnpm build` 全部通过。
-- [ ] `cargo fmt --check`、`cargo clippy -D warnings`、`cargo test` 全部通过。
-- [ ] 本机 Tauri 开发运行与生产安装包构建成功。
+- [ ] `pnpm check`、前端测试、`pnpm build` 全部通过（check/build 已通过，前端自动化测试待补）。
+- [x] `cargo fmt --check`、`cargo clippy -D warnings`、`cargo test` 全部通过。
+- [x] 本机 Tauri 开发运行与生产 `.app` 构建成功，并生成已校验的本地测试 DMG。
 - [ ] macOS 安装包可启动；Windows CI 配置能生成对应安装包。
 - [ ] Git 历史按工程基线、后端、平台、前端、设置、测试、文档、发布合理分批。
 - [ ] README、PRD、设计、架构、贡献、安全、隐私、许可证、变更记录和发布文档完整且互相一致。
@@ -116,7 +116,7 @@
 - 文件不被复制进应用数据目录；文件移动后显示引用失效。
 - v1 不包含云同步、账号、AI、插件、标签/文件夹或联网内容增强。
 
-## 6. 实施前环境基线（2026-07-13）
+## 6. 开发与验证基线（2026-07-13）
 
 - Node.js：项目指定的 `v24.16.0` 已通过本机 nvm 验证；非交互 shell 需要显式加载 `~/.nvm/nvm.sh`。
 - pnpm：通过 Corepack 使用项目锁定的 `9.15.3`，`pnpm install --frozen-lockfile` 成功。
@@ -128,5 +128,7 @@
 - `pnpm build`：通过，静态产物写入 `build/`。
 - `cargo fmt --check`：通过。
 - `cargo clippy --all-targets -- -D warnings`：通过。
-- `cargo test`：通过，但当前 Rust 与前端均没有业务测试；这是既有基线，不代表功能已实现。
-- 当前页面与 Rust command 仍是 create-tauri-app 默认模板；这属于已知产品缺口而非回归。
+- `cargo test`：5 个 Rust 业务与存储测试通过；前端自动化测试仍待补充。
+- 本机已完成真实剪贴板捕获、列表刷新、Esc 隐藏、全局快捷键重新呼出和 release 窗口创建冒烟验证。
+- macOS 已生成 `.app` 与本地测试 DMG；公开发布仍需要 Apple Developer ID 签名、公证和对应凭据。
+- Windows 构建工作流已配置，最终 `.msi`/NSIS 仍需 Windows runner 或实机产物证明。

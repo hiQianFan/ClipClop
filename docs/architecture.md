@@ -38,7 +38,7 @@ ClipClop 采用 **模块化单体 + 轻量领域模型 + 平台适配层**，不
 
 ## 2. 当前工程与目标架构
 
-当前代码是 `create-tauri-app` 的默认 Svelte 模板：前端逻辑集中在 `src/routes/+page.svelte`，Rust 只有 `lib.rs` 中的 `greet` command。它适合验证环境，但没有业务模块、稳定 IPC、数据所有权、错误模型和测试边界，不能直接作为生产架构。
+当前代码已从 `create-tauri-app` 模板演进为可运行的模块化单体：Rust 侧包含剪贴板监听、SQLite/FTS5、类型化 commands、设置、托盘、全局快捷键与窗口生命周期；Svelte 侧包含 Quick Panel、预览和独立设置窗口。SQLite 是历史记录的唯一真相来源，前端只通过 IPC DTO 访问业务能力。后续仍按本章边界拆分增长，不为尚未出现的模块预建空层级。
 
 Tauri 官方把项目视为 JavaScript 前端与 `src-tauri` Rust 工程两部分，并建议桌面入口保持在 `main.rs`，主要初始化写在 `lib.rs`。前端通过 message passing 调用 Rust；commands 支持参数、返回值、错误和异步，events 更动态、无返回值且只传 JSON。因此本项目使用 command 处理请求/响应，event 只通知状态失效，不用 event 承载业务事务或二进制内容。[Tauri 项目结构](https://v2.tauri.app/start/project-structure/) · [Tauri 架构](https://v2.tauri.app/concept/architecture/) · [调用 Rust](https://v2.tauri.app/develop/calling-rust/)
 
