@@ -1,4 +1,6 @@
-# Clip-Clop Design Spec
+# ClipClop Design Spec
+
+> **历史设计记录。** 本文保留早期探索，不再是实现依据。amber 强调色、自动跳过 concealed/transient、Pin、类型筛选和 direct paste 均已被后续决策取代。当前唯一有效的 UI 规范是根目录 `DESIGN.md`。
 
 Operationalizes the first-principles direction in `addendum.md` into a single committed theme, a converged feature set, and the overall layout. This is the design source of truth; where it conflicts with earlier prototype notes, this wins.
 
@@ -56,7 +58,7 @@ Reviewed FR-1..FR-14 against the invariants. The set is close to right. Findings
 
 ### 2.1 Gaps to add (genuinely missing, low cost, high trust)
 
-- **G-1 — Ignore sensitive/concealed pasteboard types (NEW, must-fix).** FR-13 only ignores whole *apps*. Password managers mark clipboard data as concealed/transient (macOS `org.nspasteboard.ConcealedType` / `TransientType`; Windows `ExcludeClipboardContentFromMonitorProcessing` / `CanIncludeInClipboardHistory`). Clip-Clop must skip these by default. This is table-stakes privacy every serious competitor honors; without it "private by default" is false. → add as FR-15.
+- **G-1 — Ignore sensitive/concealed pasteboard types (NEW, must-fix).** FR-13 only ignores whole *apps*. Password managers mark clipboard data as concealed/transient (macOS `org.nspasteboard.ConcealedType` / `TransientType`; Windows `ExcludeClipboardContentFromMonitorProcessing` / `CanIncludeInClipboardHistory`). ClipClop must skip these by default. This is table-stakes privacy every serious competitor honors; without it "private by default" is false. → add as FR-15.
 - **G-2 — Keyboard navigation contract (spec gap, not new feature).** Define explicitly: ↑/↓ move selection, Enter = paste, Esc = dismiss, and reuse moves the item to top. This is implied by FR-4/5/9 but must be pinned so build is unambiguous.
 - **G-3 — Paste as plain text (optional, v1.1).** A single modifier (e.g. ⌘/Ctrl+Enter) pastes stripped of formatting. High value for the keyboard-heavy target user, low cost. Not MVP-blocking; note as fast-follow.
 

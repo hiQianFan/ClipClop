@@ -1,4 +1,6 @@
-# Clip-Clop PRD Addendum
+# ClipClop PRD Addendum
+
+> **历史补充记录。** 本文中的 glass/amber、类型筛选、自动敏感内容过滤、Pin 与 direct paste 仅代表早期探索。2026-07-13 之后以 `PRODUCT.md`、PRD 顶部修订、根目录 `DESIGN.md` 和 `docs/architecture.md` 为准。
 
 ## Technical Baseline
 
@@ -32,9 +34,9 @@ Tauri is frontend-agnostic and serves static HTML/CSS/JavaScript/WASM through a 
 Recommendation for MVP:
 
 - Use Svelte + TypeScript + Vite for the Tauri UI.
-- Avoid SvelteKit/Next/Nuxt for MVP because Clip-Clop does not need SSR or routing-heavy app structure.
+- Avoid SvelteKit/Next/Nuxt for MVP because ClipClop does not need SSR or routing-heavy app structure.
 - Avoid React unless ecosystem/team familiarity matters more than bundle/runtime minimalism.
-- Avoid plain Web UI unless the UI is intentionally kept extremely small; Clip-Clop's preview pane, filtering, grouped list, keyboard navigation, settings, and state transitions justify a small component framework.
+- Avoid plain Web UI unless the UI is intentionally kept extremely small; ClipClop's preview pane, filtering, grouped list, keyboard navigation, settings, and state transitions justify a small component framework.
 
 Rationale:
 
@@ -54,12 +56,12 @@ macOS:
 - Clipboard read/write itself should not be framed as a user-granted permission.
 - Clipboard monitoring can work through pasteboard APIs.
 - Direct paste into another app requires synthetic keyboard/input behavior.
-- Direct paste generally requires Accessibility permission so Clip-Clop can control the Mac by sending paste input to the previously active app.
-- Global shortcuts should use a registration API/plugin, not a low-level keyboard event tap. If Clip-Clop ever records arbitrary keyboard events through an event tap, that becomes an Input Monitoring concern and should be avoided for MVP.
-- Screen Recording is not required for MVP because Clip-Clop does not inspect screen pixels.
-- Automation permission is not required if Clip-Clop uses accessibility/input APIs rather than Apple Events to control specific apps.
-- The onboarding should explain this narrowly: "Allow Clip-Clop to paste the item you choose into the current app."
-- If permission is not granted, Clip-Clop should still support copy-only fallback.
+- Direct paste generally requires Accessibility permission so ClipClop can control the Mac by sending paste input to the previously active app.
+- Global shortcuts should use a registration API/plugin, not a low-level keyboard event tap. If ClipClop ever records arbitrary keyboard events through an event tap, that becomes an Input Monitoring concern and should be avoided for MVP.
+- Screen Recording is not required for MVP because ClipClop does not inspect screen pixels.
+- Automation permission is not required if ClipClop uses accessibility/input APIs rather than Apple Events to control specific apps.
+- The onboarding should explain this narrowly: "Allow ClipClop to paste the item you choose into the current app."
+- If permission is not granted, ClipClop should still support copy-only fallback.
 
 Windows:
 
@@ -82,7 +84,7 @@ Confirmed from public sources:
 - The public `raycast/extensions` repository is predominantly TypeScript and documents building extensions with React.
 - Raycast's UI model is a command palette with incremental search, keyboard-first actions, list/grid/details layouts, and a consistent action system.
 
-What this means for Clip-Clop:
+What this means for ClipClop:
 
 - Do not copy Raycast's extension technology choice as proof that the core Raycast app is React-based.
 - Do copy the interaction model: centered command surface, fast search focus, left list, right preview/details pane, type filter, action bar, and keyboard-first confirm/copy/delete/pin actions.
@@ -91,7 +93,7 @@ What this means for Clip-Clop:
 
 ## Product UI Direction
 
-Clip-Clop should not copy Raycast Clipboard History's exact layout. The design should start from the user's actual clipboard-reuse flow:
+ClipClop should not copy Raycast Clipboard History's exact layout. The design should start from the user's actual clipboard-reuse flow:
 
 1. Recall roughly what was copied.
 2. Narrow by search, type, source, or time.
@@ -120,7 +122,7 @@ Recommended next prototype direction:
 - Borrow **Canvas preview** only for image/file-heavy selections.
 - Keep Source-first rail as a later mode if source-based retrieval proves important.
 
-This gives Clip-Clop its own product logic: content recognition first, source/type/time metadata second, paste confirmation last.
+This gives ClipClop its own product logic: content recognition first, source/type/time metadata second, paste confirmation last.
 
 ## UI Prototype Critique and Revised Direction
 
@@ -174,7 +176,7 @@ Next image generation prompt should produce:
 
 ## Clipboard Content Rendering Rule
 
-Clip-Clop is a clipboard manager, not a content intelligence tool. A Clipboard Item is one captured payload. The preview should render that payload faithfully and add only capture metadata.
+ClipClop is a clipboard manager, not a content intelligence tool. A Clipboard Item is one captured payload. The preview should render that payload faithfully and add only capture metadata.
 
 Do:
 
@@ -222,13 +224,13 @@ Not glass, not a warm mascot aesthetic. The landing point is a **near-achromatic
 
 Raycast looks the way it does because it is also a summoned keyboard recognition tool, pushed to the same point by the same invariants. Convergence is evidence the reasoning is right. Plagiarism is copying the skin without understanding why; deriving the same point from first principles is understanding. Identity therefore does not live in picking a different macro-style — it lives in the free variables the invariants do not pin down (below).
 
-### Committed free-variable decisions (Clip-Clop's identity)
+### Committed free-variable decisions (ClipClop's identity)
 
 The invariants lock ~80% of the design. These are the remaining degrees of freedom, committed to defensible defaults. Each is a decision, not a constraint — revisit with real content, but do not leave them open.
 
 - **Color temperature:** warm-neutral gray (a faint warm cast in the grays), not cool/blue-gray. Keeps the "restrained but not cold" personality and quietly separates from Raycast's cooler shell at near-zero cost.
 - **Functional accent:** a single warm amber/honey hue used ONLY for selection state and the primary Paste action. Avoids the danger-red / trust-blue clichés and reads as the product's signature. Everything else stays achromatic.
-- **Content-type system (the primary expressive canvas):** each Content Type gets a quiet, desaturated color + icon so it is identifiable while scanning — e.g. text = neutral, code = indigo (monospace), link = blue, color = the swatch itself, image = green, file = amber-gray. This is where Clip-Clop's character lives, and it is functional, not decorative.
+- **Content-type system (the primary expressive canvas):** each Content Type gets a quiet, desaturated color + icon so it is identifiable while scanning — e.g. text = neutral, code = indigo (monospace), link = blue, color = the swatch itself, image = green, file = amber-gray. This is where ClipClop's character lives, and it is functional, not decorative.
 - **Density:** medium-tight — between Maccy (very dense) and Paste (loose). Target ~8–10 rows visible without scrolling in the default panel, with enough vertical breathing room to scan comfortably.
 - **Edge material:** soft shadow + a thin edge to signal "floating," with optional subtle vibrancy at the outer shell only; must fall back to solid on Windows where Mica is unreliable.
 - **Radius / rhythm:** moderate corner radius; the panel may be more rounded than its inner rows. Keep it quiet — radius is minor personality, not a statement.

@@ -1,26 +1,36 @@
 ---
-title: Clip-Clop
+title: ClipClop
 status: draft
 created: 2026-07-10
 updated: 2026-07-10
 ---
 
-# PRD: Clip-Clop
+# PRD: ClipClop
+
+> **2026-07-13 MVP 修订（优先于下文旧章节）**
+>
+> - 产品品牌统一为 `ClipClop`。
+> - v1 默认捕获平台允许读取的全部受支持 flavor，不因 concealed/transient 标记或内容语义自动过滤。
+> - 用户通过暂停记录、忽略指定来源应用、删除、清空和保留期限控制数据。
+> - v1 采用 copy-only：Enter/双击将原始 flavor 写回系统剪贴板并关闭面板，不模拟直接粘贴，不申请 Accessibility 权限。
+> - 默认保留格式复制；`⌘⇧C` / `Ctrl+Shift+C` 和操作菜单支持复制为纯文本。
+> - Pin、类型筛选和 direct paste 延后到用户需求得到验证后；不属于 v1。
+> - UI、颜色和布局以根目录 `DESIGN.md` 为准；技术边界以 `docs/architecture.md` 为准。
 
 ## 0. Document Purpose
 
-This PRD defines the product scope for Clip-Clop so downstream UX, architecture, and implementation work can proceed from a stable product boundary. It builds on:
+This PRD defines the product scope for ClipClop so downstream UX, architecture, and implementation work can proceed from a stable product boundary. It builds on:
 
 - `outputs/brainstorming/brainstorming-session-2026-06-15-1358.md`
 - `outputs/research/clipboard-manager-market-research-2026-07-05.md`
 
 ## 1. Vision
 
-Clip-Clop is a modern, lightweight, ready-out-of-the-box clipboard history tool for macOS and Windows.
+ClipClop is a modern, lightweight, ready-out-of-the-box clipboard history tool for macOS and Windows.
 
 The product helps users quickly recover and reuse recently copied content without turning clipboard management into a heavy workflow system. The core value is simple: copied text stays one shortcut away, searchable, private, and fast.
 
-Clip-Clop intentionally avoids becoming an AI clipboard, knowledge base, note-taking system, automation platform, or team collaboration tool in v1.
+ClipClop intentionally avoids becoming an AI clipboard, knowledge base, note-taking system, automation platform, or team collaboration tool in v1.
 
 The intended launch posture is a public, free desktop utility. The product should feel closer to Raycast Clipboard History in clarity and speed: a searchable history list, a fast preview/details area, source metadata, content metadata, and keyboard-first reuse.
 
@@ -40,21 +50,21 @@ The intended launch posture is a public, free desktop utility. The product shoul
 ### 2.2 Key User Journeys
 
 - **UJ-1. Developer reuses a copied command without leaving the terminal.**
-  A developer copies several commands and URLs while working across browser and terminal. In the terminal, they open Clip-Clop with the global shortcut, type a few characters, select the previous command, and press Enter. Clip-Clop places that item back on the system clipboard and pastes it into the terminal. The developer continues without returning to the original source.
+  A developer copies several commands and URLs while working across browser and terminal. In the terminal, they open ClipClop with the global shortcut, type a few characters, select the previous command, and press Enter. ClipClop places that item back on the system clipboard and pastes it into the terminal. The developer continues without returning to the original source.
 
 - **UJ-2. Writer confirms a copied paragraph before pasting.**
-  A writer opens the Quick Panel, selects a recent text item, reviews the preview, checks the source app and basic content metadata, then confirms. Clip-Clop pastes the selected content into the active editor and updates the system clipboard to that item.
+  A writer opens the Quick Panel, selects a recent text item, reviews the preview, checks the source app and basic content metadata, then confirms. ClipClop pastes the selected content into the active editor and updates the system clipboard to that item.
 
 - **UJ-3. User filters mixed clipboard history by content type.**
-  A user has copied text, links, images, and files during the day. They open Clip-Clop, filter to the needed type, find the item by recency or search, preview it, then paste it into the current app.
+  A user has copied text, links, images, and files during the day. They open ClipClop, filter to the needed type, find the item by recency or search, preview it, then paste it into the current app.
 
 ## 3. Glossary
 
 - **Clipboard History** — The local list of captured clipboard items.
 - **Clipboard Item** — One captured clipboard entry.
 - **Pinned Item** — A Clipboard Item fixed above normal recent history.
-- **Quick Panel** — The keyboard-invoked Clip-Clop surface for browsing, searching, and reusing Clipboard Items.
-- **Ignored App** — An application whose copied content Clip-Clop does not store.
+- **Quick Panel** — The keyboard-invoked ClipClop surface for browsing, searching, and reusing Clipboard Items.
+- **Ignored App** — An application whose copied content ClipClop does not store.
 - **Source App** — The application active when a Clipboard Item was captured.
 - **Content Type** — The primary detected kind of a Clipboard Item, such as text, formatted text, link, image, file, or color.
 - **Preview Pane** — The area that displays the selected Clipboard Item content and metadata before reuse.
@@ -63,13 +73,13 @@ The intended launch posture is a public, free desktop utility. The product shoul
 
 ### 4.1 Clipboard Capture
 
-**Description:** Clip-Clop captures clipboard changes while running in the background and stores them locally as Clipboard Items. MVP should support common clipboard types, not text only.
+**Description:** ClipClop captures clipboard changes while running in the background and stores them locally as Clipboard Items. MVP should support common clipboard types, not text only.
 
 **Functional Requirements:**
 
 #### FR-1: Capture clipboard items
 
-Clip-Clop can capture new Clipboard Items when the system clipboard changes. Realizes UJ-1, UJ-2, UJ-3.
+ClipClop can capture new Clipboard Items when the system clipboard changes. Realizes UJ-1, UJ-2, UJ-3.
 
 **Consequences (testable):**
 - Copying supported content creates a new Clipboard Item.
@@ -78,7 +88,7 @@ Clip-Clop can capture new Clipboard Items when the system clipboard changes. Rea
 
 #### FR-2: Capture multiple content types
 
-Clip-Clop can capture common Content Types including plain text, formatted text, links, images, files, and colors where the platform exposes them reliably. Realizes UJ-3.
+ClipClop can capture common Content Types including plain text, formatted text, links, images, files, and colors where the platform exposes them reliably. Realizes UJ-3.
 
 **Consequences (testable):**
 - Each item has a Content Type.
@@ -87,7 +97,7 @@ Clip-Clop can capture common Content Types including plain text, formatted text,
 
 #### FR-3: Capture source metadata
 
-Clip-Clop records the Source App and capture time for each Clipboard Item when available. Realizes UJ-2, UJ-3.
+ClipClop records the Source App and capture time for each Clipboard Item when available. Realizes UJ-2, UJ-3.
 
 **Consequences (testable):**
 - The Preview Pane shows Source App for captured items when available.
@@ -101,7 +111,7 @@ Clip-Clop records the Source App and capture time for each Clipboard Item when a
 
 #### FR-4: Open Quick Panel with global shortcut
 
-Users can open Clip-Clop from any app with a configurable global shortcut. Realizes UJ-1, UJ-2, UJ-3.
+Users can open ClipClop from any app with a configurable global shortcut. Realizes UJ-1, UJ-2, UJ-3.
 
 **Consequences (testable):**
 - The Quick Panel opens over the current workspace.
@@ -123,7 +133,7 @@ Users can view selected Clipboard Item content and metadata before reuse. Realiz
 
 **Consequences (testable):**
 - Preview Pane shows the original Clipboard Item payload, Source App, Content Type, character count for text-like items, and capture time.
-- Clip-Clop does not summarize, explain, rewrite, classify, title, or enrich copied content with generated meaning.
+- ClipClop does not summarize, explain, rewrite, classify, title, or enrich copied content with generated meaning.
 - Large content is previewed without freezing the panel.
 
 #### FR-7: Filter by content type
@@ -161,7 +171,7 @@ Users can press Enter or double-click to reuse the selected Clipboard Item. Real
 
 **Consequences (testable):**
 - The selected item becomes the current system clipboard value.
-- Clip-Clop pastes it into the previously active app at the active cursor location.
+- ClipClop pastes it into the previously active app at the active cursor location.
 - If direct paste is blocked by OS permissions, the item is still copied and the user receives clear permission guidance.
 
 #### FR-10: Support copy-only fallback
@@ -174,7 +184,7 @@ Users can copy a selected item without automatic paste. Realizes UJ-2.
 
 ### 4.5 Organization and Cleanup
 
-**Description:** Clip-Clop supports the minimum organization needed for daily use: pin, delete, clear, and ignore sources.
+**Description:** ClipClop supports the minimum organization needed for daily use: pin, delete, clear, and ignore sources.
 
 **Functional Requirements:**
 
@@ -204,7 +214,7 @@ Users can exclude selected apps from Clipboard History capture. Realizes UJ-2.
 
 #### FR-15: Ignore sensitive/concealed clipboard content
 
-Clip-Clop does not store clipboard payloads that the source marks as concealed or transient (e.g. macOS `org.nspasteboard.ConcealedType` / `TransientType`; Windows clipboard-history exclusion flags). This makes "private by default" true for password managers and secure fields without user configuration. Realizes the privacy principle behind UJ-2.
+ClipClop does not store clipboard payloads that the source marks as concealed or transient (e.g. macOS `org.nspasteboard.ConcealedType` / `TransientType`; Windows clipboard-history exclusion flags). This makes "private by default" true for password managers and secure fields without user configuration. Realizes the privacy principle behind UJ-2.
 
 **Consequences (testable):**
 - Content copied from a password manager marked concealed is not captured.
@@ -270,7 +280,7 @@ Users can configure global shortcut, launch at login, history retention, direct-
 
 **Primary**
 
-- **SM-1:** First successful reuse time — a new user can install, copy content, open Clip-Clop, and paste a historical item within 60 seconds. Validates FR-4, FR-8, FR-9.
+- **SM-1:** First successful reuse time — a new user can install, copy content, open ClipClop, and paste a historical item within 60 seconds. Validates FR-4, FR-8, FR-9.
 - **SM-2:** Quick Panel responsiveness — opening the Quick Panel and filtering recent history feels instant on normal hardware. Validates FR-4, FR-8.
 - **SM-3:** Default usefulness — a user can get value without changing Settings. Validates FR-1, FR-4, FR-9, FR-14.
 
@@ -293,6 +303,6 @@ Users can configure global shortcut, launch at login, history retention, direct-
 ## 9. Assumptions Index
 
 - Public launch MVP scope.
-- Clip-Clop is a free tool for v1.
+- ClipClop is a free tool for v1.
 - Common non-text clipboard types should be included in MVP.
 - Enter or double-click confirms a selected item, updates the system clipboard, and pastes into the active cursor location.

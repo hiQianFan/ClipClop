@@ -1,13 +1,13 @@
 # ClipClop v1 实施计划
 
 状态：待实施  
-依据：`PRODUCT.md`、`DESIGN.md`、`docs/architecture.md`、PRD 文档集与 `outputs/prototype/clipclop-dark.html`
+依据：`PRODUCT.md`、`DESIGN.md`、`docs/architecture.md`、PRD 的 2026-07-13 MVP 修订与 `outputs/prototype/clipclop-dark.html`。
 
 ## 1. 规范优先级与冲突裁决
 
-1. 产品范围以 `outputs/prds/prd-ClipClop-2026-07-10/prd.md` 及 `addendum.md` 中明确的 v1 要求为准。
+1. 产品范围以 `PRODUCT.md` 和 PRD 顶部的 2026-07-13 MVP 修订为准；旧章节仅保留历史背景。
 2. 架构边界以 `docs/architecture.md` 为准：Tauri 2 + Rust 模块化单体 + SQLite + Svelte 5。
-3. 布局、密度与视觉构成以已确认的 dark prototype 为主要参照。
+3. 布局、密度与视觉构成以根目录 `DESIGN.md` 为准；dark prototype 与 mock data 作为实现参考，不能覆盖正式 token 与交互决策。
 4. Light/Dark 色值以根目录 `DESIGN.md` 为准。早期附录中的玻璃、暖色外壳、彩色类型图标及永久筛选控件均被后续灰阶设计取代。
 5. 文档中的产品名统一为 `ClipClop`；历史产出文件保留原始决策记录，但正式文档不再使用 `Clip-Clop`。
 
@@ -18,9 +18,9 @@
 - 应用状态、稳定错误码和类型化 IPC DTO。
 - SQLite migrations、clips/flavors/settings/ignored apps 数据表、FTS 搜索与分页。
 - 文本、富文本、链接、颜色、图片和文件引用的数据模型与持久化。
-- 剪贴板轮询监听、去重、concealed/transient 跳过、暂停记录与保留期清理。
-- rich/plain 写回、copy-only 与 direct-paste 编排及权限失败回退。
-- pin/unpin、单条删除、清空非 pinned 历史、设置与忽略来源应用。
+- 剪贴板轮询监听、去重、暂停记录与保留期清理；不按 concealed/transient 或内容语义自动过滤。
+- rich/plain 两种写回模式；v1 不实现 direct paste。
+- 单条删除、清空历史、设置与用户主动配置的忽略来源应用；pin/unpin 延后。
 - 全局快捷键、Quick Panel 窗口生命周期、系统托盘与启动时初始化。
 - macOS/Windows 平台适配边界；当前平台实现并编译验证，另一平台保持条件编译可构建。
 
@@ -31,21 +31,21 @@
 - 文本/代码/链接/颜色/图片/文件预览；不渲染不受信任 HTML，不联网抓取 URL 元数据。
 - 键盘操作：上下选择、左右翻页、1–0 跳行、Enter 复用、纯文本复制、搜索、操作菜单与 Esc。
 - loading、empty、search-empty、error、retry、disabled、success 状态。
-- 设置页面：快捷键、开机启动、保留期、直接粘贴、暂停捕获、ignored apps。
-- macOS 首次权限说明与 copy-only 回退；Windows 不展示无意义的权限门槛。
+- 设置页面：快捷键、开机启动、保留期、暂停捕获、ignored apps。
+- v1 不申请 macOS Accessibility 权限；macOS 和 Windows 均采用 copy-only。
 - 响应默认 720×540 与最小 640×480；Dark/Light 跟随系统并支持减少动态效果。
 
 ### 2.3 设计系统
 
 - `tokens.css` 完整落地 `DESIGN.md` 的 Light/Dark token、字体、间距、圆角、焦点与 motion。
 - UI 产品控件保持灰阶；只有用户内容可保留色彩。
-- prototype 的 300px 左栏、右侧预览、48px 状态栏、44px 行高和内容槽结构。
+- `DESIGN.md` 定义的 300px 左栏、右侧预览、48px 状态栏、44px 行高和内容槽结构。
 - WCAG AA 对比度、清晰焦点、44×44 可操作目标和完整键盘可达性。
 
 ### 2.4 测试与发布
 
 - Rust 单元测试：类型推断、规范化、去重、rich/plain、保留期与输入限制。
-- SQLite 集成测试：migration、事务、分页、搜索、pin、删除和设置持久化。
+- SQLite 集成测试：migration、事务、分页、搜索、删除和设置持久化。
 - 前端单元测试：键盘映射、状态转换、IPC 错误处理与列表行为。
 - 完整质量门：Svelte check、前端测试、构建、Rust fmt/clippy/test。
 - 当前 macOS 生成可安装 `.dmg`/`.app`；Windows 配置与 CI 构建 `.msi`/NSIS。
@@ -55,7 +55,7 @@
 
 - 完整 README：截图、能力、隐私、安装、开发、构建、测试、故障排查和路线图。
 - 完整 PRD：目标用户、范围、用户旅程、FR/NFR、验收标准、风险与发布标准。
-- 完整设计规范：token、组件、状态、响应式、无障碍和 prototype 对照。
+- 完整设计规范：token、组件、状态、响应式、无障碍和原型对照。
 - 完整架构：模块、数据模型、IPC、并发、平台差异、安全、测试与 ADR。
 - `CONTRIBUTING.md`、`SECURITY.md`、`PRIVACY.md`、`LICENSE`、行为准则、变更日志与发布指南。
 - 文档索引、测试指南、平台权限指南和维护者发布清单。
@@ -64,7 +64,7 @@
 
 1. **工程与提交基线（小）**：清理 ignore、统一命名、补测试框架和开发配置，创建初始提交。
 2. **领域模型与 SQLite（中）**：migration、模型、存储、分页/搜索、设置；先测后接 UI。
-3. **剪贴板与平台能力（中）**：捕获、过滤、去重、写回、全局快捷键和窗口生命周期。
+3. **剪贴板与平台能力（中）**：捕获、用户配置的来源忽略、去重、写回、全局快捷键和窗口生命周期。
 4. **类型化 IPC（小）**：commands、events、错误契约与前端 client。
 5. **Quick Panel UI（中）**：tokens、列表、预览、键盘、操作菜单与完整状态。
 6. **Settings 与 onboarding（中）**：配置持久化、ignored apps、权限与回退。
@@ -79,20 +79,20 @@
 
 - [ ] 支持的剪贴板变化会入库并在重启后保留。
 - [ ] 支持文本、富文本、链接、颜色、图片和文件引用；未知格式失败不会停止监听。
-- [ ] concealed/transient 项不落盘；应用不上传或记录剪贴板正文。
+- [ ] concealed/transient 等标记不触发自动过滤；应用不上传或写入日志剪贴板正文。
 - [ ] 短时间重复内容按规范去重。
 - [ ] 全局快捷键打开 Quick Panel，搜索可立即使用。
-- [ ] 历史最新优先、pinned 置顶、10 条分页、搜索和类型查询正确。
+- [ ] 历史最新优先、10 条分页和搜索正确；v1 不提供 pin 与类型筛选。
 - [ ] 选择项具有安全且类型匹配的预览与来源/类型/大小/时间元数据。
 - [ ] 默认 rich 写回保留已有 flavor；plain 模式只写纯文本。
-- [ ] copy-only 始终可用；direct paste 不可用时给出可恢复提示。
-- [ ] pin、unpin、删除、清空非 pinned、暂停/恢复均持久化且刷新 UI。
-- [ ] 快捷键、开机启动、保留期、直接粘贴和 ignored apps 设置重启后保持。
+- [ ] 默认 rich 写回与 plain 写回均只更新系统剪贴板，不模拟直接粘贴。
+- [ ] 删除、清空历史、暂停/恢复均持久化且刷新 UI。
+- [ ] 快捷键、开机启动、保留期和 ignored apps 设置重启后保持。
 - [ ] ignored app 的后续复制不被捕获，移除后恢复。
 
 ### UI 与交互
 
-- [ ] 默认 720×540、最小 640×480 时无溢出，布局与 prototype 一致。
+- [ ] 默认 720×540、最小 640×480 时无溢出，布局与 `DESIGN.md` 一致。
 - [ ] Light/Dark 使用 `DESIGN.md` 指定 token，信息层级一致且没有额外品牌色。
 - [ ] 文本/代码无类型图标；颜色、图片、文件和本地 favicon 使用固定内容槽。
 - [ ] hover、selected、focus、active、disabled、loading、error、empty、success 状态完整。
@@ -112,7 +112,7 @@
 ## 5. 已知约束
 
 - Windows 安装包与系统剪贴板行为最终需要 Windows runner/实机证明；本机只能验证条件编译配置与 macOS 产物。
-- macOS direct paste 依赖 Accessibility 权限，拒绝授权时必须退化为 copy-only。
+- v1 不实现 direct paste，因此不申请 macOS Accessibility 权限。
 - 文件不被复制进应用数据目录；文件移动后显示引用失效。
 - v1 不包含云同步、账号、AI、插件、标签/文件夹或联网内容增强。
 
@@ -123,7 +123,7 @@
 - Rust：stable `rustc/cargo 1.96.0`，目标 `aarch64-apple-darwin`。
 - Apple 工具链：Xcode Command Line Tools 路径有效。
 - 前端开发服务器：Vite 在 `127.0.0.1:1420` 正常启动，根页面可请求。
-- 设计资料：`DESIGN.md`、design spec、dark prototype 与 mock data 均可访问；尚无生产 token/component 文件，属于计划内工作。
+- 设计资料：`DESIGN.md` 是正式规范；dark prototype 与 mock data 已恢复并作为实现参考；旧 design spec 仅作历史记录。
 - `pnpm check`：通过，0 errors / 0 warnings。
 - `pnpm build`：通过，静态产物写入 `build/`。
 - `cargo fmt --check`：通过。
