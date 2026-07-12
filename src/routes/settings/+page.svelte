@@ -40,6 +40,7 @@
   {#if settings}
     <section>
       <label><span><strong>暂停记录</strong><small>暂停后不保存新的剪贴板变化。</small></span><input type="checkbox" bind:checked={settings.capture_paused} /></label>
+      <label><span><strong>开机启动</strong><small>登录系统后在后台启动 ClipClop。</small></span><input type="checkbox" bind:checked={settings.launch_at_login} /></label>
       <label><span><strong>保留期限</strong><small>超出期限的历史会在后续捕获时清理。</small></span><select bind:value={settings.retention_days}><option value={7}>7 天</option><option value={30}>30 天</option><option value={90}>90 天</option></select></label>
       <label><span><strong>外观</strong><small>跟随系统，或固定使用 Light/Dark。</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">跟随系统</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
       <div class="shortcut"><span><strong>全局快捷键</strong><small>当前版本使用固定快捷键。</small></span><kbd>⇧⌘C / Ctrl+Shift+C</kbd></div>

@@ -2,6 +2,13 @@
 
 轻量、离线优先的跨平台剪贴板历史工具。技术栈为 Tauri 2、Rust、Svelte 5、TypeScript 和 Vite。
 
+## 功能
+
+- 捕获纯文本、HTML、RTF、图片和文件引用，并在本地搜索与预览。
+- Enter 默认保留格式复制，`⇧⌘C` / `Ctrl+Shift+C` 复制为纯文本。
+- 全局快捷键呼出、托盘常驻、Light/Dark、暂停记录、保留期限与忽略来源应用。
+- macOS 与 Windows 双端构建；无账号、云同步、遥测或链接联网增强。
+
 ## 命名约定
 
 - 用户可见的产品名统一使用 `ClipClop`，包括窗口标题、macOS 应用名和 Windows 开始菜单名称。
@@ -31,3 +38,5 @@ cargo fmt --check --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+架构与分发说明见 [docs/architecture.md](docs/architecture.md) 和 [docs/distribution.md](docs/distribution.md)。

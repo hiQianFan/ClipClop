@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_autostart::ManagerExt;
 
 use crate::{error::AppResult, state::AppState};
 
@@ -47,15 +48,21 @@ fn default_hotkey() -> String {
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<'_, AppState>) -> AppResult<Settings> {
-    Ok(state
+pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> AppResult<Settings> {
+    let mut settings: Settings = state
         .database
         .get_setting(SETTINGS_KEY)?
-        .unwrap_or_default())
+        .unwrap_or_default();
+    settings.launch_at_login = app.autolaunch().is_enabled().unwrap_or(false);
+    Ok(settings)
 }
 
 #[tauri::command]
-pub fn update_settings(state: State<'_, AppState>, settings: Settings) -> AppResult<Settings> {
+pub fn update_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> AppResult<Settings> {
     if !matches!(settings.retention_days, 7 | 30 | 90) {
         return Err(crate::error::AppError::Validation(
             "retention_days must be 7, 30, or 90".into(),
@@ -66,6 +73,13 @@ pub fn update_settings(state: State<'_, AppState>, settings: Settings) -> AppRes
             "hotkey must contain between 1 and 80 characters".into(),
         ));
     }
+    let autostart = app.autolaunch();
+    let result = if settings.launch_at_login {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    };
+    result.map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
     state.database.set_setting(SETTINGS_KEY, &settings)?;
     Ok(settings)
 }
