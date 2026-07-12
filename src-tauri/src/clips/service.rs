@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use crate::error::AppResult;
 use crate::storage::Database;
 
-use super::{ClipDetail, ClipPage, ListClipsRequest, NewClip};
+use super::{ClipDetail, ClipPage, Flavor, ListClipsRequest, NewClip};
 
 #[derive(Clone)]
 pub struct ClipService {
@@ -34,6 +34,10 @@ impl ClipService {
 
     pub fn get(&self, id: &str) -> AppResult<ClipDetail> {
         self.database.get_clip(id)
+    }
+
+    pub fn flavors(&self, id: &str) -> AppResult<Vec<Flavor>> {
+        self.database.get_flavors(id)
     }
 
     pub fn delete(&self, id: &str) -> AppResult<()> {

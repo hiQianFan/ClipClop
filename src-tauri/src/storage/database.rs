@@ -7,7 +7,7 @@ use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExten
 use uuid::Uuid;
 
 use crate::clips::{
-    ClipDetail, ClipPage, ClipSummary, ContentType, FlavorInfo, ListClipsRequest, NewClip,
+    ClipDetail, ClipPage, ClipSummary, ContentType, Flavor, FlavorInfo, ListClipsRequest, NewClip,
     SourceApp,
 };
 use crate::error::{AppError, AppResult};
@@ -174,6 +174,22 @@ impl Database {
             plain_text,
             flavors,
         })
+    }
+
+    pub fn get_flavors(&self, id: &str) -> AppResult<Vec<Flavor>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare(
+            "SELECT format, inline_data FROM clip_flavors WHERE clip_id = ?1 ORDER BY format",
+        )?;
+        let flavors = statement
+            .query_map([id], |row| {
+                Ok(Flavor {
+                    format: row.get(0)?,
+                    payload: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(flavors)
     }
 
     pub fn delete_clip(&self, id: &str) -> AppResult<()> {

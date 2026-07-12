@@ -1,7 +1,8 @@
 use tauri::State;
 
 use crate::{
-    clips::{ClipDetail, ClipPage, ListClipsRequest},
+    clipboard::SystemClipboard,
+    clips::{ClipDetail, ClipPage, CopyMode, ListClipsRequest},
     error::AppResult,
     state::AppState,
 };
@@ -24,4 +25,9 @@ pub fn delete_clip(state: State<'_, AppState>, id: String) -> AppResult<()> {
 #[tauri::command]
 pub fn clear_history(state: State<'_, AppState>) -> AppResult<u64> {
     state.clips.clear()
+}
+
+#[tauri::command]
+pub fn copy_clip(state: State<'_, AppState>, id: String, mode: CopyMode) -> AppResult<()> {
+    SystemClipboard::write(state.clips.flavors(&id)?, mode)
 }

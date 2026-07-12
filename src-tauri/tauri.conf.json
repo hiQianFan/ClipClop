@@ -16,7 +16,12 @@
         "width": 720,
         "height": 540,
         "minWidth": 640,
-        "minHeight": 480
+        "minHeight": 480,
+        "center": true,
+        "decorations": false,
+        "shadow": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {

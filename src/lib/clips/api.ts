@@ -1,0 +1,24 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { ClipDetail, ClipPage } from "./types";
+
+export function listClips(query = "", page = 1): Promise<ClipPage> {
+  return invoke("list_clips", {
+    request: { query, page, page_size: 10 },
+  });
+}
+
+export function getClip(id: string): Promise<ClipDetail> {
+  return invoke("get_clip", { id });
+}
+
+export function copyClip(id: string, mode: "rich" | "plain"): Promise<void> {
+  return invoke("copy_clip", { id, mode });
+}
+
+export function deleteClip(id: string): Promise<void> {
+  return invoke("delete_clip", { id });
+}
+
+export function clearHistory(): Promise<number> {
+  return invoke("clear_history");
+}
