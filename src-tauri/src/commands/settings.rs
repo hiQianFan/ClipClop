@@ -6,11 +6,16 @@ use crate::{error::AppResult, state::AppState};
 
 const SETTINGS_KEY: &str = "app";
 
+#[cfg(target_os = "macos")]
+pub const DEFAULT_HOTKEY: &str = "Control+Command+C";
+
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+C";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct Settings {
     pub retention_days: u32,
-    pub capture_paused: bool,
     pub launch_at_login: bool,
     pub hotkey: String,
     pub ignored_apps: Vec<String>,
@@ -21,9 +26,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             retention_days: 30,
-            capture_paused: false,
             launch_at_login: false,
-            hotkey: default_hotkey(),
+            hotkey: DEFAULT_HOTKEY.into(),
             ignored_apps: Vec::new(),
             theme: Theme::System,
         }
@@ -39,20 +43,14 @@ pub enum Theme {
     System,
 }
 
-fn default_hotkey() -> String {
-    if cfg!(target_os = "macos") {
-        "CommandOrControl+Shift+C".into()
-    } else {
-        "Ctrl+Shift+C".into()
-    }
-}
-
 #[tauri::command]
 pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> AppResult<Settings> {
     let mut settings: Settings = state
         .database
         .get_setting(SETTINGS_KEY)?
         .unwrap_or_default();
+    // 快捷键录制尚未开放；不要向旧配置或设置页暴露一个不会实际生效的值。
+    settings.hotkey = DEFAULT_HOTKEY.into();
     settings.launch_at_login = app.autolaunch().is_enabled().unwrap_or(false);
     Ok(settings)
 }
@@ -106,6 +104,12 @@ pub fn open_settings(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn quit_app(app: AppHandle) -> AppResult<()> {
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn ignore_source(state: State<'_, AppState>, app_id: String) -> AppResult<Settings> {
     if app_id.trim().is_empty() || app_id.chars().count() > 1024 {
         return Err(crate::error::AppError::Validation(
@@ -131,7 +135,6 @@ mod tests {
     fn defaults_are_minimal_and_local() {
         let settings = Settings::default();
         assert_eq!(settings.retention_days, 30);
-        assert!(!settings.capture_paused);
         assert!(settings.ignored_apps.is_empty());
         assert_eq!(settings.theme, Theme::System);
     }

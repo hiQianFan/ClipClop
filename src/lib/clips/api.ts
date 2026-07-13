@@ -15,6 +15,22 @@ export function getClipAsset(id: string): Promise<{ data_url: string | null }> {
   return invoke("get_clip_asset", { id });
 }
 
+export function getClipThumbnail(id: string): Promise<{ data_url: string | null }> {
+  return invoke("get_clip_thumbnail", { id });
+}
+
+export function openClip(id: string): Promise<void> {
+  return invoke("open_clip", { id });
+}
+
+export function getSourceAppIcon(appId: string): Promise<{ data_url: string | null }> {
+  return invoke("get_source_app_icon", { appId });
+}
+
+export function hidePanel(): Promise<void> {
+  return invoke("hide_panel");
+}
+
 export function copyClip(id: string, mode: "rich" | "plain"): Promise<void> {
   return invoke("copy_clip", { id, mode });
 }

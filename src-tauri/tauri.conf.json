@@ -10,16 +10,17 @@
     "frontendDist": "../build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "ClipClop",
-        "width": 720,
-        "height": 540,
-        "minWidth": 640,
-        "minHeight": 480,
+        "width": 760,
+        "height": 580,
+        "resizable": false,
         "center": true,
         "decorations": false,
-        "shadow": true,
+        "transparent": true,
+        "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true
       }

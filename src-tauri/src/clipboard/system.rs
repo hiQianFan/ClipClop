@@ -1,4 +1,6 @@
 use std::thread;
+#[cfg(target_os = "macos")]
+use std::{path::Path, process::Command};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
@@ -66,9 +68,7 @@ impl SystemClipboard {
     }
 
     pub fn preview_asset(flavors: &[Flavor], file_path: Option<&str>) -> AppResult<Option<String>> {
-        let png = if let Some(flavor) = flavors.iter().find(|item| item.format == "image/png") {
-            Some(flavor.payload.clone())
-        } else if let Some(path) = file_path {
+        let png = if let Some(path) = file_path {
             let path = path.strip_prefix("file://").unwrap_or(path);
             clipboard_rs::RustImageData::from_path(path)
                 .and_then(|image| image.thumbnail(960, 640))
@@ -76,10 +76,115 @@ impl SystemClipboard {
                 .ok()
                 .map(|buffer| buffer.get_bytes().to_vec())
         } else {
-            None
+            flavors
+                .iter()
+                .find(|item| item.format == "image/png")
+                .map(|flavor| flavor.payload.clone())
         };
         Ok(png.map(|bytes| format!("data:image/png;base64,{}", STANDARD.encode(bytes))))
     }
+
+    pub fn thumbnail_asset(
+        flavors: &[Flavor],
+        file_path: Option<&str>,
+    ) -> AppResult<Option<String>> {
+        let image = if let Some(path) = file_path {
+            let path = path.strip_prefix("file://").unwrap_or(path);
+            clipboard_rs::RustImageData::from_path(path)
+                .and_then(|image| image.thumbnail(56, 56))
+                .and_then(|image| image.to_png())
+                .ok()
+        } else if let Some(flavor) = flavors.iter().find(|item| item.format == "image/png") {
+            clipboard_rs::RustImageData::from_bytes(&flavor.payload)
+                .and_then(|image| image.thumbnail(56, 56))
+                .and_then(|image| image.to_png())
+                .ok()
+        } else {
+            None
+        };
+        Ok(image.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png.get_bytes()))))
+    }
+
+    pub fn source_app_icon(app_id: &str) -> Option<String> {
+        source_app_icon(app_id)
+            .map(|bytes| format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn source_app_icon(app_id: &str) -> Option<Vec<u8>> {
+    let executable = Path::new(app_id);
+    let app_bundle = executable
+        .ancestors()
+        .find(|path| path.extension().is_some_and(|extension| extension == "app"))?;
+    let resources = app_bundle.join("Contents/Resources");
+    let declared_name = Command::new("/usr/libexec/PlistBuddy")
+        .args(["-c", "Print :CFBundleIconFile"])
+        .arg(app_bundle.join("Contents/Info.plist"))
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|name| name.trim().to_owned());
+    let declared_icon = declared_name.map(|name| {
+        resources.join(if name.ends_with(".icns") {
+            name
+        } else {
+            format!("{name}.icns")
+        })
+    });
+    let icon = declared_icon.filter(|path| path.exists()).or_else(|| {
+        std::fs::read_dir(&resources)
+            .ok()?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "icns")
+            })
+    })?;
+    let output_path =
+        std::env::temp_dir().join(format!("clipclop-icon-{}.png", uuid::Uuid::now_v7()));
+    let output = Command::new("/usr/bin/sips")
+        .args(["-s", "format", "png"])
+        .arg(&icon)
+        .arg("--out")
+        .arg(&output_path)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let bytes = std::fs::read(&output_path).ok();
+    let _ = std::fs::remove_file(output_path);
+    bytes
+}
+
+#[cfg(not(target_os = "macos"))]
+#[cfg(not(target_os = "windows"))]
+fn source_app_icon(_app_id: &str) -> Option<Vec<u8>> {
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn source_app_icon(app_id: &str) -> Option<Vec<u8>> {
+    let output_path =
+        std::env::temp_dir().join(format!("clipclop-icon-{}.png", uuid::Uuid::now_v7()));
+    let escaped_app = app_id.replace('\'', "''");
+    let escaped_output = output_path.to_string_lossy().replace('\'', "''");
+    let script = format!(
+        "Add-Type -AssemblyName System.Drawing; $i=[System.Drawing.Icon]::ExtractAssociatedIcon('{escaped_app}'); if ($i) {{ $i.ToBitmap().Save('{escaped_output}', [System.Drawing.Imaging.ImageFormat]::Png); $i.Dispose() }}"
+    );
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let bytes = std::fs::read(&output_path).ok();
+    let _ = std::fs::remove_file(output_path);
+    bytes
 }
 
 struct CaptureHandler {
@@ -99,9 +204,6 @@ impl CaptureHandler {
     fn capture(&self) -> AppResult<()> {
         let state = self.app.state::<AppState>();
         let settings: Settings = state.database.get_setting("app")?.unwrap_or_default();
-        if settings.capture_paused {
-            return Ok(());
-        }
         state.clips.prune(settings.retention_days)?;
         let Some(mut clip) = read_clip(&self.clipboard)? else {
             return Ok(());
@@ -207,16 +309,40 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
     } else {
         classify_text(text.as_deref().unwrap_or_default())
     };
-    let preview = preview_for(content_type, text.as_deref(), files.as_deref());
+    let preview = if content_type == ContentType::Image {
+        image_meta
+            .as_ref()
+            .and_then(|dimensions| {
+                Some(format!(
+                    "{} × {}",
+                    dimensions.get("width")?,
+                    dimensions.get("height")?
+                ))
+            })
+            .unwrap_or_default()
+    } else {
+        preview_for(content_type, text.as_deref(), files.as_deref())
+    };
     let mut hasher = Sha256::new();
     for flavor in &flavors {
         hasher.update(flavor.format.as_bytes());
         hasher.update(&flavor.payload);
     }
-    let metadata = image_meta.unwrap_or_else(|| match files {
-        Some(files) => json!({ "files": files }),
-        None => json!({ "char_count": text.as_ref().map(|value| value.chars().count()) }),
-    });
+    let metadata = match files {
+        Some(files) => {
+            let mut metadata = json!({
+            "files": files,
+            "file_sizes": files.iter().map(|path| file_size(path)).collect::<Vec<_>>(),
+            });
+            if let Some(dimensions) = image_meta {
+                metadata["image_dimensions"] = dimensions;
+            }
+            metadata
+        }
+        None => image_meta.unwrap_or_else(
+            || json!({ "char_count": text.as_ref().map(|value| value.chars().count()) }),
+        ),
+    };
     Ok(Some(NewClip {
         content_type,
         plain_text: text,
@@ -227,6 +353,14 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
         content_hash: hex::encode(hasher.finalize()),
         created_at: Utc::now(),
     }))
+}
+
+fn file_size(path: &str) -> Option<u64> {
+    let path = path.strip_prefix("file://").unwrap_or(path);
+    std::fs::metadata(path)
+        .ok()
+        .filter(|metadata| metadata.is_file())
+        .map(|metadata| metadata.len())
 }
 
 fn html_is_present(flavors: &[Flavor]) -> bool {
@@ -268,9 +402,6 @@ fn preview_for(content_type: ContentType, text: Option<&str>, files: Option<&[St
             .and_then(|path| std::path::Path::new(path).file_name())
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "文件".into());
-    }
-    if content_type == ContentType::Image {
-        return "图片".into();
     }
     text.unwrap_or_default()
         .split_whitespace()
