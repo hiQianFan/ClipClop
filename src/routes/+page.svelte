@@ -5,7 +5,7 @@
   import { fade } from "svelte/transition";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip } from "$lib/clips/api";
+  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipFileThumbnail, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile } from "$lib/clips/api";
   import type { AppError, ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
   import { applyTheme, getSettings, ignoreSource, quitApp, updateSettings, type Settings } from "$lib/settings/api";
 
@@ -15,6 +15,10 @@
   let assetUrl = $state<string | null>(null);
   let sourceIconUrl = $state<string | null>(null);
   let thumbnailUrls = $state<Record<string, string>>({});
+  let fileThumbnailUrls = $state<Array<string | null>>([]);
+  let fileIndex = $state(0);
+  let previewPending = $state(false);
+  let expandedId = $state<string | null>(null);
   let query = $state("");
   let loading = $state(true);
   let error = $state("");
@@ -25,6 +29,7 @@
   let settings = $state<Settings | null>(null);
   let settingsStatus = $state("");
   let pendingAction = $state<"delete" | "clear" | null>(null);
+  let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
   let searchInput = $state<HTMLInputElement>();
   let listbox = $state<HTMLDivElement>();
@@ -34,10 +39,19 @@
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
   let requestVersion = 0;
+  let refreshRequestVersion = 0;
   let thumbnailRequestVersion = 0;
+  let assetTimer: number | undefined;
+  const detailCache = new Map<string, ClipDetail>();
+  const assetCache = new Map<string, string | null>();
+  const thumbnailCache = new Map<string, string>();
+  const fileThumbnailCache = new Map<string, string | null>();
+  const sourceIconCache = new Map<string, string | null>();
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
+  const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
+  const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
 
   onMount(() => {
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -72,68 +86,91 @@
     };
   });
 
-  async function refresh(targetPage = page.page) {
+  async function refresh(targetPage = page.page, selectLatest = false) {
+    const refreshVersion = ++refreshRequestVersion;
     loading = true;
     error = "";
     const thumbnailVersion = ++thumbnailRequestVersion;
     try {
-      page = await listClips(query, targetPage);
-      thumbnailUrls = {};
+      const nextPage = await listClips(query, targetPage);
+      if (refreshVersion !== refreshRequestVersion) return;
+      page = nextPage;
+      thumbnailUrls = Object.fromEntries(page.items.flatMap((item) => {
+        const thumbnail = thumbnailCache.get(item.id);
+        return thumbnail ? [[item.id, thumbnail]] : [];
+      }));
       void loadThumbnails(page.items, thumbnailVersion);
-      const next = page.items.some((item) => item.id === selectedId)
+      const next = !selectLatest && page.items.some((item) => item.id === selectedId)
         ? selectedId : page.items[0]?.id ?? null;
       await select(next);
     } catch (reason) {
-      error = errorMessage(reason);
+      if (refreshVersion === refreshRequestVersion) error = errorMessage(reason);
     } finally {
-      loading = false;
+      if (refreshVersion === refreshRequestVersion) loading = false;
     }
   }
 
   async function loadThumbnails(items: ClipSummary[], version: number) {
-    const mediaItems = items.filter((item) => item.content_type === "image" || item.content_type === "file");
-    const entries = await Promise.all(mediaItems.map(async (item) => {
+    const mediaItems = items.filter((item) => (item.content_type === "image" || item.content_type === "file") && !thumbnailCache.has(item.id));
+    for (const item of mediaItems) {
+      if (version !== thumbnailRequestVersion) return;
       try {
         const thumbnail = await getClipThumbnail(item.id);
-        return thumbnail.data_url ? [item.id, thumbnail.data_url] as const : null;
-      } catch { return null; }
-    }));
-    if (version === thumbnailRequestVersion) {
-      thumbnailUrls = Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => entry !== null));
+        if (thumbnail.data_url) thumbnailCache.set(item.id, thumbnail.data_url);
+      } catch { /* A neutral file icon is an intentional fallback. */ }
+      if (version === thumbnailRequestVersion) {
+        thumbnailUrls = Object.fromEntries(items.flatMap((current) => {
+          const thumbnail = thumbnailCache.get(current.id);
+          return thumbnail ? [[current.id, thumbnail]] : [];
+        }));
+      }
     }
   }
 
   async function select(id: string | null) {
+    const version = ++requestVersion;
+    const selectionChanged = selectedId !== id;
     selectedId = id;
+    if (selectionChanged) expandedId = null;
+    if (assetTimer !== undefined) window.clearTimeout(assetTimer);
     detail = null;
     assetUrl = null;
+    fileThumbnailUrls = [];
+    fileIndex = 0;
     sourceIconUrl = null;
+    previewPending = id !== null;
     if (!id) return;
-    const version = ++requestVersion;
     try {
-      const next = await getClip(id);
+      const next = detailCache.get(id) ?? await getClip(id);
+      detailCache.set(id, next);
       if (version === requestVersion) {
         detail = next;
+        previewPending = false;
         if (next.source_app) {
-          getSourceAppIcon(next.source_app.id).then((icon) => {
+          const cachedIcon = sourceIconCache.get(next.source_app.id);
+          if (cachedIcon !== undefined) sourceIconUrl = cachedIcon;
+          else getSourceAppIcon(next.source_app.id).then((icon) => {
+            sourceIconCache.set(next.source_app!.id, icon.data_url);
             if (version === requestVersion) sourceIconUrl = icon.data_url;
-          }).catch(() => {});
+          }).catch(() => sourceIconCache.set(next.source_app!.id, null));
         }
         if (next.content_type === "image" || next.content_type === "file") {
-          const asset = await getClipAsset(id);
-          if (version === requestVersion) assetUrl = asset.data_url;
+          const paths = filePaths(next);
+          if (next.content_type === "file") void loadFileThumbnails(id, paths.length, version);
+          scheduleAsset(id, next.content_type === "file" ? 0 : null, version);
         }
       }
     } catch (reason) {
       if (version === requestVersion) error = errorMessage(reason);
+      if (version === requestVersion) previewPending = false;
     }
   }
 
-  async function copy(mode: "rich" | "plain") {
+  async function copy() {
     if (!selectedId) return;
     try {
-      await copyClip(selectedId, mode);
-      copied = mode === "rich" ? "已复制" : "已复制为纯文本";
+      await copyClip(selectedId);
+      copied = "已复制";
       setTimeout(() => copied = "", 1400);
       await getCurrentWindow().hide();
     } catch (reason) { error = errorMessage(reason); }
@@ -145,6 +182,7 @@
     const index = page.items.findIndex((item) => item.id === selectedId);
     const nextId = page.items[index + 1]?.id ?? page.items[index - 1]?.id ?? null;
     try {
+      rowReorderMotion = true;
       await deleteClip(selectedId);
       selectedId = nextId;
       await refresh(page.page);
@@ -152,6 +190,9 @@
       listbox?.focus();
     }
     catch (reason) { error = errorMessage(reason); }
+    finally {
+      requestAnimationFrame(() => rowReorderMotion = false);
+    }
     menuOpen = false;
   }
 
@@ -192,7 +233,10 @@
 
   async function openSelectedClip() {
     if (!selectedId) return;
-    try { await openClip(selectedId); }
+    try {
+      if (detail?.content_type === "file") await openClipFile(selectedId, fileIndex);
+      else await openClip(selectedId);
+    }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
   }
@@ -204,7 +248,6 @@
     if (type === "link") return "在默认浏览器打开链接";
     if (type === "color") return "在默认应用中查看色值";
     if (type === "code") return "在默认应用中查看代码";
-    if (type === "formatted_text") return "在默认应用中查看富文本";
     return "在默认应用中查看文本";
   }
 
@@ -305,31 +348,60 @@
 
   function selectFromList(id: string) {
     listbox?.focus();
+    const item = page.items.find((candidate) => candidate.id === id);
+    if (selectedId === id && item && canExpand(item)) {
+      expandedId = expandedId === id ? null : id;
+      return;
+    }
     void select(id);
   }
 
-  function restoreListFocus() {
+  async function resetToLatest() {
     menuOpen = false;
     appMenuOpen = false;
-    if (view === "history") requestAnimationFrame(() => listbox?.focus());
+    view = "history";
+    query = "";
+    await tick();
+    listbox?.focus();
+    await refresh(1, true);
+    if (document.activeElement === document.body || document.activeElement === listbox) {
+      requestAnimationFrame(() => listbox?.focus());
+    }
+  }
+
+  function suppressContextMenu(event: MouseEvent) {
+    event.preventDefault();
   }
 
   function onListKeydown(event: KeyboardEvent) {
     const index = page.items.findIndex((item) => item.id === selectedId);
     const selectIndex = (next: number) => void select(page.items[Math.max(0, Math.min(next, page.items.length - 1))]?.id ?? null);
-    if (event.key === "ArrowDown") { event.preventDefault(); selectIndex(index + 1); }
+    const selected = page.items.find((item) => item.id === selectedId);
+    if ((event.metaKey || event.ctrlKey) && selected && canExpand(selected) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault();
+      void selectFile(fileIndex + (event.key === "ArrowLeft" ? -1 : 1));
+    }
+    else if (event.key === "ArrowDown") { event.preventDefault(); selectIndex(index + 1); }
     else if (event.key === "ArrowUp") { event.preventDefault(); selectIndex(index - 1); }
     else if (event.key === "Home") { event.preventDefault(); selectIndex(0); }
     else if (event.key === "End") { event.preventDefault(); selectIndex(page.items.length - 1); }
     else if (event.key === "PageDown" && page.page < page.total_pages) { event.preventDefault(); void refresh(page.page + 1); }
     else if (event.key === "PageUp" && page.page > 1) { event.preventDefault(); void refresh(page.page - 1); }
-    else if (event.key === "ArrowLeft" && page.page > 1) { event.preventDefault(); void refresh(page.page - 1); }
-    else if (event.key === "ArrowRight" && page.page < page.total_pages) { event.preventDefault(); void refresh(page.page + 1); }
+    else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      if (expandedId === selectedId) expandedId = null;
+      else if (page.page > 1) void refresh(page.page - 1);
+    }
+    else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      if (page.page < page.total_pages) void refresh(page.page + 1);
+    }
     else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
-      void openSelectedClip();
+      if (selected && canExpand(selected)) expandedId = expandedId === selectedId ? null : selectedId;
+      else void openSelectedClip();
     }
-    else if (event.key === "Enter") { event.preventDefault(); void copy(event.shiftKey ? "plain" : "rich"); }
+    else if (event.key === "Enter") { event.preventDefault(); void copy(); }
     else if ((event.metaKey || event.ctrlKey) && ["Backspace", "Delete"].includes(event.key)) {
       event.preventDefault();
       void requestPendingAction("delete");
@@ -338,6 +410,20 @@
       const target = event.key === "0" ? 9 : Number(event.key) - 1;
       if (page.items[target]) { event.preventDefault(); void select(page.items[target].id); }
     }
+  }
+
+  function onFileNavigatorKeydown(event: KeyboardEvent) {
+    if (!detail || detail.content_type !== "file") return;
+    const lastIndex = filePaths(detail).length - 1;
+    const next = event.key === "ArrowLeft" ? fileIndex - 1
+      : event.key === "ArrowRight" ? fileIndex + 1
+      : event.key === "Home" ? 0
+      : event.key === "End" ? lastIndex
+      : null;
+    if (next === null || next < 0 || next > lastIndex) return;
+    event.preventDefault();
+    void selectFile(next);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-file-index="${next}"]`)?.focus());
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -404,25 +490,98 @@
       return facts;
     }
     if (detail.content_type === "file") {
-      const files = Array.isArray(detail.metadata.files) ? detail.metadata.files : [];
-      facts.push({ label: "文件", value: `${files.length || 1} 项` });
+      const files = filePaths(detail);
+      facts.push({ label: "文件", value: `${fileIndex + 1}/${files.length || 1}` });
       const sizes = Array.isArray(detail.metadata.file_sizes)
         ? detail.metadata.file_sizes.filter((size): size is number => typeof size === "number") : [];
-      if (sizes.length) facts.push({ label: "大小", value: formatBytes(sizes.reduce((sum, size) => sum + size, 0)) });
+      const size = sizes[fileIndex];
+      if (size !== undefined) facts.push({ label: "大小", value: formatBytes(size) });
       return facts;
     }
     const charCount = countValue(detail, "char_count") ?? detail.plain_text?.length ?? 0;
     if (charCount) facts.push({ label: "字符", value: charCount.toLocaleString() });
-    const formats = detail.flavors
-      .filter((flavor) => flavor.format === "text/html" || flavor.format === "text/rtf")
-      .map((flavor) => flavor.format === "text/html" ? "HTML" : "RTF");
-    if (formats.length) facts.push({ label: "格式", value: formats.join(" + ") });
     facts.push({ label: "大小", value: formatBytes(detail.byte_size) });
     return facts;
   }
+
+  function groupedFiles(item: ClipSummary) {
+    return item.content_type === "file" && Array.isArray(item.metadata.files)
+      ? item.metadata.files.filter((path): path is string => typeof path === "string")
+      : [];
+  }
+
+  function canExpand(item: ClipSummary) {
+    return groupedFiles(item).length > 1;
+  }
+
+  function filePaths(record: ClipDetail) {
+    return Array.isArray(record.metadata.files)
+      ? record.metadata.files.filter((path): path is string => typeof path === "string")
+      : [];
+  }
+
+  function fileName(path: string) {
+    const normalized = path.replace(/^file:\/\//, "");
+    return normalized.split(/[\\/]/).pop() || normalized;
+  }
+
+  async function loadFileThumbnails(id: string, count: number, version: number) {
+    const thumbnails = Array.from({ length: count }, (_, index) => fileThumbnailCache.get(`${id}:${index}`) ?? null);
+    if (version === requestVersion) fileThumbnailUrls = thumbnails;
+    for (let index = 0; index < count; index += 1) {
+      const key = `${id}:${index}`;
+      if (fileThumbnailCache.has(key) || version !== requestVersion) continue;
+      try { fileThumbnailCache.set(key, (await getClipFileThumbnail(id, index)).data_url); }
+      catch { fileThumbnailCache.set(key, null); }
+      if (version === requestVersion) fileThumbnailUrls = Array.from({ length: count }, (_, current) => fileThumbnailCache.get(`${id}:${current}`) ?? null);
+    }
+  }
+
+  async function selectFile(index: number) {
+    if (!selectedId || !detail || detail.content_type !== "file") return;
+    const paths = filePaths(detail);
+    if (index < 0 || index >= paths.length || index === fileIndex) return;
+    fileIndex = index;
+    const key = assetKey(selectedId, index);
+    if (assetCache.has(key)) {
+      assetUrl = assetCache.get(key) ?? null;
+      return;
+    }
+    assetUrl = null;
+    const version = requestVersion;
+    try {
+      const asset = await getClipFileAsset(selectedId, index);
+      assetCache.set(key, asset.data_url);
+      if (version === requestVersion) assetUrl = asset.data_url;
+    } catch (reason) {
+      if (version === requestVersion) error = errorMessage(reason);
+    }
+  }
+
+  function assetKey(id: string, index: number | null) {
+    return `${id}:${index ?? "image"}`;
+  }
+
+  function scheduleAsset(id: string, index: number | null, version: number) {
+    const key = assetKey(id, index);
+    if (assetCache.has(key)) {
+      assetUrl = assetCache.get(key) ?? null;
+      return;
+    }
+    assetTimer = window.setTimeout(() => {
+      assetTimer = undefined;
+      const request = index === null ? getClipAsset(id) : getClipFileAsset(id, index);
+      request.then((asset) => {
+        assetCache.set(key, asset.data_url);
+        if (version === requestVersion) assetUrl = asset.data_url;
+      }).catch((reason) => {
+        if (version === requestVersion) error = errorMessage(reason);
+      });
+    }, 80);
+  }
 </script>
 
-<svelte:window onkeydown={onKeydown} onfocus={restoreListFocus} />
+<svelte:window onkeydown={onKeydown} onfocus={() => void resetToLatest()} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label="ClipClop 剪贴板历史">
   <header class="titlebar">
@@ -452,7 +611,7 @@
       <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label="搜索剪贴板历史" placeholder="搜索剪贴板…" />
       <kbd>/</kbd>
     </form>
-    <div bind:this={listbox} class="list" role="listbox" aria-label="剪贴板历史" aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
+    <div bind:this={listbox} class="list" role="tree" aria-label="剪贴板历史" aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
       {#if loading && page.items.length === 0}
         <div class="empty">正在读取历史…</div>
       {:else if error && page.items.length === 0}
@@ -461,29 +620,38 @@
         <div class="empty">{query ? "没有匹配结果" : "复制一点内容，然后再回来听见哒哒声。"}</div>
       {:else}
         {#each page.items as item, index (item.id)}
-          <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="option" tabindex="-1" aria-selected={item.id === selectedId} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => copy("rich")} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown} animate:flip={{ duration: reducedMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion ? 0 : 90 }}>
-            <span class="num">{index === 9 ? 0 : index + 1}</span>
-            <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
-              {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
-              {:else if item.content_type === "image"}<span aria-hidden="true">▧</span>
-              {:else if item.content_type === "file"}<span class="file-icon" aria-hidden="true"></span>{/if}
-            </span>
-            <span class="snippet">{item.preview}</span>
+          <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
+            <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="treeitem" tabindex="-1" aria-selected={item.id === selectedId} aria-expanded={canExpand(item) ? expandedId === item.id : undefined} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => copy()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
+              <span class="num">{index === 9 ? 0 : index + 1}</span>
+              <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
+                {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
+                {:else if item.content_type === "image"}<span aria-hidden="true">▧</span>
+                {:else if item.content_type === "file"}<span class="file-icon" aria-hidden="true"></span>{/if}
+              </span>
+              <span class="snippet">{item.preview}</span>
+              {#if canExpand(item)}<span class="disclosure" aria-hidden="true">›</span>{/if}
+            </div>
+            {#if canExpand(item) && expandedId === item.id}
+              <div class="row-details" role="group" in:fade={{ duration: reducedMotion ? 0 : 120 }} out:fade={{ duration: reducedMotion ? 0 : 90 }}>
+                {#each groupedFiles(item) as path, filePosition}
+                  <button tabindex="-1" class:selected={filePosition === fileIndex} class="row-child" onclick={(event) => { event.stopPropagation(); void selectFile(filePosition); }}>{fileName(path)}</button>
+                {/each}
+              </div>
+            {/if}
           </div>
         {/each}
       {/if}
     </div>
   </section>
 
-  <section class="preview" aria-live="polite">
+  <section class:pending={previewPending} class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={previewPending}>
     {#if detail}
-      <div class="preview-body">
+      <div class:text-preview={!['color', 'file', 'image'].includes(detail.content_type)} class="preview-body">
         {#if detail.content_type === "color"}
           <div class="color-preview"><span style:background={detail.preview}></span><code>{detail.preview}</code></div>
         {:else if detail.content_type === "file"}
-          {#if assetUrl}<img class="asset" src={assetUrl} alt="文件缩略图" />{/if}
-          <div class="file-name">{detail.preview}</div>
-          {#if Array.isArray(detail.metadata.files)}<div class="paths"><span>路径</span><code>{detail.metadata.files.join("\n")}</code></div>{/if}
+          {#if assetUrl}<img class="asset" src={assetUrl} alt="文件缩略图" />
+          {:else}<div class="file-preview-placeholder">无可用预览</div>{/if}
         {:else if detail.content_type === "image"}
           {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt="剪贴板图片预览" /></div>
           {:else}<div class="image-placeholder">图片 · {String(detail.metadata.width ?? "?")}×{String(detail.metadata.height ?? "?")}</div>{/if}
@@ -491,21 +659,50 @@
           <pre>{detail.plain_text ?? detail.preview}</pre>
         {/if}
       </div>
+      {#if detail.content_type === "file" && filePaths(detail).length > 1}
+        <nav class="file-nav" aria-label="已复制文件导航；使用左右方向键切换文件">
+          <button tabindex="-1" class="file-nav-arrow" aria-label={`上一个文件，列表中快捷键${previousFileShortcut}，导航内使用左方向键`} title={`上一个文件（${previousFileShortcut}；导航内 ←）`} disabled={fileIndex === 0} onclick={() => void selectFile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
+          <div class="file-strip" role="tablist" aria-label={`${filePaths(detail).length} 个已复制文件`}>
+            {#each filePaths(detail) as path, index}
+              <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={`查看文件 ${index + 1}：${fileName(path)}`} title={fileName(path)} onclick={() => void selectFile(index)} onkeydown={onFileNavigatorKeydown}>
+                {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
+                {:else}<span class="file-icon" aria-hidden="true"></span>{/if}
+              </button>
+            {/each}
+          </div>
+          <button tabindex="-1" class="file-nav-arrow" aria-label={`下一个文件，列表中快捷键${nextFileShortcut}，导航内使用右方向键`} title={`下一个文件（${nextFileShortcut}；导航内 →）`} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => void selectFile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
+          <span class="file-nav-count" aria-live="polite">{fileIndex + 1}/{filePaths(detail).length}</span>
+        </nav>
+      {/if}
       <div class="preview-meta">
-        <div class="meta-source">
-        {#if sourceIconUrl}
-          <img class="app-icon" src={sourceIconUrl} alt="" />
-        {:else}
-          <span class="app-fallback" aria-hidden="true">{detail.source_app?.name?.slice(0, 1) ?? "?"}</span>
+        {#if detail.content_type === "file"}
+          <div class="meta-file">
+            <span title={filePaths(detail)[fileIndex] ?? detail.preview}>{fileName(filePaths(detail)[fileIndex] ?? detail.preview)}</span>
+            {#if filePaths(detail)[fileIndex]}<code title={filePaths(detail)[fileIndex]}>{filePaths(detail)[fileIndex]}</code>{/if}
+          </div>
         {/if}
-          <div class="source-details"><span>{detail.source_app?.name ?? "未知来源"}</span><time>{exactTime(detail.created_at)}</time></div>
+        <div class="meta-summary">
+          <div class="meta-source">
+            {#if detail.source_app}
+              {#if sourceIconUrl}
+                <img class="app-icon" src={sourceIconUrl} alt="" />
+              {:else}
+                <span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>
+              {/if}
+              <div class="source-details"><span>{detail.source_app.name}</span><time>{exactTime(detail.created_at)}</time></div>
+            {:else}
+              <div class="source-details"><time>{exactTime(detail.created_at)}</time></div>
+            {/if}
+          </div>
+          <dl class="meta-facts">
+            {#each metadataFacts(detail) as fact}
+              <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+            {/each}
+          </dl>
         </div>
-        <dl class="meta-facts">
-          {#each metadataFacts(detail) as fact}
-            <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
-          {/each}
-        </dl>
       </div>
+    {:else if selectedId}
+      <div class="preview-loading"><span>正在读取</span><pre>{page.items.find((item) => item.id === selectedId)?.preview ?? ""}</pre></div>
     {:else}
       <div class="empty">选择一条记录查看内容</div>
     {/if}
@@ -527,18 +724,17 @@
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{/if}
       <div class="menu-wrap">
-        <button bind:this={menuButton} class="ghost" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> 操作</button>
+        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> 操作</button>
         {#if menuOpen}
-          <div class="menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => copy("plain")} disabled={!selectedId}>复制为纯文本 <kbd>⇧↵</kbd></button>
-            <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}>{openActionLabel()} <kbd>Space</kbd></button>
-            <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}>忽略此来源应用</button>
-            <button data-menu-item role="menuitem" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}>从 ClipClop 删除 <kbd>{deleteShortcut}</kbd></button>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}>清空全部历史</button>
+          <div class="menu action-menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
+            <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span><kbd>Space</kbd></button>
+            <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
+            <button data-menu-item role="menuitem" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
+            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}><span>清空全部历史</span></button>
           </div>
         {/if}
       </div>
-      <button class="copy" onclick={() => copy("rich")} disabled={!selectedId}><kbd>⏎</kbd> 复制</button>
+      <button class="copy" onclick={() => copy()} disabled={!selectedId}><kbd>⏎</kbd> 复制</button>
     {/if}
   </footer>
   {:else}
@@ -582,6 +778,7 @@
   kbd { font:10px/1.4 var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:4px; padding:1px 5px; white-space:nowrap; }
   .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; }
   .list:focus-visible { outline:none; }
+  .clip-item { width:100%; }
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
   .row.selected { background:var(--bg-selected); }
@@ -593,14 +790,29 @@
   .file-icon { width:13px; height:16px; position:relative; border:1px solid var(--text-2); border-radius:2px; }
   .file-icon::after { content:""; position:absolute; top:-1px; right:-1px; width:5px; height:5px; border-left:1px solid var(--text-2); border-bottom:1px solid var(--text-2); background:var(--bg-raised); }
   .snippet { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:13px/1.5 var(--mono); }
+  .disclosure { width:12px; flex:none; color:var(--text-3); font:16px/1 system-ui; text-align:center; transform:rotate(0deg); transition:transform 160ms cubic-bezier(.16, 1, .3, 1), color 120ms ease-out; }
+  .clip-item.expanded .disclosure { color:var(--text-2); transform:rotate(90deg); }
+  .row-details { margin:0 8px 4px 50px; padding:3px 8px 7px; }
+  .row-child { width:100%; display:block; overflow:hidden; padding:4px 6px; border-radius:4px; color:var(--text-2); background:transparent; font:11px/1.45 var(--mono); text-align:left; text-overflow:ellipsis; white-space:nowrap; }
+  .row-child:hover, .row-child.selected { background:var(--bg-hover); color:var(--text-1); }
+  .row-child:focus-visible { outline:2px solid var(--text-2); outline-offset:1px; }
   .preview { grid-column:2; grid-row:2; min-width:0; min-height:0; display:flex; flex-direction:column; }
-  .preview-body { flex:1; min-height:0; overflow:auto; padding:20px; }
-  pre { margin:0; color:var(--text-1); font:13px/1.65 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
-  .preview-meta { height:64px; flex:none; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:8px 20px; border-top:1px solid var(--hairline); }
+  .preview.pending { contain:content; }
+  .preview-body { flex:1; min-height:0; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .preview-body.text-preview { align-items:flex-start; justify-content:flex-start; }
+  .preview-body.text-preview pre { width:100%; }
+  pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:13px/1.65 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .preview-meta { height:64px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
+  .preview.file-preview .preview-meta { height:96px; display:grid; grid-template-rows:minmax(0, 1fr) auto; gap:7px; padding-block:10px; }
+  .meta-summary { min-width:0; width:100%; display:flex; align-items:center; justify-content:space-between; gap:20px; }
   .meta-source { min-width:0; display:flex; align-items:center; gap:8px; }
   .source-details { min-width:0; display:flex; flex-direction:column; gap:2px; color:var(--text-2); font:12px/1.2 var(--mono); }
   .source-details span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .source-details time { color:var(--text-3); font-size:10px; }
+  .meta-file { min-width:0; width:100%; display:flex; flex-direction:column; gap:3px; color:var(--text-2); font:11px/1.3 var(--mono); }
+  .meta-file > span, .meta-file code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .meta-file > span { color:var(--text-1); }
+  .meta-file code { color:var(--text-3); font:10px/1.3 var(--mono); }
   .meta-facts { display:flex; align-items:center; justify-content:flex-end; gap:16px; margin:0; }
   .meta-facts div { display:flex; flex-direction:column; align-items:flex-end; gap:2px; white-space:nowrap; }
   .meta-facts dt { color:var(--text-3); font:10px/1 var(--mono); }
@@ -611,29 +823,48 @@
   .color-preview { display:flex; align-items:center; gap:14px; }
   .color-preview span { width:72px; height:72px; border:1px solid var(--hairline); border-radius:8px; }
   .color-preview code { color:var(--text-2); font:12px/1.6 var(--mono); white-space:pre-wrap; }
-  .file-name { margin-top:16px; color:var(--text-1); font:13px/1.5 var(--mono); overflow-wrap:anywhere; }
-  .paths { display:flex; flex-direction:column; gap:5px; margin-top:12px; color:var(--text-2); }
-  .paths span { color:var(--text-3); font-size:10px; }
-  .paths code { color:inherit; font:11px/1.6 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
   .image-placeholder { min-height:180px; display:grid; place-items:center; color:var(--text-3); border:1px solid var(--hairline); border-radius:8px; }
   .asset-frame { width:100%; height:100%; min-height:180px; display:flex; align-items:center; justify-content:center; }
   .asset { display:block; max-width:100%; max-height:100%; border-radius:8px; object-fit:contain; }
+  .file-preview-placeholder { color:var(--text-3); font-size:12px; }
+  .file-nav { height:58px; flex:none; display:flex; align-items:center; gap:8px; padding:6px 20px; border-top:1px solid var(--hairline); }
+  .file-strip { min-width:0; flex:1; display:flex; align-items:center; gap:6px; overflow-x:auto; }
+  .file-thumb { width:38px; height:38px; flex:none; display:grid; place-items:center; padding:3px; border-radius:6px; background:transparent; }
+  .file-thumb:hover, .file-thumb.selected { background:var(--bg-selected); }
+  .file-thumb:focus-visible { outline:0; background:var(--bg-hover); box-shadow:inset 0 0 0 1px var(--text-2); }
+  .file-thumb img { width:100%; height:100%; border-radius:4px; object-fit:cover; }
+  .file-nav-arrow { min-width:38px; height:28px; flex:none; display:grid; place-items:center; padding:0 3px; border-radius:4px; color:var(--text-2); background:transparent; }
+  .file-nav-arrow kbd { color:inherit; border-color:currentColor; }
+  .file-nav-arrow:hover:not(:disabled) { background:var(--bg-hover); }
+  .file-nav-count { flex:none; color:var(--text-3); font:10px var(--mono); }
   .empty { flex:1; display:grid; place-items:center; padding:24px; color:var(--text-3); font-size:13px; text-align:center; background:transparent; }
+  .preview-loading { flex:1; min-height:0; padding:20px; color:var(--text-2); }
+  .preview-loading span { display:block; margin-bottom:8px; color:var(--text-3); font-size:11px; }
+  .preview-loading pre { color:var(--text-2); }
   .retry { width:100%; cursor:pointer; }
   .pager { grid-column:1; grid-row:3; display:flex; align-items:center; gap:10px; padding:0 16px; border-top:1px solid var(--hairline); border-right:1px solid var(--hairline); color:var(--text-2); font:12px var(--mono); }
-  .pager button { padding:2px 7px; border:1px solid var(--hairline); border-radius:4px; color:var(--text-2); background:transparent; }
+  .pager button { padding:2px 7px; border:1px solid var(--hairline); border-radius:4px; color:var(--text-2); background:transparent; transition:background 100ms ease-out, color 100ms ease-out; }
+  .pager button:hover:not(:disabled) { color:var(--text-1); background:var(--bg-hover); }
+  .pager button:active:not(:disabled) { background:var(--bg-selected); }
   .pager button:disabled { opacity:.35; }
   .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
   .copy, .ghost, .destructive { display:flex; align-items:center; gap:6px; border-radius:6px; color:var(--text-2); background:transparent; padding:7px 10px; }
   .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
   .copy:hover { background:var(--action-hover); }
+  .copy:active { filter:brightness(.92); }
   .copy kbd { color:inherit; border-color:currentColor; opacity:.9; }
+  .ghost:hover, .ghost.expanded { color:var(--text-1); background:var(--bg-hover); }
+  .ghost:active, .ghost.expanded:active { background:var(--bg-selected); }
+  .action-menu-trigger.expanded kbd { color:inherit; border-color:currentColor; }
   .destructive { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
   .menu { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:8px; background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .action-menu { width:260px; }
   .app-menu { top:30px; bottom:auto; left:0; right:auto; width:180px; }
-  .menu button { width:100%; display:flex; justify-content:space-between; padding:9px 10px; border-radius:6px; color:var(--text-1); background:transparent; text-align:left; }
+  .menu button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:6px; color:var(--text-1); background:transparent; line-height:1.4; text-align:left; }
+  .menu button > span { min-width:0; }
+  .menu button > kbd { flex:none; align-self:center; }
   .menu button:hover { background:var(--bg-hover); }
   .menu .danger { color:var(--danger); }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:11px; }
@@ -660,4 +891,5 @@
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }
   @media (prefers-reduced-motion:no-preference) { .panel { animation:enter 120ms ease-out; } @keyframes enter { from { opacity:0; transform:scale(.98); } } }
+  @media (prefers-reduced-motion:reduce) { .disclosure { transition:none; } }
 </style>

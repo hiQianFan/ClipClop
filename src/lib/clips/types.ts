@@ -1,6 +1,5 @@
 export type ContentType =
   | "text"
-  | "formatted_text"
   | "link"
   | "color"
   | "code"

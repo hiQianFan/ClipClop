@@ -13,6 +13,8 @@ use crate::clips::{
 use crate::error::{AppError, AppResult};
 
 const MIGRATION: &str = include_str!("../../migrations/0001_init.sql");
+const LEGACY_DATA_CLEANUP: &str =
+    include_str!("../../migrations/0002_remove_legacy_formatted_text.sql");
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -35,6 +37,7 @@ impl Database {
     fn from_connection(connection: Connection) -> AppResult<Self> {
         connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
         connection.execute_batch(MIGRATION)?;
+        connection.execute_batch(LEGACY_DATA_CLEANUP)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })

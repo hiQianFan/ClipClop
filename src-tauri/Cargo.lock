@@ -606,10 +606,13 @@ name = "clipclop"
 version = "0.1.0"
 dependencies = [
  "active-win-pos-rs",
+ "appkit-nsworkspace-bindings",
  "base64 0.22.1",
  "chrono",
  "clipboard-rs",
+ "core-foundation 0.10.1",
  "hex",
+ "objc",
  "rusqlite",
  "serde",
  "serde_json",
@@ -624,6 +627,7 @@ dependencies = [
  "thiserror 2.0.18",
  "url",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

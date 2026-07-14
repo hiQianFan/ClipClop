@@ -9,7 +9,6 @@ use crate::error::AppError;
 #[serde(rename_all = "snake_case")]
 pub enum ContentType {
     Text,
-    FormattedText,
     Link,
     Color,
     Code,
@@ -21,7 +20,6 @@ impl Display for ContentType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Text => "text",
-            Self::FormattedText => "formatted_text",
             Self::Link => "link",
             Self::Color => "color",
             Self::Code => "code",
@@ -37,7 +35,6 @@ impl FromStr for ContentType {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "text" => Ok(Self::Text),
-            "formatted_text" => Ok(Self::FormattedText),
             "link" => Ok(Self::Link),
             "color" => Ok(Self::Color),
             "code" => Ok(Self::Code),
@@ -134,11 +131,4 @@ pub struct ClipPage {
     pub page_size: u32,
     pub total: u64,
     pub total_pages: u32,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum CopyMode {
-    Rich,
-    Plain,
 }

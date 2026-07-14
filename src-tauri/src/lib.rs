@@ -6,9 +6,10 @@ pub mod state;
 pub mod storage;
 
 use commands::{
-    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_thumbnail,
-    get_settings, get_source_app_icon, hide_panel, ignore_source, list_clips, open_settings,
-    open_clip, quit_app, update_settings, DEFAULT_HOTKEY,
+    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
+    get_clip_file_thumbnail, get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel,
+    ignore_source, list_clips, open_clip, open_clip_file, open_settings, quit_app, update_settings,
+    DEFAULT_HOTKEY,
 };
 use state::AppState;
 use storage::Database;
@@ -129,8 +130,11 @@ pub fn run() {
             list_clips,
             get_clip,
             get_clip_asset,
+            get_clip_file_asset,
             get_clip_thumbnail,
+            get_clip_file_thumbnail,
             open_clip,
+            open_clip_file,
             get_source_app_icon,
             hide_panel,
             delete_clip,

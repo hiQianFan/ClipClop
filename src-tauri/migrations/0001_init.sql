@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS clips (
   id TEXT PRIMARY KEY,
-  content_type TEXT NOT NULL CHECK (content_type IN ('text', 'formatted_text', 'link', 'color', 'code', 'image', 'file')),
+  content_type TEXT NOT NULL CHECK (content_type IN ('text', 'link', 'color', 'code', 'image', 'file')),
   plain_text TEXT,
   preview TEXT NOT NULL,
   source_id TEXT,

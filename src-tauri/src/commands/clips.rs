@@ -6,7 +6,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::{
     clipboard::SystemClipboard,
-    clips::{ClipDetail, ClipPage, ContentType, CopyMode, ListClipsRequest},
+    clips::{ClipDetail, ClipPage, ContentType, ListClipsRequest},
     error::AppResult,
     state::AppState,
 };
@@ -32,8 +32,8 @@ pub fn clear_history(state: State<'_, AppState>) -> AppResult<u64> {
 }
 
 #[tauri::command]
-pub fn copy_clip(state: State<'_, AppState>, id: String, mode: CopyMode) -> AppResult<()> {
-    SystemClipboard::write(state.clips.flavors(&id)?, mode)
+pub fn copy_clip(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    SystemClipboard::write(state.clips.flavors(&id)?)
 }
 
 #[derive(Serialize)]
@@ -51,6 +51,19 @@ pub fn get_clip_asset(state: State<'_, AppState>, id: String) -> AppResult<ClipA
 }
 
 #[tauri::command]
+pub fn get_clip_file_asset(
+    state: State<'_, AppState>,
+    id: String,
+    index: usize,
+) -> AppResult<ClipAssetDto> {
+    let detail = state.clips.get(&id)?;
+    let flavors = state.clips.flavors(&id)?;
+    Ok(ClipAssetDto {
+        data_url: SystemClipboard::preview_asset(&flavors, file_path_at(&detail, index))?,
+    })
+}
+
+#[tauri::command]
 pub fn get_clip_thumbnail(state: State<'_, AppState>, id: String) -> AppResult<ClipAssetDto> {
     let detail = state.clips.get(&id)?;
     let flavors = state.clips.flavors(&id)?;
@@ -60,11 +73,26 @@ pub fn get_clip_thumbnail(state: State<'_, AppState>, id: String) -> AppResult<C
 }
 
 #[tauri::command]
+pub fn get_clip_file_thumbnail(
+    state: State<'_, AppState>,
+    id: String,
+    index: usize,
+) -> AppResult<ClipAssetDto> {
+    let detail = state.clips.get(&id)?;
+    let flavors = state.clips.flavors(&id)?;
+    Ok(ClipAssetDto {
+        data_url: SystemClipboard::thumbnail_asset(&flavors, file_path_at(&detail, index))?,
+    })
+}
+
+#[tauri::command]
 pub fn open_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     let detail = state.clips.get(&id)?;
     match detail.summary.content_type {
         ContentType::File => {
-            let path = file_path(&detail).map(normalized_path).ok_or(crate::error::AppError::NotFound)?;
+            let path = file_path(&detail)
+                .map(normalized_path)
+                .ok_or(crate::error::AppError::NotFound)?;
             if !Path::new(path).is_file() {
                 return Err(crate::error::AppError::NotFound);
             }
@@ -72,9 +100,13 @@ pub fn open_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppR
         }
         ContentType::Link => {
             let url = detail.plain_text.unwrap_or(detail.summary.preview);
-            let parsed = url::Url::parse(&url).map_err(|_| crate::error::AppError::Validation("link is not a valid URL".into()))?;
+            let parsed = url::Url::parse(&url).map_err(|_| {
+                crate::error::AppError::Validation("link is not a valid URL".into())
+            })?;
             if !matches!(parsed.scheme(), "http" | "https") {
-                return Err(crate::error::AppError::Validation("link must use http or https".into()));
+                return Err(crate::error::AppError::Validation(
+                    "link must use http or https".into(),
+                ));
             }
             app.opener()
                 .open_url(url, None::<&str>)
@@ -90,12 +122,40 @@ pub fn open_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppR
             write_preview(&path, &png.payload)?;
             open_path(&app, &path)
         }
-        ContentType::Text | ContentType::FormattedText | ContentType::Color | ContentType::Code => {
+        ContentType::Text | ContentType::Color | ContentType::Code => {
             let path = preview_path(&app, &id, "txt")?;
-            write_preview(&path, detail.plain_text.unwrap_or(detail.summary.preview).as_bytes())?;
+            write_preview(
+                &path,
+                detail
+                    .plain_text
+                    .unwrap_or(detail.summary.preview)
+                    .as_bytes(),
+            )?;
             open_path(&app, &path)
         }
     }
+}
+
+#[tauri::command]
+pub fn open_clip_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    index: usize,
+) -> AppResult<()> {
+    let detail = state.clips.get(&id)?;
+    if detail.summary.content_type != ContentType::File {
+        return Err(crate::error::AppError::Validation(
+            "clip is not a file record".into(),
+        ));
+    }
+    let path = file_path_at(&detail, index)
+        .map(normalized_path)
+        .ok_or(crate::error::AppError::NotFound)?;
+    if !Path::new(path).is_file() {
+        return Err(crate::error::AppError::NotFound);
+    }
+    open_path(&app, path)
 }
 
 fn open_path(app: &AppHandle, path: impl AsRef<Path>) -> AppResult<()> {
@@ -110,7 +170,8 @@ fn preview_path(app: &AppHandle, id: &str, extension: &str) -> AppResult<PathBuf
         .app_cache_dir()
         .map_err(|error| crate::error::AppError::Platform(error.to_string()))?
         .join("external-preview");
-    std::fs::create_dir_all(&dir).map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
     Ok(dir.join(format!("{id}.{extension}")))
 }
 
@@ -119,19 +180,22 @@ fn write_preview(path: &Path, bytes: &[u8]) -> AppResult<()> {
 }
 
 fn file_path(detail: &ClipDetail) -> Option<&str> {
+    file_path_at(detail, 0)
+}
+
+fn file_path_at(detail: &ClipDetail, index: usize) -> Option<&str> {
     detail
         .summary
         .metadata
         .get("files")
         .and_then(|files| files.as_array())
-        .and_then(|files| files.first())
+        .and_then(|files| files.get(index))
         .and_then(|path| path.as_str())
 }
 
 fn normalized_path(path: &str) -> &str {
     path.strip_prefix("file://").unwrap_or(path)
 }
-
 
 #[tauri::command]
 pub fn get_source_app_icon(app_id: String) -> ClipAssetDto {
