@@ -15,7 +15,7 @@
 | TypeScript 变量与函数 | `camelCase` | `copyClip`、`selectedClip` |
 | TypeScript 类型与 Svelte 组件 | `PascalCase` | `ClipDetail`、`ClipRow.svelte` |
 | Rust 模块、变量与函数 | `snake_case` | `copy_clip`、`clipboard_monitor` |
-| Rust 类型与枚举 | `PascalCase` | `ClipService`、`CopyMode` |
+| Rust 类型与枚举 | `PascalCase` | `ClipService`、`ContentType` |
 | 常量与环境变量 | `SCREAMING_SNAKE_CASE` | `CLIPCLOP_LOG` |
 
 禁止在正式产品和项目文档中混用 `Clip-Clop`、`Clip Clop` 或 `clip-clop`。URL、第三方平台 slug 因占用限制无法使用 `clipclop` 时，可以使用 `clipclop-app`，但不改变产品品牌。
@@ -30,7 +30,7 @@ ClipClop 采用 **模块化单体 + 轻量领域模型 + 平台适配层**，不
 
 本项目只采用 DDD 中真正有价值的部分：
 
-- 使用统一语言：`Clip`、`Flavor`、`CopyMode`、`SourceApp`、`RetentionPolicy`。
+- 使用统一语言：`Clip`、`Flavor`、`ContentType`、`SourceApp`、`RetentionPolicy`。
 - 领域规则集中在 Rust 模块，不放进 Tauri command、SQL 或 Svelte 组件。
 - 按业务能力划分模块，模块对外暴露小而明确的 API。
 - 平台实现和存储实现位于边界，不能反向污染领域规则。
@@ -117,9 +117,9 @@ ClipClop/
 │   │   │   └── settings.rs
 │   │   ├── clips/                     # 核心领域模块
 │   │   │   ├── mod.rs                 # 对外公开 ClipService
-│   │   │   ├── model.rs               # Clip、Flavor、CopyMode
+│   │   │   ├── model.rs               # Clip、Flavor、ContentType
 │   │   │   ├── capture.rs             # 捕获编排、去重、持久化
-│   │   │   ├── copy.rs                # rich/plain 写回规则
+│   │   │   ├── copy.rs                # 剪贴板写回规则（按增长需要拆分）
 │   │   │   └── query.rs               # 列表与详情用例
 │   │   ├── clipboard/                 # 系统剪贴板适配
 │   │   │   ├── mod.rs
@@ -195,31 +195,32 @@ pub struct Flavor {
     pub byte_size: u64,
 }
 
-pub enum CopyMode {
-    Rich,
-    Plain,
+pub enum ContentType {
+    Text,
+    Link,
+    Color,
+    Code,
+    Image,
+    File,
 }
 ```
 
-`Clip` 是一次剪贴板变化的完整记录，`Flavor` 是同一次复制携带的一种表示。HTML、RTF、纯文本不是三条历史，也不是三个业务模块。
+`Clip` 是一次剪贴板变化的完整记录，`Flavor` 是同一次复制携带的一种受支持表示。v1 对文字只读取和写回纯文本；链接、代码与色值是纯文本的轻量识别结果。
 
-### 4.3 富文本复制
+### 4.3 剪贴板写回
 
-- 默认 `copy_clip(id, CopyMode::Rich)`：写回原记录中平台支持的 HTML、RTF 和纯文本 fallback。
-- “复制为纯文本”调用 `copy_clip(id, CopyMode::Plain)`：只写 `text/plain`。
-- 若记录只有纯文本，两种模式结果一致。
-- 前端不解析、清洗或重建 HTML/RTF；预览使用纯文本，原始 payload 只在 Rust 中处理。
-- Enter 默认带格式；`⌘⇧C` / `Ctrl+Shift+C` 复制纯文本；操作菜单同时展示两个动作。
-
-两种模式必须共用一个 service 方法，通过 `CopyMode` 分支，不能维护两套复制流程。
+- `copy_clip(id)` 写回该记录保存的受支持 payload。
+- 文本只保存和写回纯文本；不读取、保存、渲染或重建 HTML/RTF。
+- 图片与文件引用由平台适配层按系统格式写回；前端不直接处理原始二进制。
+- Enter 触发复制并关闭面板；v1 没有“保留格式/纯文本”双模式。
 
 ### 4.4 用户控制与隐私
 
-ClipClop **不识别、不分类、不拦截所谓敏感内容**。密码管理器或系统附加的 concealed/transient 标记不会触发自动丢弃。默认保存平台允许读取的全部受支持 flavor。
+ClipClop **不识别、不分类、不拦截所谓敏感内容**。密码管理器或系统附加的 concealed/transient 标记不会触发自动丢弃。默认保存平台允许读取的受支持格式。
 
 用户通过以下显式动作控制数据：
 
-- 暂停/恢复记录。
+- 完全退出应用以停止记录。
 - 忽略用户指定的来源应用。
 - 删除单条或清空全部。
 - 设置保留期限。
@@ -254,7 +255,7 @@ CREATE TABLE clip_flavors (
 );
 ```
 
-- 可搜索纯文本和小型 HTML/RTF 可以入 SQLite；图片、较大 payload 和缩略图写入应用数据目录。
+- 可搜索纯文本进入 SQLite；图片和较大 payload 可写入应用数据目录。
 - 数据库只存应用数据目录内的相对路径，避免迁移目录后失效。
 - 插入 Clip、Flavor 元数据和 FTS 索引必须处于同一事务。
 - 文件缓存采用“先写临时文件 → `fsync`/关闭 → 原子重命名 → 提交数据库引用”；失败时不留下数据库悬空路径。
@@ -279,12 +280,11 @@ IPC 使用少量粗粒度 commands，不把每个 Rust 函数暴露给前端。
 ```text
 list_clips(request)             -> ClipPageDto
 get_clip(id)                    -> ClipDetailDto
-copy_clip(id, mode)             -> CopyResultDto
+copy_clip(id)                   -> Unit
 delete_clip(id)                 -> Unit
 clear_history()                 -> Unit
 get_settings()                  -> SettingsDto
 update_settings(patch)          -> SettingsDto
-set_capture_paused(paused)      -> CaptureStateDto
 ```
 
 事件：
@@ -292,7 +292,6 @@ set_capture_paused(paused)      -> CaptureStateDto
 ```text
 clips_changed { revision, latest_id? }
 settings_changed { revision }
-capture_state_changed { paused }
 ```
 
 规则：
@@ -300,7 +299,7 @@ capture_state_changed { paused }
 - command 名称稳定，参数使用对象，便于以后增加可选字段。
 - DTO 显式包含 `kind`，不依赖字段是否为空猜类型。
 - 列表 DTO 不包含原始 flavor 或大二进制；详情按需返回安全预览信息。
-- 原始文件路径、HTML/RTF payload 不发送给 WebView，除非某个已定义视图确实需要。
+- 原始 payload 不发送给 WebView；文件路径只在已定义的文件详情中按需返回。
 - 错误返回稳定 `code + message + details?`；UI 根据 `code` 决定恢复动作，不解析错误字符串。
 - events 只做失效通知。Tauri 官方说明 event 无类型安全、无返回值且只支持 JSON；需要有序高吞吐数据时应使用 channel，但 ClipClop 的 UI 更新没有必要发送高吞吐流。[Tauri 前端事件](https://v2.tauri.app/develop/_sections/frontend-listen/)
 - Svelte 组件卸载时必须执行 `unlisten`，防止 SPA 中重复监听和内存泄漏。
@@ -353,7 +352,7 @@ ClipRow.svelte                   # 展示与触发
 
 - 所有 command 返回 `Result<T, AppError>`，错误码稳定、用户文案由前端本地化。
 - 捕获循环的单条失败不能终止监听器；记录错误后继续处理下一次变化。
-- 使用 Rust `tracing` 输出本地滚动日志，但不得记录剪贴板正文、HTML/RTF、文件路径或完整 URL。
+- 若引入结构化日志，不得记录剪贴板正文、文件路径或完整 URL。
 - panic 只表示无法继续启动的配置/迁移错误；正常 I/O、格式和权限问题必须返回错误。
 
 ### 8.2 权限与安全
@@ -366,11 +365,11 @@ ClipRow.svelte                   # 展示与触发
 
 ### 8.3 测试
 
-- Rust 单元测试：flavor 归一化、rich/plain 选择、去重、保留期和资源上限。
+- Rust 单元测试：格式归一化、类型识别、去重、保留期和资源上限。
 - SQLite 集成测试：migration、事务回滚、分页、FTS、级联删除和孤儿缓存清理。
-- 平台冒烟测试：macOS/Windows 各验证文本、HTML/RTF、图片、文件引用的读写回环；系统剪贴板测试串行执行。
+- 平台冒烟测试：macOS/Windows 各验证纯文本、图片、文件引用的读写回环；系统剪贴板测试串行执行。
 - 前端测试：键盘映射、状态转换、IPC 错误恢复。Tauri 官方提供 `mockIPC` 和 event mock，可在不启动真实 Rust 后端时测试前端调用。[Tauri Mock APIs](https://v2.tauri.app/develop/tests/mocking/)
-- 最小端到端路径：捕获富文本 → 列表出现 → 默认带格式复制 → 纯文本复制 → 删除。
+- 最小端到端路径：捕获纯文本 → 列表出现 → 复制 → 删除。
 
 ### 8.4 CI 与发布门槛
 
