@@ -5,7 +5,7 @@
   import { fade } from "svelte/transition";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipFileThumbnail, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile } from "$lib/clips/api";
+  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipFileThumbnail, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, type PasteOutcome } from "$lib/clips/api";
   import type { AppError, ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
   import { applyTheme, getSettings, ignoreSource, quitApp, updateSettings, type Settings } from "$lib/settings/api";
 
@@ -166,15 +166,37 @@
     }
   }
 
-  async function copy() {
+  async function pasteSelected() {
+    if (!selectedId) return;
+    try {
+      const outcome = await pasteClip(selectedId);
+      if (outcome !== "pasted") {
+        copied = pasteFallbackMessage(outcome);
+        await getCurrentWindow().show();
+        await getCurrentWindow().setFocus();
+        setTimeout(() => copied = "", 3200);
+      }
+    } catch (reason) { error = errorMessage(reason); }
+    menuOpen = false;
+  }
+
+  async function copyOnly() {
     if (!selectedId) return;
     try {
       await copyClip(selectedId);
-      copied = "已复制";
-      setTimeout(() => copied = "", 1400);
-      await getCurrentWindow().hide();
+      copied = "已复制，可手动粘贴";
+      setTimeout(() => copied = "", 1800);
     } catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
+  }
+
+  function pasteFallbackMessage(outcome: PasteOutcome) {
+    if (outcome === "copied_permission_required") return "已复制；请允许辅助功能权限后自动粘贴";
+    if (outcome === "copied_target_lost") return "已复制；原窗口已关闭，请手动粘贴";
+    if (outcome === "copied_focus_failed") return "已复制；无法恢复原窗口，请手动粘贴";
+    if (outcome === "copied_injection_failed") return "已复制；系统拦截了自动粘贴，请手动粘贴";
+    if (outcome === "copied_already_in_progress") return "已复制；正在处理上一次粘贴";
+    return "已复制；当前平台暂不支持自动粘贴";
   }
 
   async function removeSelected() {
@@ -401,7 +423,7 @@
       if (selected && canExpand(selected)) expandedId = expandedId === selectedId ? null : selectedId;
       else void openSelectedClip();
     }
-    else if (event.key === "Enter") { event.preventDefault(); void copy(); }
+    else if (event.key === "Enter") { event.preventDefault(); void pasteSelected(); }
     else if ((event.metaKey || event.ctrlKey) && ["Backspace", "Delete"].includes(event.key)) {
       event.preventDefault();
       void requestPendingAction("delete");
@@ -621,7 +643,7 @@
       {:else}
         {#each page.items as item, index (item.id)}
           <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
-            <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="treeitem" tabindex="-1" aria-selected={item.id === selectedId} aria-expanded={canExpand(item) ? expandedId === item.id : undefined} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => copy()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
+            <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="treeitem" tabindex="-1" aria-selected={item.id === selectedId} aria-expanded={canExpand(item) ? expandedId === item.id : undefined} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => pasteSelected()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
               <span class="num">{index === 9 ? 0 : index + 1}</span>
               <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
                 {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
@@ -728,13 +750,14 @@
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
             <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span><kbd>Space</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>仅复制到剪贴板</span></button>
             <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
             <button data-menu-item role="menuitem" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
             <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}><span>清空全部历史</span></button>
           </div>
         {/if}
       </div>
-      <button class="copy" onclick={() => copy()} disabled={!selectedId}><kbd>⏎</kbd> 复制</button>
+      <button class="copy" onclick={() => pasteSelected()} disabled={!selectedId}><kbd>⏎</kbd> 粘贴</button>
     {/if}
   </footer>
   {:else}

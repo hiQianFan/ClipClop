@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use crate::{clips::ClipService, storage::Database};
+use crate::{clips::ClipService, paste::PasteController, storage::Database};
 
 pub struct AppState {
     pub clips: ClipService,
     pub database: Arc<Database>,
+    pub paste: PasteController,
 }
 
 impl AppState {
@@ -13,6 +14,7 @@ impl AppState {
         Self {
             clips: ClipService::new(database.clone()),
             database,
+            paste: PasteController::default(),
         }
     }
 }

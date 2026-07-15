@@ -1,15 +1,18 @@
+#![allow(unexpected_cfgs)] // objc 0.2 macros probe a legacy `cargo-clippy` cfg.
+
 pub mod clipboard;
 pub mod clips;
 pub mod commands;
 pub mod error;
+pub mod paste;
 pub mod state;
 pub mod storage;
 
 use commands::{
     clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
     get_clip_file_thumbnail, get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel,
-    ignore_source, list_clips, open_clip, open_clip_file, open_settings, quit_app, update_settings,
-    DEFAULT_HOTKEY,
+    ignore_source, list_clips, open_clip, open_clip_file, open_settings, paste_clip, quit_app,
+    update_settings, DEFAULT_HOTKEY,
 };
 use state::AppState;
 use storage::Database;
@@ -52,6 +55,7 @@ fn resize_panel_for_monitor(window: &WebviewWindow) {
 }
 
 fn show_panel(app: &tauri::AppHandle) {
+    app.state::<AppState>().paste.capture_target();
     if let Some(window) = app.get_webview_window("main") {
         resize_panel_for_monitor(&window);
         let _ = window.center();
@@ -140,6 +144,7 @@ pub fn run() {
             delete_clip,
             clear_history,
             copy_clip,
+            paste_clip,
             get_settings,
             update_settings,
             open_settings,

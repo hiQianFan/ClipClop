@@ -8,6 +8,7 @@ use crate::{
     clipboard::SystemClipboard,
     clips::{ClipDetail, ClipPage, ContentType, ListClipsRequest},
     error::AppResult,
+    paste::PasteOutcome,
     state::AppState,
 };
 
@@ -34,6 +35,21 @@ pub fn clear_history(state: State<'_, AppState>) -> AppResult<u64> {
 #[tauri::command]
 pub fn copy_clip(state: State<'_, AppState>, id: String) -> AppResult<()> {
     SystemClipboard::write(state.clips.flavors(&id)?)
+}
+
+#[tauri::command]
+pub fn paste_clip(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<PasteOutcome> {
+    SystemClipboard::write(state.clips.flavors(&id)?)?;
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .hide()
+            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    }
+    Ok(state.paste.paste_to_target())
 }
 
 #[derive(Serialize)]

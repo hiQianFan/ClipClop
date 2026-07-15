@@ -47,6 +47,19 @@ export function copyClip(id: string): Promise<void> {
   return invoke("copy_clip", { id });
 }
 
+export type PasteOutcome =
+  | "pasted"
+  | "copied_permission_required"
+  | "copied_target_lost"
+  | "copied_focus_failed"
+  | "copied_injection_failed"
+  | "copied_already_in_progress"
+  | "copied_unsupported_platform";
+
+export function pasteClip(id: string): Promise<PasteOutcome> {
+  return invoke("paste_clip", { id });
+}
+
 export function deleteClip(id: string): Promise<void> {
   return invoke("delete_clip", { id });
 }
