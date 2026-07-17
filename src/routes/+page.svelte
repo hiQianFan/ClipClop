@@ -4,8 +4,7 @@
   import { cubicOut } from "svelte/easing";
   import { fade } from "svelte/transition";
   import { listen } from "@tauri-apps/api/event";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipFileThumbnail, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, type PasteOutcome } from "$lib/clips/api";
+  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, toggleClipPreview, type PasteOutcome } from "$lib/clips/api";
   import type { AppError, ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
   import { applyTheme, getSettings, ignoreSource, quitApp, updateSettings, type Settings } from "$lib/settings/api";
 
@@ -41,11 +40,11 @@
   let requestVersion = 0;
   let refreshRequestVersion = 0;
   let thumbnailRequestVersion = 0;
+  let pageNavigationPending = false;
   let assetTimer: number | undefined;
   const detailCache = new Map<string, ClipDetail>();
   const assetCache = new Map<string, string | null>();
   const thumbnailCache = new Map<string, string>();
-  const fileThumbnailCache = new Map<string, string | null>();
   const sourceIconCache = new Map<string, string | null>();
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
@@ -78,11 +77,15 @@
     document.addEventListener("keydown", captureEscape, true);
     getSettings().then((settings) => applyTheme(settings.theme)).catch(() => {});
     void refresh(1);
-    const unlisten = listen("clips_changed", () => refresh(page.page));
+    const unlistenClips = listen("clips_changed", () => refresh(page.page));
+    // Only an explicit panel show is a new browsing session. Quick Look also
+    // returns focus to this window, but must preserve the current selection.
+    const unlistenPanel = listen("panel_shown", () => void resetToLatest());
     return () => {
       document.removeEventListener("keydown", captureEscape, true);
       motionQuery.removeEventListener("change", updateReducedMotion);
-      unlisten.then((fn) => fn());
+      unlistenClips.then((fn) => fn());
+      unlistenPanel.then((fn) => fn());
     };
   });
 
@@ -111,7 +114,9 @@
   }
 
   async function loadThumbnails(items: ClipSummary[], version: number) {
-    const mediaItems = items.filter((item) => (item.content_type === "image" || item.content_type === "file") && !thumbnailCache.has(item.id));
+    // File thumbnails require reading the original path. Do not touch protected
+    // folders (Downloads, Desktop, Documents) merely by opening the panel.
+    const mediaItems = items.filter((item) => item.content_type === "image" && !thumbnailCache.has(item.id));
     for (const item of mediaItems) {
       if (version !== thumbnailRequestVersion) return;
       try {
@@ -154,11 +159,7 @@
             if (version === requestVersion) sourceIconUrl = icon.data_url;
           }).catch(() => sourceIconCache.set(next.source_app!.id, null));
         }
-        if (next.content_type === "image" || next.content_type === "file") {
-          const paths = filePaths(next);
-          if (next.content_type === "file") void loadFileThumbnails(id, paths.length, version);
-          scheduleAsset(id, next.content_type === "file" ? 0 : null, version);
-        }
+        if (next.content_type === "image") scheduleAsset(id, null, version);
       }
     } catch (reason) {
       if (version === requestVersion) error = errorMessage(reason);
@@ -172,8 +173,6 @@
       const outcome = await pasteClip(selectedId);
       if (outcome !== "pasted") {
         copied = pasteFallbackMessage(outcome);
-        await getCurrentWindow().show();
-        await getCurrentWindow().setFocus();
         setTimeout(() => copied = "", 3200);
       }
     } catch (reason) { error = errorMessage(reason); }
@@ -219,7 +218,12 @@
   }
 
   async function removeAll() {
-    try { await clearHistory(); await refresh(1); await tick(); listbox?.focus(); }
+    try {
+      await clearHistory();
+      await refresh(1);
+      if (view === "settings") settingsStatus = "历史已清空";
+      else { await tick(); listbox?.focus(); }
+    }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
   }
@@ -234,7 +238,7 @@
 
   function cancelPendingAction() {
     pendingAction = null;
-    requestAnimationFrame(() => listbox?.focus());
+    requestAnimationFrame(() => view === "settings" ? settingsFirstControl?.focus() : listbox?.focus());
   }
 
   function confirmPendingAction() {
@@ -258,6 +262,19 @@
     try {
       if (detail?.content_type === "file") await openClipFile(selectedId, fileIndex);
       else await openClip(selectedId);
+    }
+    catch (reason) { error = errorMessage(reason); }
+    menuOpen = false;
+  }
+
+  async function previewSelectedClip() {
+    if (!selectedId) return;
+    try {
+      const openedSystemPreview = await toggleClipPreview(selectedId, fileIndex);
+      if (!openedSystemPreview) {
+        const selected = page.items.find((item) => item.id === selectedId);
+        if (selected && canExpand(selected)) expandedId = expandedId === selectedId ? null : selectedId;
+      }
     }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
@@ -403,8 +420,8 @@
       event.preventDefault();
       void selectFile(fileIndex + (event.key === "ArrowLeft" ? -1 : 1));
     }
-    else if (event.key === "ArrowDown") { event.preventDefault(); selectIndex(index + 1); }
-    else if (event.key === "ArrowUp") { event.preventDefault(); selectIndex(index - 1); }
+    else if (event.key === "ArrowDown") { event.preventDefault(); void moveSelection(1); }
+    else if (event.key === "ArrowUp") { event.preventDefault(); void moveSelection(-1); }
     else if (event.key === "Home") { event.preventDefault(); selectIndex(0); }
     else if (event.key === "End") { event.preventDefault(); selectIndex(page.items.length - 1); }
     else if (event.key === "PageDown" && page.page < page.total_pages) { event.preventDefault(); void refresh(page.page + 1); }
@@ -420,8 +437,7 @@
     }
     else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
-      if (selected && canExpand(selected)) expandedId = expandedId === selectedId ? null : selectedId;
-      else void openSelectedClip();
+      void previewSelectedClip();
     }
     else if (event.key === "Enter") { event.preventDefault(); void pasteSelected(); }
     else if ((event.metaKey || event.ctrlKey) && ["Backspace", "Delete"].includes(event.key)) {
@@ -431,6 +447,32 @@
     else if (/^[0-9]$/.test(event.key)) {
       const target = event.key === "0" ? 9 : Number(event.key) - 1;
       if (page.items[target]) { event.preventDefault(); void select(page.items[target].id); }
+    }
+  }
+
+  async function moveSelection(direction: -1 | 1) {
+    if (pageNavigationPending || page.items.length === 0) return;
+    const index = page.items.findIndex((item) => item.id === selectedId);
+    const nextIndex = index + direction;
+    if (nextIndex >= 0 && nextIndex < page.items.length) {
+      await select(page.items[nextIndex]?.id ?? null);
+      return;
+    }
+    if (direction < 0 && page.page > 1) {
+      pageNavigationPending = true;
+      try {
+        await refresh(page.page - 1);
+        await select(page.items.at(-1)?.id ?? null);
+      } finally {
+        pageNavigationPending = false;
+      }
+    } else if (direction > 0 && page.page < page.total_pages) {
+      pageNavigationPending = true;
+      try {
+        await refresh(page.page + 1);
+      } finally {
+        pageNavigationPending = false;
+      }
     }
   }
 
@@ -448,7 +490,39 @@
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-file-index="${next}"]`)?.focus());
   }
 
+  function cycleTabFocus(event: KeyboardEvent) {
+    if (event.key !== "Tab" || event.metaKey || event.ctrlKey || event.altKey) return false;
+    const scope = pendingAction
+      ? document.querySelector<HTMLElement>(".confirmation")
+      : menuOpen
+        ? document.querySelector<HTMLElement>(".action-menu")
+        : appMenuOpen
+          ? document.querySelector<HTMLElement>(".app-menu")
+          : document.querySelector<HTMLElement>(".panel");
+    if (!scope) return false;
+    const elements = Array.from(scope.querySelectorAll<HTMLElement>(
+      'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
+    )).filter((element) => element.getClientRects().length > 0);
+    if (elements.length === 0) return false;
+    event.preventDefault();
+    const current = elements.indexOf(document.activeElement as HTMLElement);
+    const next = event.shiftKey
+      ? (current <= 0 ? elements.length - 1 : current - 1)
+      : (current < 0 || current === elements.length - 1 ? 0 : current + 1);
+    elements[next]?.focus();
+    return true;
+  }
+
   function onKeydown(event: KeyboardEvent) {
+    if (cycleTabFocus(event)) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "w") {
+      event.preventDefault();
+      pendingAction = null;
+      menuOpen = false;
+      appMenuOpen = false;
+      void hidePanel();
+      return;
+    }
     if (pendingAction) return;
     if (view === "settings") {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -547,18 +621,6 @@
     return normalized.split(/[\\/]/).pop() || normalized;
   }
 
-  async function loadFileThumbnails(id: string, count: number, version: number) {
-    const thumbnails = Array.from({ length: count }, (_, index) => fileThumbnailCache.get(`${id}:${index}`) ?? null);
-    if (version === requestVersion) fileThumbnailUrls = thumbnails;
-    for (let index = 0; index < count; index += 1) {
-      const key = `${id}:${index}`;
-      if (fileThumbnailCache.has(key) || version !== requestVersion) continue;
-      try { fileThumbnailCache.set(key, (await getClipFileThumbnail(id, index)).data_url); }
-      catch { fileThumbnailCache.set(key, null); }
-      if (version === requestVersion) fileThumbnailUrls = Array.from({ length: count }, (_, current) => fileThumbnailCache.get(`${id}:${current}`) ?? null);
-    }
-  }
-
   async function selectFile(index: number) {
     if (!selectedId || !detail || detail.content_type !== "file") return;
     const paths = filePaths(detail);
@@ -603,14 +665,14 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onfocus={() => void resetToLatest()} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onKeydown} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label="ClipClop 剪贴板历史">
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
         <div class="app-menu-wrap">
-          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label="ClipClop 应用菜单" aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}><img src="/favicon.png" alt="" /></button>
+          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label="ClipClop 应用菜单" aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
           {#if appMenuOpen}
             <div class="menu app-menu" role="menu" tabindex="-1" aria-label="ClipClop 应用菜单" onkeydown={onMenuKeydown}>
               <button data-menu-item role="menuitem" onclick={() => void openSettingsView()}>设置… <kbd>{settingsShortcut}</kbd></button>
@@ -618,7 +680,6 @@
             </div>
           {/if}
         </div>
-        <span>ClipClop</span>
       </div>
     {:else}
       <button class="back" aria-label="返回历史记录" onclick={closeSettingsView}>←</button>
@@ -749,11 +810,11 @@
         <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> 操作</button>
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span><kbd>Space</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void previewSelectedClip()} disabled={!selectedId}><span>快速预览</span><kbd>Space</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span></button>
             <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>仅复制到剪贴板</span></button>
             <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
-            <button data-menu-item role="menuitem" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}><span>清空全部历史</span></button>
+            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
           </div>
         {/if}
       </div>
@@ -767,6 +828,7 @@
         <label><span><strong>保留期限</strong><small>超出期限的历史会在后续捕获时清理。</small></span><select bind:value={settings.retention_days}><option value={7}>7 天</option><option value={30}>30 天</option><option value={90}>90 天</option></select></label>
         <label><span><strong>外观</strong><small>跟随系统，或固定使用 Light/Dark。</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">跟随系统</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <div class="preference-row"><span><strong>全局快捷键</strong><small>当前版本使用平台默认值；暂不支持自定义。</small></span><kbd>{settings.hotkey}</kbd></div>
+        <div class="preference-row"><span><strong>数据管理</strong><small>清除 ClipClop 保存的全部历史，不影响原始文件或系统剪贴板。</small></span><button class="danger-action" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}>清空全部历史</button></div>
         {#if settings.ignored_apps.length > 0}
           <div class="ignored-apps"><strong>已忽略的应用</strong>{#each settings.ignored_apps as appId}<div><code title={appId}>{appLabel(appId)}</code><button onclick={() => removeIgnoredApp(appId)}>移除</button></div>{/each}</div>
         {/if}
@@ -775,9 +837,17 @@
       {/if}
     </section>
     <footer class="settings-actions">
-      <span aria-live="polite" class:error={settingsStatus !== "" && settingsStatus !== "已保存"}>{settingsStatus}</span>
-      <button class="ghost" onclick={closeSettingsView}>返回 <kbd>Esc</kbd></button>
-      <button class="copy" onclick={() => void saveSettings()} disabled={!settings}>保存</button>
+      {#if pendingAction === "clear"}
+        <div class="confirmation" role="alertdialog" aria-label="确认清空历史">
+          <span>清空全部历史？<small>仅从 ClipClop 移除，不影响原始文件或系统剪贴板。</small></span>
+          <button bind:this={cancelActionButton} class="ghost" onclick={cancelPendingAction}>取消 <kbd>Esc</kbd></button>
+          <button bind:this={confirmActionButton} class="destructive" onclick={confirmPendingAction}>清空</button>
+        </div>
+      {:else}
+        <span aria-live="polite" class:error={settingsStatus !== "" && !["已保存", "历史已清空"].includes(settingsStatus)}>{settingsStatus}</span>
+        <button class="ghost" onclick={closeSettingsView}>返回 <kbd>Esc</kbd></button>
+        <button class="copy" onclick={() => void saveSettings()} disabled={!settings}>保存</button>
+      {/if}
     </footer>
   {/if}
 </main>
@@ -786,11 +856,10 @@
   .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:14px; box-shadow:var(--panel-shadow); overflow:hidden; }
   .titlebar { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--hairline); user-select:none; }
   .titlebar-drag { flex:1; align-self:stretch; }
-  .brand { display:flex; align-items:center; gap:7px; color:var(--text-2); font-size:12px; font-weight:600; letter-spacing:.01em; }
+  .brand { display:flex; align-items:center; color:var(--text-2); }
   .app-menu-wrap { position:relative; }
-  .app-menu-trigger { display:grid; place-items:center; width:24px; height:24px; padding:0; border-radius:5px; background:transparent; }
+  .app-menu-trigger { height:24px; padding:0 4px; border-radius:5px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; letter-spacing:.01em; }
   .app-menu-trigger:hover { background:var(--bg-hover); }
-  .brand img { width:18px; height:18px; border-radius:5px; }
   .back { width:24px; height:24px; padding:0; border-radius:5px; color:var(--text-2); background:transparent; font-size:16px; }
   .back:hover { background:var(--bg-hover); }
   .settings-title { margin-left:7px; color:var(--text-2); font-size:12px; font-weight:600; }
@@ -805,7 +874,8 @@
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
   .row.selected { background:var(--bg-selected); }
-  .num { width:14px; flex:none; color:var(--text-3); font:11px var(--mono); text-align:center; }
+  .num { width:16px; flex:none; color:var(--text-3); font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size:12px; font-weight:650; line-height:1; font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum" 1, "lnum" 1, "zero" 0; letter-spacing:-.01em; text-align:center; }
+  .row.selected .num { color:var(--text-2); }
   .lead { width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:4px; color:var(--text-2); font:7px var(--mono); }
   .lead.swatch { color:transparent; border:1px solid var(--hairline); }
   .lead.media { overflow:hidden; background:var(--bg-raised); font:15px/1 system-ui; }
@@ -865,8 +935,9 @@
   .preview-loading span { display:block; margin-bottom:8px; color:var(--text-3); font-size:11px; }
   .preview-loading pre { color:var(--text-2); }
   .retry { width:100%; cursor:pointer; }
-  .pager { grid-column:1; grid-row:3; display:flex; align-items:center; gap:10px; padding:0 16px; border-top:1px solid var(--hairline); border-right:1px solid var(--hairline); color:var(--text-2); font:12px var(--mono); }
-  .pager button { padding:2px 7px; border:1px solid var(--hairline); border-radius:4px; color:var(--text-2); background:transparent; transition:background 100ms ease-out, color 100ms ease-out; }
+  .pager { grid-column:1; grid-row:3; display:grid; grid-template-columns:36px minmax(32px, auto) 36px; align-items:center; justify-content:start; gap:8px; padding:0 14px; border-top:1px solid var(--hairline); border-right:1px solid var(--hairline); color:var(--text-2); font:12px var(--mono); }
+  .pager span { min-width:32px; text-align:center; font-variant-numeric:tabular-nums; }
+  .pager button { width:36px; height:30px; display:grid; place-items:center; padding:0; border:1px solid var(--hairline); border-radius:4px; color:var(--text-2); background:transparent; font-size:14px; line-height:1; transition:background 100ms ease-out, color 100ms ease-out; }
   .pager button:hover:not(:disabled) { color:var(--text-1); background:var(--bg-hover); }
   .pager button:active:not(:disabled) { background:var(--bg-selected); }
   .pager button:disabled { opacity:.35; }
@@ -902,6 +973,8 @@
   .preferences small { color:var(--text-3); font-size:11px; }
   .preferences select { min-width:116px; padding:7px 28px 7px 9px; border:1px solid var(--hairline); border-radius:6px; color:var(--text-1); background:var(--bg-raised); }
   .preferences input { width:18px; height:18px; accent-color:var(--text-1); }
+  .danger-action { padding:7px 10px; border:1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius:6px; color:var(--danger); background:transparent; }
+  .danger-action:hover:not(:disabled) { background:color-mix(in srgb, var(--danger) 8%, transparent); }
   .ignored-apps { padding:16px 0; display:flex; flex-direction:column; gap:8px; }
   .ignored-apps > strong { margin-bottom:2px; }
   .ignored-apps div { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:7px 9px; border-radius:6px; background:var(--bg-raised); }

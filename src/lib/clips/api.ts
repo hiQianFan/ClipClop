@@ -35,6 +35,10 @@ export function openClipFile(id: string, index: number): Promise<void> {
   return invoke("open_clip_file", { id, index });
 }
 
+export function toggleClipPreview(id: string, index = 0): Promise<boolean> {
+  return invoke("toggle_clip_preview", { id, index });
+}
+
 export function getSourceAppIcon(appId: string): Promise<{ data_url: string | null }> {
   return invoke("get_source_app_icon", { appId });
 }
