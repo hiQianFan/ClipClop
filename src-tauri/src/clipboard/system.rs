@@ -44,6 +44,9 @@ use crate::{
 
 const MAX_CAPTURE_BYTES: usize = 20 * 1024 * 1024;
 const RECENT_SOURCE_MAX_AGE: Duration = Duration::from_secs(2);
+// macOS pasteboard custom types must be valid UTIs; a reverse-DNS identifier
+// also works as a private clipboard format on Windows and Linux.
+const SELF_WRITE_FORMAT: &str = "com.clipclop.self-write";
 
 #[derive(Clone)]
 struct RecentSource {
@@ -79,6 +82,13 @@ impl SystemClipboard {
         if contents.is_empty() {
             return Err(AppError::Clipboard("clip has no writable flavors".into()));
         }
+        // A clipboard manager must distinguish replaying history from a new user copy.
+        // The marker travels with this clipboard ownership and disappears on the next
+        // external copy, so it has no timing race and works for text, images and files.
+        contents.push(ClipboardContent::Other(
+            SELF_WRITE_FORMAT.into(),
+            b"clipclop".to_vec(),
+        ));
         context.set(contents).map_err(clipboard_error)
     }
 
@@ -217,6 +227,9 @@ impl ClipboardHandler for CaptureHandler {
 
 impl CaptureHandler {
     fn capture(&self) -> AppResult<()> {
+        if self.clipboard.get_buffer(SELF_WRITE_FORMAT).is_ok() {
+            return Ok(());
+        }
         // Freeze attribution before reading or encoding large clipboard payloads.
         let captured_source = source_app(&self.clipboard);
         let state = self.app.state::<AppState>();
@@ -241,11 +254,26 @@ impl CaptureHandler {
 }
 
 fn source_app(clipboard: &ClipboardContext) -> Option<SourceApp> {
-    declared_source_app(clipboard)
-        .or_else(|| platform_source_app(clipboard))
-        .or_else(window_source_app)
-        .filter(is_external_source)
-        .or_else(recent_source_app)
+    resolve_source(
+        [
+            declared_source_app(clipboard),
+            platform_source_app(clipboard),
+            window_source_app(),
+        ],
+        recent_source_app(),
+    )
+}
+
+fn resolve_source(
+    candidates: impl IntoIterator<Item = Option<SourceApp>>,
+    recent: Option<SourceApp>,
+) -> Option<SourceApp> {
+    if let Some(source) = candidates.into_iter().flatten().next() {
+        // Finding ClipClop is conclusive. Falling through to RECENT_SOURCE here
+        // incorrectly attributes our own write to the previously focused app.
+        return is_external_source(&source).then_some(source);
+    }
+    recent
 }
 
 fn is_external_source(source: &SourceApp) -> bool {
@@ -645,5 +673,19 @@ mod tests {
         );
         assert!(matching_source_signature(&["public.png".into()], |_| true).is_none());
         assert!(matching_source_signature(&formats, |_| false).is_none());
+    }
+
+    #[test]
+    fn clipclop_source_blocks_recent_external_fallback() {
+        let clipclop = SourceApp {
+            id: "com.clipclop.desktop".into(),
+            name: "ClipClop".into(),
+        };
+        let previous = SourceApp {
+            id: "com.example.editor".into(),
+            name: "Editor".into(),
+        };
+
+        assert_eq!(resolve_source([Some(clipclop)], Some(previous)), None);
     }
 }

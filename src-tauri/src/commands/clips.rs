@@ -10,6 +10,7 @@ use crate::{
     error::AppResult,
     paste::PasteOutcome,
     state::AppState,
+    PreviewState,
 };
 
 #[tauri::command]
@@ -49,7 +50,11 @@ pub fn paste_clip(
             .hide()
             .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
     }
-    Ok(state.paste.paste_to_target())
+    let outcome = state.paste.paste_to_target();
+    if outcome != PasteOutcome::Pasted {
+        eprintln!("automatic paste degraded to clipboard-only: {outcome:?}");
+    }
+    Ok(outcome)
 }
 
 #[derive(Serialize)]
@@ -172,6 +177,89 @@ pub fn open_clip_file(
         return Err(crate::error::AppError::NotFound);
     }
     open_path(&app, path)
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn toggle_clip_preview(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preview: State<'_, PreviewState>,
+    id: String,
+    index: usize,
+) -> AppResult<bool> {
+    use tauri_plugin_quicklook::{PreviewItem, QuicklookExt};
+
+    crate::install_quicklook_key_handler();
+    let path = clip_preview_path(&app, &state, &id, index)?;
+    let url = url::Url::from_file_path(&path)
+        .map_err(|_| crate::error::AppError::Validation("preview path is invalid".into()))?;
+
+    preview.set_active(true);
+    app.quicklook()
+        .set_items(vec![PreviewItem::new(url.to_string(), None)])
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    app.quicklook()
+        .queue_reload_if_dirty()
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    app.quicklook()
+        .queue_toggle_visible()
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    Ok(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn toggle_clip_preview(
+    _app: AppHandle,
+    _state: State<'_, AppState>,
+    _preview: State<'_, PreviewState>,
+    _id: String,
+    _index: usize,
+) -> AppResult<bool> {
+    Ok(false)
+}
+
+fn clip_preview_path(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    id: &str,
+    index: usize,
+) -> AppResult<PathBuf> {
+    let detail = state.clips.get(id)?;
+    match detail.summary.content_type {
+        ContentType::File => {
+            let path = file_path_at(&detail, index)
+                .map(normalized_path)
+                .ok_or(crate::error::AppError::NotFound)?;
+            let path = PathBuf::from(path);
+            if !path.is_file() {
+                return Err(crate::error::AppError::NotFound);
+            }
+            Ok(path)
+        }
+        ContentType::Image => {
+            let flavors = state.clips.flavors(id)?;
+            let png = flavors
+                .iter()
+                .find(|flavor| flavor.format == "image/png")
+                .ok_or(crate::error::AppError::NotFound)?;
+            let path = preview_path(app, id, "png")?;
+            write_preview(&path, &png.payload)?;
+            Ok(path)
+        }
+        ContentType::Text | ContentType::Color | ContentType::Code | ContentType::Link => {
+            let path = preview_path(app, id, "txt")?;
+            write_preview(
+                &path,
+                detail
+                    .plain_text
+                    .unwrap_or(detail.summary.preview)
+                    .as_bytes(),
+            )?;
+            Ok(path)
+        }
+    }
 }
 
 fn open_path(app: &AppHandle, path: impl AsRef<Path>) -> AppResult<()> {

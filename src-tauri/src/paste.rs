@@ -131,9 +131,14 @@ mod platform {
             return PasteOutcome::CopiedTargetLost;
         }
 
-        let _: bool = unsafe { msg_send![app, activateWithOptions: ACTIVATE_IGNORING_OTHER_APPS] };
-        if !wait_until(|| frontmost_pid() == Some(pid), TARGET_FOCUS_TIMEOUT) {
-            return PasteOutcome::CopiedFocusFailed;
+        // A non-activating panel keeps the original application active. In that
+        // normal path, activating it again only creates another focus race.
+        if frontmost_pid() != Some(pid) {
+            let activated: bool =
+                unsafe { msg_send![app, activateWithOptions: ACTIVATE_IGNORING_OTHER_APPS] };
+            if !activated || !wait_until(|| frontmost_pid() == Some(pid), TARGET_FOCUS_TIMEOUT) {
+                return PasteOutcome::CopiedFocusFailed;
+            }
         }
 
         if send_command_v() {
