@@ -47,11 +47,6 @@ const RECENT_SOURCE_MAX_AGE: Duration = Duration::from_secs(2);
 // macOS pasteboard custom types must be valid UTIs; a reverse-DNS identifier
 // also works as a private clipboard format on Windows and Linux.
 const SELF_WRITE_FORMAT: &str = "com.clipclop.self-write";
-#[cfg(target_os = "macos")]
-const REMOTE_CLIPBOARD_FORMAT: &str = "com.apple.is-remote-clipboard";
-const UNIVERSAL_CLIPBOARD_SOURCE_ID: &str = "com.apple.universal-clipboard";
-#[cfg(target_os = "macos")]
-const UNIVERSAL_CLIPBOARD_SOURCE_NAME: &str = "其他 Apple 设备";
 
 #[derive(Clone)]
 struct RecentSource {
@@ -236,7 +231,7 @@ impl CaptureHandler {
             return Ok(());
         }
         // Freeze attribution before reading or encoding large clipboard payloads.
-        let captured_source = source_app(&self.clipboard)?;
+        let captured_source = source_app(&self.clipboard);
         let state = self.app.state::<AppState>();
         let settings: Settings = state.database.get_setting("app")?.unwrap_or_default();
         state.clips.prune(settings.retention_days)?;
@@ -244,9 +239,11 @@ impl CaptureHandler {
             return Ok(());
         };
         clip.source_app = captured_source;
-        if clip.source_app.as_ref().is_some_and(|source| {
-            source.id != UNIVERSAL_CLIPBOARD_SOURCE_ID && settings.ignored_apps.contains(&source.id)
-        }) {
+        if clip
+            .source_app
+            .as_ref()
+            .is_some_and(|source| settings.ignored_apps.contains(&source.id))
+        {
             return Ok(());
         }
         if let Some(id) = state.clips.capture(&clip)? {
@@ -256,50 +253,15 @@ impl CaptureHandler {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn source_app(clipboard: &ClipboardContext) -> AppResult<Option<SourceApp>> {
-    let formats = clipboard.available_formats().map_err(clipboard_error)?;
-    Ok(resolve_macos_source(
-        &formats,
+fn source_app(clipboard: &ClipboardContext) -> Option<SourceApp> {
+    resolve_source(
         [
             declared_source_app(clipboard),
             platform_source_app(clipboard),
             window_source_app(),
         ],
         recent_source_app(),
-    ))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn source_app(clipboard: &ClipboardContext) -> AppResult<Option<SourceApp>> {
-    Ok(resolve_source(
-        [
-            declared_source_app(clipboard),
-            platform_source_app(clipboard),
-            window_source_app(),
-        ],
-        recent_source_app(),
-    ))
-}
-
-#[cfg(target_os = "macos")]
-fn universal_clipboard_source(formats: &[String]) -> Option<SourceApp> {
-    formats
-        .iter()
-        .any(|format| format == REMOTE_CLIPBOARD_FORMAT)
-        .then(|| SourceApp {
-            id: UNIVERSAL_CLIPBOARD_SOURCE_ID.into(),
-            name: UNIVERSAL_CLIPBOARD_SOURCE_NAME.into(),
-        })
-}
-
-#[cfg(target_os = "macos")]
-fn resolve_macos_source(
-    formats: &[String],
-    candidates: impl IntoIterator<Item = Option<SourceApp>>,
-    recent: Option<SourceApp>,
-) -> Option<SourceApp> {
-    universal_clipboard_source(formats).or_else(|| resolve_source(candidates, recent))
+    )
 }
 
 fn resolve_source(
@@ -725,58 +687,5 @@ mod tests {
         };
 
         assert_eq!(resolve_source([Some(clipclop)], Some(previous)), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn universal_clipboard_marker_resolves_to_dedicated_source() {
-        let formats = vec![
-            "public.utf8-plain-text".into(),
-            REMOTE_CLIPBOARD_FORMAT.into(),
-        ];
-
-        assert_eq!(
-            universal_clipboard_source(&formats),
-            Some(SourceApp {
-                id: UNIVERSAL_CLIPBOARD_SOURCE_ID.into(),
-                name: UNIVERSAL_CLIPBOARD_SOURCE_NAME.into(),
-            })
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn universal_clipboard_source_takes_priority_over_local_attribution() {
-        let local = SourceApp {
-            id: "/Applications/Editor.app".into(),
-            name: "Editor".into(),
-        };
-
-        assert_eq!(
-            resolve_macos_source(
-                &[REMOTE_CLIPBOARD_FORMAT.into()],
-                [Some(local.clone())],
-                Some(local),
-            )
-            .map(|source| source.id),
-            Some(UNIVERSAL_CLIPBOARD_SOURCE_ID.into())
-        );
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn ordinary_clipboard_formats_do_not_create_remote_source() {
-        let local = SourceApp {
-            id: "/Applications/Editor.app".into(),
-            name: "Editor".into(),
-        };
-        assert_eq!(
-            resolve_macos_source(
-                &["public.utf8-plain-text".into()],
-                [Some(local.clone())],
-                None,
-            ),
-            Some(local)
-        );
     }
 }
