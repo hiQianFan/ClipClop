@@ -46,6 +46,7 @@
   const assetCache = new Map<string, string | null>();
   const thumbnailCache = new Map<string, string>();
   const sourceIconCache = new Map<string, string | null>();
+  const universalClipboardSourceId = "com.apple.universal-clipboard";
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
@@ -151,7 +152,7 @@
       if (version === requestVersion) {
         detail = next;
         previewPending = false;
-        if (next.source_app) {
+        if (next.source_app && next.source_app.id !== universalClipboardSourceId) {
           const cachedIcon = sourceIconCache.get(next.source_app.id);
           if (cachedIcon !== undefined) sourceIconUrl = cachedIcon;
           else getSourceAppIcon(next.source_app.id).then((icon) => {
@@ -250,7 +251,7 @@
 
   async function ignoreSelectedSource() {
     const source = detail?.source_app;
-    if (!source) return;
+    if (!source || source.id === universalClipboardSourceId) return;
     if (!confirm(`以后不再记录来自“${source.name}”的内容？`)) return;
     try { await ignoreSource(source.id); copied = `已忽略 ${source.name}`; }
     catch (reason) { error = errorMessage(reason); }
@@ -767,12 +768,19 @@
         <div class="meta-summary">
           <div class="meta-source">
             {#if detail.source_app}
-              {#if sourceIconUrl}
+              {#if detail.source_app.id === universalClipboardSourceId}
+                <span class="device-source-icon" aria-hidden="true" title="通过 Apple 通用剪贴板同步">
+                  <svg viewBox="0 0 22 22" aria-hidden="true">
+                    <rect x="2.5" y="3.5" width="10" height="14" rx="1.8"></rect>
+                    <rect x="9.5" y="6.5" width="10" height="12" rx="1.8"></rect>
+                  </svg>
+                </span>
+              {:else if sourceIconUrl}
                 <img class="app-icon" src={sourceIconUrl} alt="" />
               {:else}
                 <span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>
               {/if}
-              <div class="source-details"><span>{detail.source_app.name}</span><time>{exactTime(detail.created_at)}</time></div>
+              <div class="source-details"><span title={detail.source_app.id === universalClipboardSourceId ? "通过 Apple 通用剪贴板同步" : undefined} aria-label={detail.source_app.id === universalClipboardSourceId ? "其他 Apple 设备，通过 Apple 通用剪贴板同步" : undefined}>{detail.source_app.name}</span><time>{exactTime(detail.created_at)}</time></div>
             {:else}
               <div class="source-details"><time>{exactTime(detail.created_at)}</time></div>
             {/if}
@@ -813,7 +821,9 @@
             <button data-menu-item role="menuitem" onclick={() => void previewSelectedClip()} disabled={!selectedId}><span>快速预览</span><kbd>Space</kbd></button>
             <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span></button>
             <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>仅复制到剪贴板</span></button>
-            <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
+            {#if detail?.source_app?.id !== universalClipboardSourceId}
+              <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
+            {/if}
             <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
           </div>
         {/if}
@@ -913,6 +923,8 @@
   .app-icon, .app-fallback { width:22px; height:22px; flex:none; border-radius:4px; }
   .app-icon { object-fit:contain; }
   .app-fallback { display:grid; place-items:center; color:var(--bg-shell); background:var(--text-2); font:600 11px var(--mono); }
+  .device-source-icon { width:22px; height:22px; flex:none; display:grid; place-items:center; color:var(--text-2); }
+  .device-source-icon svg { width:22px; height:22px; overflow:visible; fill:var(--bg-raised); stroke:currentColor; stroke-width:1.25; }
   .color-preview { display:flex; align-items:center; gap:14px; }
   .color-preview span { width:72px; height:72px; border:1px solid var(--hairline); border-radius:8px; }
   .color-preview code { color:var(--text-2); font:12px/1.6 var(--mono); white-space:pre-wrap; }
