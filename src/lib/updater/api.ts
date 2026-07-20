@@ -111,7 +111,11 @@ export async function downloadAndInstall(
     else onProgress(total ? Math.min(99, Math.round((downloaded / total) * 100)) : null);
   };
 
-  await found.downloadAndInstall(progress, { timeout: 120_000 });
+  try {
+    await found.downloadAndInstall(progress, { timeout: 120_000 });
+  } finally {
+    try { await found.close(); } catch { /* Do not mask install failure or block relaunch. */ }
+  }
   writeCachedUpdate(null);
   await relaunch();
 }

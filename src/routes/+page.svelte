@@ -4,11 +4,11 @@
   import { cubicOut } from "svelte/easing";
   import { fade } from "svelte/transition";
   import { listen } from "@tauri-apps/api/event";
-  import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, toggleClipPreview, type PasteOutcome } from "$lib/clips/api";
-  import type { AppError, ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
-  import { applyTheme, getSettings, ignoreSource, quitApp, updateSettings, type Settings } from "$lib/settings/api";
-  import { cachedUpdate, checkForUpdate, currentVersion, downloadAndInstall, openLatestRelease, type AvailableUpdate } from "$lib/updater/api";
-  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, toggleClipPreview } from "$lib/clips/api";
+  import type { ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
+  import { cacheSet, canExpand, errorMessage, exactTime, fileName, filePaths, groupedFiles, metadataFacts, pasteFallbackMessage } from "$lib/clips/view";
+  import { applyTheme, getSettings, quitApp } from "$lib/settings/api";
+  import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft, ChevronLeft, ChevronRight, File, Image, Search } from "@lucide/svelte";
 
   let page = $state<ClipPage>({ items: [], page: 1, page_size: 10, total: 0, total_pages: 0 });
@@ -28,23 +28,13 @@
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"history" | "settings">("history");
-  let settings = $state<Settings | null>(null);
-  let settingsStatus = $state("");
-  let activeSettingsTab = $state<"general" | "updates" | "about">("general");
-  let appVersion = $state("…");
-  let update = $state<AvailableUpdate | null>(null);
-  let updateStatus = $state<"idle" | "checking" | "current" | "downloading" | "installing" | "error">("idle");
-  let updateMessage = $state("");
-  let updateProgress = $state<number | null>(null);
-  let pendingAction = $state<"delete" | "clear" | null>(null);
+  let deletePending = $state(false);
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
   let searchInput = $state<HTMLInputElement>();
   let listbox = $state<HTMLDivElement>();
   let menuButton = $state<HTMLButtonElement>();
   let appMenuButton = $state<HTMLButtonElement>();
-  let settingsFirstControl = $state<HTMLInputElement>();
-  let settingsTabEls = $state<HTMLButtonElement[]>([]);
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
   let requestVersion = 0;
@@ -52,8 +42,9 @@
   let thumbnailRequestVersion = 0;
   let pageNavigationPending = false;
   let assetTimer: number | undefined;
+  let searchTimer: number | undefined;
   const detailCache = new Map<string, ClipDetail>();
-  const assetCache = new Map<string, string | null>();
+  const assetCache = new Map<string, { data_url: string | null; byte_size: number | null }>();
   const thumbnailCache = new Map<string, string>();
   const sourceIconCache = new Map<string, string | null>();
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
@@ -71,8 +62,8 @@
       if (event.key === "Escape" || event.key === "Esc" || event.code === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (pendingAction) {
-          cancelPendingAction();
+        if (deletePending) {
+          cancelDelete();
         } else if (menuOpen) {
           closeMenu();
         } else if (appMenuOpen) {
@@ -118,6 +109,10 @@
       await select(next);
     } catch (reason) {
       if (refreshVersion === refreshRequestVersion) error = errorMessage(reason);
+      if (refreshVersion === refreshRequestVersion) {
+        page = { items: [], page: targetPage, page_size: 10, total: 0, total_pages: 0 };
+        await select(null);
+      }
     } finally {
       if (refreshVersion === refreshRequestVersion) loading = false;
     }
@@ -142,7 +137,7 @@
     }
   }
 
-  async function select(id: string | null) {
+  async function select(id: string | null, readSelectedFile = false) {
     const version = ++requestVersion;
     const selectionChanged = selectedId !== id;
     selectedId = id;
@@ -157,7 +152,7 @@
     if (!id) return;
     try {
       const next = detailCache.get(id) ?? await getClip(id);
-      detailCache.set(id, next);
+      cacheSet(detailCache, id, next);
       if (version === requestVersion) {
         detail = next;
         previewPending = false;
@@ -165,11 +160,14 @@
           const cachedIcon = sourceIconCache.get(next.source_app.id);
           if (cachedIcon !== undefined) sourceIconUrl = cachedIcon;
           else getSourceAppIcon(next.source_app.id).then((icon) => {
-            sourceIconCache.set(next.source_app!.id, icon.data_url);
+            cacheSet(sourceIconCache, next.source_app!.id, icon.data_url);
             if (version === requestVersion) sourceIconUrl = icon.data_url;
-          }).catch(() => sourceIconCache.set(next.source_app!.id, null));
+          }).catch(() => cacheSet(sourceIconCache, next.source_app!.id, null));
         }
         if (next.content_type === "image") scheduleAsset(id, null, version);
+        // Auto-selecting the first row must not touch its original file. Only a
+        // user click/key selection or preview request opts into that read.
+        if (next.content_type === "file" && readSelectedFile) scheduleAsset(id, 0, version);
       }
     } catch (reason) {
       if (version === requestVersion) error = errorMessage(reason);
@@ -177,10 +175,11 @@
     }
   }
 
-  async function pasteSelected() {
+  async function pasteSelected(plainText = false) {
     if (!selectedId) return;
+    if (plainText && detail?.plain_text == null) return;
     try {
-      const outcome = await pasteClip(selectedId);
+      const outcome = await pasteClip(selectedId, plainText);
       if (outcome !== "pasted") {
         copied = pasteFallbackMessage(outcome);
         setTimeout(() => copied = "", 3200);
@@ -189,34 +188,32 @@
     menuOpen = false;
   }
 
-  async function copyOnly() {
+  async function pastePlainSelected() {
+    await pasteSelected(true);
+  }
+
+  async function copyOnly(plainText = false) {
     if (!selectedId) return;
+    if (plainText && detail?.plain_text == null) return;
     try {
-      await copyClip(selectedId);
-      copied = "已复制，可手动粘贴";
+      await copyClip(selectedId, plainText);
+      copied = plainText ? "已复制纯文本，可手动粘贴" : "已复制，可手动粘贴";
       setTimeout(() => copied = "", 1800);
     } catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
-  }
-
-  function pasteFallbackMessage(outcome: PasteOutcome) {
-    if (outcome === "copied_permission_required") return "已复制；请允许辅助功能权限后自动粘贴";
-    if (outcome === "copied_target_lost") return "已复制；原窗口已关闭，请手动粘贴";
-    if (outcome === "copied_focus_failed") return "已复制；无法恢复原窗口，请手动粘贴";
-    if (outcome === "copied_injection_failed") return "已复制；系统拦截了自动粘贴，请手动粘贴";
-    if (outcome === "copied_already_in_progress") return "已复制；正在处理上一次粘贴";
-    return "已复制；当前平台暂不支持自动粘贴";
   }
 
   async function removeSelected() {
     if (!selectedId) return;
     const index = page.items.findIndex((item) => item.id === selectedId);
     const nextId = page.items[index + 1]?.id ?? page.items[index - 1]?.id ?? null;
+    const targetPage = page.items.length === 1 && page.page > 1 ? page.page - 1 : page.page;
     try {
       rowReorderMotion = true;
       await deleteClip(selectedId);
+      evictClip(selectedId);
       selectedId = nextId;
-      await refresh(page.page);
+      await refresh(targetPage);
       await tick();
       listbox?.focus();
     }
@@ -227,81 +224,44 @@
     menuOpen = false;
   }
 
-  async function removeAll() {
-    try {
-      await clearHistory();
-      await refresh(1);
-      if (view === "settings") settingsStatus = "历史已清空";
-      else { await tick(); listbox?.focus(); }
-    }
-    catch (reason) { error = errorMessage(reason); }
+  async function requestDelete() {
+    if (!selectedId) return;
     menuOpen = false;
-  }
-
-  async function requestPendingAction(action: "delete" | "clear") {
-    if ((action === "delete" && !selectedId) || (action === "clear" && page.total === 0)) return;
-    menuOpen = false;
-    pendingAction = action;
+    deletePending = true;
     await tick();
     confirmActionButton?.focus();
   }
 
-  function cancelPendingAction() {
-    pendingAction = null;
-    requestAnimationFrame(() => view === "settings" ? settingsFirstControl?.focus() : listbox?.focus());
+  function cancelDelete() {
+    deletePending = false;
+    requestAnimationFrame(() => listbox?.focus());
   }
 
-  function confirmPendingAction() {
-    const action = pendingAction;
-    pendingAction = null;
-    if (action === "delete") void removeSelected();
-    if (action === "clear") void removeAll();
+  function confirmDelete() {
+    deletePending = false;
+    void removeSelected();
   }
 
-  async function ignoreSelectedSource() {
-    const source = detail?.source_app;
-    if (!source) return;
-    if (!confirm(`以后不再记录来自“${source.name}”的内容？`)) return;
-    try { await ignoreSource(source.id); copied = `已忽略 ${source.name}`; }
-    catch (reason) { error = errorMessage(reason); }
-    menuOpen = false;
-  }
-
-  async function openSelectedClip() {
-    if (!selectedId) return;
-    try {
-      if (detail?.content_type === "file") await openClipFile(selectedId, fileIndex);
-      else await openClip(selectedId);
-    }
-    catch (reason) { error = errorMessage(reason); }
-    menuOpen = false;
-  }
-
-  async function previewSelectedClip() {
+  async function viewSelectedClip() {
     if (!selectedId) return;
     try {
       const openedSystemPreview = await toggleClipPreview(selectedId, fileIndex);
       if (!openedSystemPreview) {
-        const selected = page.items.find((item) => item.id === selectedId);
-        if (selected && canExpand(selected)) expandedId = expandedId === selectedId ? null : selectedId;
+        if (detail?.content_type === "file") await openClipFile(selectedId, fileIndex);
+        else await openClip(selectedId);
       }
     }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
   }
 
-  function openActionLabel() {
-    const type = page.items.find((item) => item.id === selectedId)?.content_type;
-    if (type === "file") return "在默认应用中打开文件";
-    if (type === "image") return "在默认应用中查看图片";
-    if (type === "link") return "在默认浏览器打开链接";
-    if (type === "color") return "在默认应用中查看色值";
-    if (type === "code") return "在默认应用中查看代码";
-    return "在默认应用中查看文本";
+  function onSearch() {
+    if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      searchTimer = undefined;
+      void refresh(1);
+    }, 120);
   }
-
-
-  function onSearch() { void refresh(1); }
 
   async function openMenu() {
     if (menuOpen) {
@@ -337,110 +297,12 @@
 
   async function openSettingsView() {
     appMenuOpen = false;
-    settingsStatus = "";
-    activeSettingsTab = "general";
-    updateStatus = "idle";
-    updateMessage = "";
-    settings = null;
-    appVersion = await currentVersion();
-    update = cachedUpdate();
     view = "settings";
-    try {
-      settings = await getSettings();
-      await tick();
-      settingsFirstControl?.focus();
-    } catch (reason) {
-      settingsStatus = errorMessage(reason);
-    }
   }
 
   function closeSettingsView() {
     view = "history";
-    settingsStatus = "";
     requestAnimationFrame(() => listbox?.focus());
-  }
-
-  const settingsTabs = ["general", "updates", "about"] as const;
-
-  function selectSettingsTab(tab: (typeof settingsTabs)[number]) {
-    activeSettingsTab = tab;
-  }
-
-  function onSettingsTabKeydown(event: KeyboardEvent) {
-    const index = settingsTabs.indexOf(activeSettingsTab);
-    let next = index;
-    if (event.key === "ArrowDown") next = (index + 1) % settingsTabs.length;
-    else if (event.key === "ArrowUp") next = (index - 1 + settingsTabs.length) % settingsTabs.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = settingsTabs.length - 1;
-    else return;
-    event.preventDefault();
-    activeSettingsTab = settingsTabs[next];
-    requestAnimationFrame(() => settingsTabEls[next]?.focus());
-  }
-
-  async function checkUpdates() {
-    updateStatus = "checking";
-    updateMessage = "";
-    try {
-      const result = await checkForUpdate();
-      if (result.kind === "available") {
-        appVersion = result.update.currentVersion;
-        update = result.update;
-        updateStatus = "idle";
-      } else if (result.kind === "current") {
-        appVersion = result.currentVersion;
-        update = null;
-        updateStatus = "current";
-        updateMessage = "当前已是最新版本";
-      } else {
-        appVersion = result.currentVersion;
-        updateStatus = "error";
-        updateMessage = "开发环境不执行自动更新";
-      }
-    } catch (reason) {
-      updateStatus = "error";
-      updateMessage = `检查失败：${errorMessage(reason)}`;
-    }
-  }
-
-  async function installUpdate() {
-    if (!update) return;
-    updateStatus = "downloading";
-    updateProgress = null;
-    updateMessage = "正在下载更新…";
-    try {
-      await downloadAndInstall(update.version, (progress) => {
-        updateProgress = progress;
-        updateMessage = progress === null ? "正在下载更新…" : `正在下载更新 ${progress}%`;
-      });
-      updateStatus = "installing";
-      updateMessage = "正在安装并重新启动…";
-    } catch (reason) {
-      updateStatus = "error";
-      updateMessage = `安装失败：${errorMessage(reason)}`;
-    }
-  }
-
-  async function saveSettings() {
-    if (!settings) return;
-    settingsStatus = "";
-    try {
-      settings = await updateSettings(settings);
-      applyTheme(settings.theme);
-      settingsStatus = "已保存";
-    } catch (reason) {
-      settingsStatus = errorMessage(reason);
-    }
-  }
-
-  function removeIgnoredApp(appId: string) {
-    if (!settings) return;
-    settings.ignored_apps = settings.ignored_apps.filter((item) => item !== appId);
-  }
-
-  function appLabel(appId: string) {
-    return appId.split(/[\\/]/).pop()?.replace(/\.exe$/i, "") || appId;
   }
 
   function menuItemElements() {
@@ -466,10 +328,11 @@
     listbox?.focus();
     const item = page.items.find((candidate) => candidate.id === id);
     if (selectedId === id && item && canExpand(item)) {
+      if (detail?.content_type === "file") scheduleAsset(id, fileIndex, requestVersion);
       expandedId = expandedId === id ? null : id;
       return;
     }
-    void select(id);
+    void select(id, true);
   }
 
   async function resetToLatest() {
@@ -477,6 +340,7 @@
     appMenuOpen = false;
     view = "history";
     query = "";
+    clearContentCaches();
     await tick();
     listbox?.focus();
     await refresh(1, true);
@@ -491,7 +355,7 @@
 
   function onListKeydown(event: KeyboardEvent) {
     const index = page.items.findIndex((item) => item.id === selectedId);
-    const selectIndex = (next: number) => void select(page.items[Math.max(0, Math.min(next, page.items.length - 1))]?.id ?? null);
+    const selectIndex = (next: number) => void select(page.items[Math.max(0, Math.min(next, page.items.length - 1))]?.id ?? null, true);
     const selected = page.items.find((item) => item.id === selectedId);
     if ((event.metaKey || event.ctrlKey) && selected && canExpand(selected) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
       event.preventDefault();
@@ -514,16 +378,19 @@
     }
     else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
-      void previewSelectedClip();
+      void viewSelectedClip();
     }
-    else if (event.key === "Enter") { event.preventDefault(); void pasteSelected(); }
+    else if (event.key === "Enter") {
+      event.preventDefault();
+      void pasteSelected(event.shiftKey);
+    }
     else if ((event.metaKey || event.ctrlKey) && ["Backspace", "Delete"].includes(event.key)) {
       event.preventDefault();
-      void requestPendingAction("delete");
+      void requestDelete();
     }
     else if (/^[0-9]$/.test(event.key)) {
       const target = event.key === "0" ? 9 : Number(event.key) - 1;
-      if (page.items[target]) { event.preventDefault(); void select(page.items[target].id); }
+      if (page.items[target]) { event.preventDefault(); void select(page.items[target].id, true); }
     }
   }
 
@@ -532,14 +399,14 @@
     const index = page.items.findIndex((item) => item.id === selectedId);
     const nextIndex = index + direction;
     if (nextIndex >= 0 && nextIndex < page.items.length) {
-      await select(page.items[nextIndex]?.id ?? null);
+      await select(page.items[nextIndex]?.id ?? null, true);
       return;
     }
     if (direction < 0 && page.page > 1) {
       pageNavigationPending = true;
       try {
         await refresh(page.page - 1);
-        await select(page.items.at(-1)?.id ?? null);
+        await select(page.items.at(-1)?.id ?? null, true);
       } finally {
         pageNavigationPending = false;
       }
@@ -547,6 +414,7 @@
       pageNavigationPending = true;
       try {
         await refresh(page.page + 1);
+        await select(page.items[0]?.id ?? null, true);
       } finally {
         pageNavigationPending = false;
       }
@@ -567,45 +435,17 @@
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-file-index="${next}"]`)?.focus());
   }
 
-  function cycleTabFocus(event: KeyboardEvent) {
-    if (event.key !== "Tab" || event.metaKey || event.ctrlKey || event.altKey) return false;
-    const scope = pendingAction
-      ? document.querySelector<HTMLElement>(".confirmation")
-      : menuOpen
-        ? document.querySelector<HTMLElement>(".action-menu")
-        : appMenuOpen
-          ? document.querySelector<HTMLElement>(".app-menu")
-          : document.querySelector<HTMLElement>(".panel");
-    if (!scope) return false;
-    const elements = Array.from(scope.querySelectorAll<HTMLElement>(
-      'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'
-    )).filter((element) => element.getClientRects().length > 0);
-    if (elements.length === 0) return false;
-    event.preventDefault();
-    const current = elements.indexOf(document.activeElement as HTMLElement);
-    const next = event.shiftKey
-      ? (current <= 0 ? elements.length - 1 : current - 1)
-      : (current < 0 || current === elements.length - 1 ? 0 : current + 1);
-    elements[next]?.focus();
-    return true;
-  }
-
   function onKeydown(event: KeyboardEvent) {
-    if (cycleTabFocus(event)) return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "w") {
       event.preventDefault();
-      pendingAction = null;
+      deletePending = false;
       menuOpen = false;
       appMenuOpen = false;
       void hidePanel();
       return;
     }
-    if (pendingAction) return;
+    if (deletePending) return;
     if (view === "settings") {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void saveSettings();
-      }
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key === ",") {
@@ -615,6 +455,9 @@
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
       event.preventDefault(); searchInput?.focus(); return;
+    }
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "c") {
+      event.preventDefault(); void copyOnly(true); return;
     }
     if (event.key === "/" && listHasFocus()) {
       event.preventDefault(); searchInput?.focus(); return;
@@ -630,93 +473,13 @@
     }
   }
 
-  function errorMessage(reason: unknown) {
-    if (typeof reason === "object" && reason && "message" in reason) return String((reason as AppError).message);
-    return String(reason ?? "未知错误");
-  }
-
-  function exactTime(value: string) {
-    const date = new Date(value);
-    const pad = (number: number) => String(number).padStart(2, "0");
-    const year = date.getFullYear() === new Date().getFullYear() ? "" : `${date.getFullYear()}-`;
-    return `${year}${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-
-  function formatBytes(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-  }
-
-  function countValue(detail: ClipDetail, key: string) {
-    const value = detail.metadata[key];
-    return typeof value === "number" ? value : null;
-  }
-
-  function metadataFacts(detail: ClipDetail) {
-    const facts: Array<{ label: string; value: string }> = [];
-    if (detail.content_type === "image") {
-      const width = countValue(detail, "width");
-      const height = countValue(detail, "height");
-      if (width && height) facts.push({ label: "尺寸", value: `${width} × ${height}` });
-      facts.push({ label: "大小", value: formatBytes(detail.byte_size) });
-      return facts;
-    }
-    if (detail.content_type === "file") {
-      const files = filePaths(detail);
-      facts.push({ label: "文件", value: `${fileIndex + 1}/${files.length || 1}` });
-      const sizes = Array.isArray(detail.metadata.file_sizes)
-        ? detail.metadata.file_sizes.filter((size): size is number => typeof size === "number") : [];
-      const size = sizes[fileIndex];
-      if (size !== undefined) facts.push({ label: "大小", value: formatBytes(size) });
-      return facts;
-    }
-    const charCount = countValue(detail, "char_count") ?? detail.plain_text?.length ?? 0;
-    if (charCount) facts.push({ label: "字符", value: charCount.toLocaleString() });
-    facts.push({ label: "大小", value: formatBytes(detail.byte_size) });
-    return facts;
-  }
-
-  function groupedFiles(item: ClipSummary) {
-    return item.content_type === "file" && Array.isArray(item.metadata.files)
-      ? item.metadata.files.filter((path): path is string => typeof path === "string")
-      : [];
-  }
-
-  function canExpand(item: ClipSummary) {
-    return groupedFiles(item).length > 1;
-  }
-
-  function filePaths(record: ClipDetail) {
-    return Array.isArray(record.metadata.files)
-      ? record.metadata.files.filter((path): path is string => typeof path === "string")
-      : [];
-  }
-
-  function fileName(path: string) {
-    const normalized = path.replace(/^file:\/\//, "");
-    return normalized.split(/[\\/]/).pop() || normalized;
-  }
-
   async function selectFile(index: number) {
     if (!selectedId || !detail || detail.content_type !== "file") return;
     const paths = filePaths(detail);
     if (index < 0 || index >= paths.length || index === fileIndex) return;
     fileIndex = index;
-    const key = assetKey(selectedId, index);
-    if (assetCache.has(key)) {
-      assetUrl = assetCache.get(key) ?? null;
-      return;
-    }
     assetUrl = null;
-    const version = requestVersion;
-    try {
-      const asset = await getClipFileAsset(selectedId, index);
-      assetCache.set(key, asset.data_url);
-      if (version === requestVersion) assetUrl = asset.data_url;
-    } catch (reason) {
-      if (version === requestVersion) error = errorMessage(reason);
-    }
+    scheduleAsset(selectedId, index, requestVersion);
   }
 
   function assetKey(id: string, index: number | null) {
@@ -725,20 +488,51 @@
 
   function scheduleAsset(id: string, index: number | null, version: number) {
     const key = assetKey(id, index);
-    if (assetCache.has(key)) {
-      assetUrl = assetCache.get(key) ?? null;
+    const cached = assetCache.get(key);
+    if (cached) {
+      assetUrl = cached.data_url;
+      if (index !== null) applyFileAsset(index, cached);
       return;
     }
     assetTimer = window.setTimeout(() => {
       assetTimer = undefined;
       const request = index === null ? getClipAsset(id) : getClipFileAsset(id, index);
       request.then((asset) => {
-        assetCache.set(key, asset.data_url);
-        if (version === requestVersion) assetUrl = asset.data_url;
+        cacheSet(assetCache, key, asset);
+        if (version === requestVersion && (index === null || index === fileIndex)) {
+          assetUrl = asset.data_url;
+          if (index !== null) applyFileAsset(index, asset);
+        }
       }).catch((reason) => {
         if (version === requestVersion) error = errorMessage(reason);
       });
     }, 80);
+  }
+
+  function applyFileAsset(index: number, asset: { data_url: string | null; byte_size: number | null }) {
+    fileThumbnailUrls[index] = asset.data_url;
+    if (!detail || asset.byte_size === null) return;
+    const sizes = [...(detail.metadata.file_sizes ?? [])];
+    sizes[index] = asset.byte_size;
+    detail.metadata.file_sizes = sizes;
+  }
+
+  function evictClip(id: string) {
+    detailCache.delete(id);
+    thumbnailCache.delete(id);
+    for (const key of assetCache.keys()) if (key.startsWith(`${id}:`)) assetCache.delete(key);
+  }
+
+  function clearContentCaches() {
+    detailCache.clear();
+    assetCache.clear();
+    thumbnailCache.clear();
+    sourceIconCache.clear();
+  }
+
+  function settingsClearedHistory() {
+    clearContentCaches();
+    void refresh(1);
   }
 </script>
 
@@ -771,7 +565,7 @@
       <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label="搜索剪贴板历史" placeholder="搜索剪贴板…" />
       <kbd>/</kbd>
     </form>
-    <div bind:this={listbox} class="list" role="tree" aria-label="剪贴板历史" aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
+    <div bind:this={listbox} class="list" role="listbox" aria-label="剪贴板历史" aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
       {#if loading && page.items.length === 0}
         <div class="empty">正在读取历史…</div>
       {:else if error && page.items.length === 0}
@@ -781,7 +575,7 @@
       {:else}
         {#each page.items as item, index (item.id)}
           <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
-            <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="treeitem" tabindex="-1" aria-selected={item.id === selectedId} aria-expanded={canExpand(item) ? expandedId === item.id : undefined} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => pasteSelected()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
+            <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="option" tabindex="-1" aria-selected={item.id === selectedId} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => pasteSelected()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
               <span class="num">{index === 9 ? 0 : index + 1}</span>
               <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
                 {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
@@ -855,7 +649,7 @@
             {/if}
           </div>
           <dl class="meta-facts">
-            {#each metadataFacts(detail) as fact}
+            {#each metadataFacts(detail, fileIndex) as fact}
               <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
             {/each}
           </dl>
@@ -874,11 +668,11 @@
     <button disabled={page.page >= page.total_pages} onclick={() => refresh(page.page + 1)} aria-label="下一页"><ChevronRight size={16} aria-hidden="true" /></button>
   </footer>
   <footer class="actions">
-    {#if pendingAction}
-      <div class="confirmation" role="alertdialog" aria-label={pendingAction === "delete" ? "确认删除记录" : "确认清空历史"}>
-        <span>{pendingAction === "delete" ? "删除此记录？" : "清空全部历史？"}<small>仅从 ClipClop 移除，不影响原始文件或系统剪贴板。</small></span>
-        <button bind:this={cancelActionButton} class="ghost" onclick={cancelPendingAction}>取消 <kbd>Esc</kbd></button>
-        <button bind:this={confirmActionButton} class="destructive" onclick={confirmPendingAction}>{pendingAction === "delete" ? "删除" : "清空"}</button>
+    {#if deletePending}
+      <div class="confirmation" role="alertdialog" aria-label="确认删除记录">
+        <span>从 ClipClop 删除此记录？<small>不会删除原始文件，也不会更改系统剪贴板。</small></span>
+        <button bind:this={cancelActionButton} class="ghost" onclick={cancelDelete}>取消 <kbd>Esc</kbd></button>
+        <button bind:this={confirmActionButton} class="destructive" onclick={confirmDelete}>删除</button>
       </div>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
@@ -887,11 +681,13 @@
         <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> 操作</button>
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => void previewSelectedClip()} disabled={!selectedId}><span>快速预览</span><kbd>Space</kbd></button>
-            <button data-menu-item role="menuitem" onclick={() => void openSelectedClip()} disabled={!selectedId}><span>{openActionLabel()}</span></button>
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>仅复制到剪贴板</span></button>
-            <button data-menu-item role="menuitem" onclick={ignoreSelectedSource} disabled={!detail?.source_app}><span>忽略此来源应用</span></button>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestPendingAction("delete")} disabled={!selectedId}><span>从 ClipClop 删除</span><kbd>{deleteShortcut}</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()} disabled={!selectedId}><span>查看所选内容</span><kbd>Space</kbd></button>
+            <div class="menu-separator" role="separator"></div>
+            <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()} disabled={detail?.plain_text == null}><span>粘贴为纯文本</span><kbd>⇧⏎</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>复制到剪贴板</span></button>
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)} disabled={detail?.plain_text == null}><span>复制为纯文本</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
+            <div class="menu-separator" role="separator"></div>
+            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()} disabled={!selectedId}><span>从 ClipClop 删除…</span><kbd>{deleteShortcut}</kbd></button>
           </div>
         {/if}
       </div>
@@ -899,63 +695,7 @@
     {/if}
   </footer>
   {:else}
-    <div class="settings-body">
-      <div class="settings-nav" role="tablist" aria-orientation="vertical" aria-label="设置分类">
-        <button bind:this={settingsTabEls[0]} role="tab" id="settings-tab-general" aria-controls="settings-panel" aria-selected={activeSettingsTab === "general"} tabindex={activeSettingsTab === "general" ? 0 : -1} class:active={activeSettingsTab === "general"} onclick={() => selectSettingsTab("general")} onkeydown={onSettingsTabKeydown}>常规</button>
-        <button bind:this={settingsTabEls[1]} role="tab" id="settings-tab-updates" aria-controls="settings-panel" aria-selected={activeSettingsTab === "updates"} tabindex={activeSettingsTab === "updates" ? 0 : -1} class:active={activeSettingsTab === "updates"} onclick={() => selectSettingsTab("updates")} onkeydown={onSettingsTabKeydown}>软件更新</button>
-        <button bind:this={settingsTabEls[2]} role="tab" id="settings-tab-about" aria-controls="settings-panel" aria-selected={activeSettingsTab === "about"} tabindex={activeSettingsTab === "about" ? 0 : -1} class:active={activeSettingsTab === "about"} onclick={() => selectSettingsTab("about")} onkeydown={onSettingsTabKeydown}>关于</button>
-      </div>
-      <div id="settings-panel" class="settings-content" role="tabpanel" aria-labelledby={`settings-tab-${activeSettingsTab}`} tabindex="0">
-        {#if settings}
-          {#if activeSettingsTab === "general"}
-            <label><span><strong>开机启动</strong><small>登录系统后在后台启动 ClipClop。</small></span><input bind:this={settingsFirstControl} type="checkbox" bind:checked={settings.launch_at_login} /></label>
-            <label><span><strong>保留期限</strong><small>超出期限的历史会在后续捕获时清理。</small></span><select bind:value={settings.retention_days}><option value={7}>7 天</option><option value={30}>30 天</option><option value={90}>90 天</option></select></label>
-            <label><span><strong>外观</strong><small>跟随系统，或固定使用 Light/Dark。</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">跟随系统</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-            <div class="preference-row"><span><strong>全局快捷键</strong><small>当前版本使用平台默认值；暂不支持自定义。</small></span><kbd>{settings.hotkey}</kbd></div>
-            <div class="preference-row"><span><strong>数据管理</strong><small>清除 ClipClop 保存的全部历史，不影响原始文件或系统剪贴板。</small></span><button class="danger-action" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}>清空全部历史</button></div>
-            {#if settings.ignored_apps.length > 0}
-              <div class="ignored-apps"><strong>已忽略的应用</strong>{#each settings.ignored_apps as appId}<div><code title={appId}>{appLabel(appId)}</code><button onclick={() => removeIgnoredApp(appId)}>移除</button></div>{/each}</div>
-            {/if}
-          {:else if activeSettingsTab === "updates"}
-            <div class="update-head"><span><strong>保持 ClipClop 为最新版本</strong><small>当前版本 {appVersion}；最多每天自动检查一次。</small></span><label class="update-toggle"><span>自动检查</span><input type="checkbox" bind:checked={settings.check_updates} /></label></div>
-            {#if update}
-              <div class="update-card">
-                <div class="update-card-head"><strong>ClipClop {update.version} 可用</strong>{#if update.date}<small>{new Date(update.date).toLocaleDateString()}</small>{/if}</div>
-                {#if update.notes}<p>{update.notes}</p>{/if}
-                {#if updateStatus === "downloading" && updateProgress !== null}<progress max="100" value={updateProgress}></progress>{/if}
-                <div class="update-actions"><button class="ghost" onclick={() => void openLatestRelease()}>查看发布页</button><button class="copy" disabled={updateStatus === "downloading" || updateStatus === "installing"} onclick={installUpdate}>下载并安装</button></div>
-              </div>
-            {:else}
-              <div class="update-check"><span class:error={updateStatus === "error"} aria-live="polite">{updateMessage}</span><button class="ghost" disabled={updateStatus === "checking"} onclick={checkUpdates}>{updateStatus === "checking" ? "正在检查…" : "检查更新"}</button></div>
-            {/if}
-            {#if update && updateMessage}<small class="update-note" class:error={updateStatus === "error"} aria-live="polite">{updateMessage}</small>{/if}
-          {:else}
-            <div class="about">
-              <img class="about-mark" src="/app-icon.png" alt="ClipClop 图标" />
-              <h2>ClipClop</h2>
-              <p>轻量、离线优先的跨平台剪贴板历史工具。</p>
-              <small>版本 {appVersion} · MIT License</small>
-              <div class="about-links"><button class="github" aria-label="在 GitHub 查看 ClipClop 项目" title="GitHub" onclick={() => void openUrl("https://github.com/hiQianFan/ClipClop")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.2c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.58-.29-5.29-1.29-5.29-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18A10.9 10.9 0 0 1 12 6.12c.98 0 1.95.13 2.86.38 2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.72 5.39-5.3 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></button></div>
-            </div>
-          {/if}
-        {:else}
-          <div class="settings-loading">{settingsStatus || "正在读取设置…"}</div>
-        {/if}
-      </div>
-    </div>
-    <footer class="settings-actions">
-      {#if pendingAction === "clear"}
-        <div class="confirmation" role="alertdialog" aria-label="确认清空历史">
-          <span>清空全部历史？<small>仅从 ClipClop 移除，不影响原始文件或系统剪贴板。</small></span>
-          <button bind:this={cancelActionButton} class="ghost" onclick={cancelPendingAction}>取消 <kbd>Esc</kbd></button>
-          <button bind:this={confirmActionButton} class="destructive" onclick={confirmPendingAction}>清空</button>
-        </div>
-      {:else}
-        <span aria-live="polite" class:error={settingsStatus !== "" && !["已保存", "历史已清空"].includes(settingsStatus)}>{settingsStatus}</span>
-        <button class="ghost" onclick={closeSettingsView}>返回 <kbd>Esc</kbd></button>
-        {#if activeSettingsTab !== "about"}<button class="copy" onclick={() => void saveSettings()} disabled={!settings}>保存</button>{/if}
-      {/if}
-    </footer>
+    <SettingsView onclose={closeSettingsView} oncleared={settingsClearedHistory} />
   {/if}
 </main>
 
@@ -980,9 +720,9 @@
   .clip-item { width:100%; }
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
-  .row.selected { background:var(--bg-selected); }
+  .list:focus .row.selected { background:var(--bg-selected); }
   .num { width:16px; flex:none; color:var(--text-3); font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size:12px; font-weight:650; line-height:1; font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum" 1, "lnum" 1, "zero" 0; letter-spacing:-.01em; text-align:center; }
-  .row.selected .num { color:var(--text-2); }
+  .list:focus .row.selected .num { color:var(--text-2); }
   .lead { width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:4px; color:var(--text-2); font:7px var(--mono); }
   .lead.swatch { color:transparent; border:1px solid var(--hairline); }
   .lead.media { overflow:hidden; background:var(--bg-raised); font:15px/1 system-ui; }
@@ -1065,57 +805,14 @@
   .menu button > span { min-width:0; }
   .menu button > kbd { flex:none; align-self:center; }
   .menu button:hover { background:var(--bg-hover); }
+  .menu-separator { height:1px; margin:5px 6px; background:var(--hairline); }
   .menu .danger { color:var(--danger); }
+  .menu .danger kbd { color:currentColor; border-color:currentColor; }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:11px; }
   .message.error { color:var(--danger); }
   .confirmation { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
   .confirmation > span { margin-right:auto; color:var(--text-1); font-size:12px; font-weight:600; }
   .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:10px; font-weight:400; }
-  .settings-body { grid-column:1 / -1; grid-row:2; min-height:0; display:grid; grid-template-columns:148px 1fr; }
-  .settings-nav { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:12px 10px; border-right:1px solid var(--hairline); }
-  .settings-nav button { text-align:left; padding:8px 10px; border-radius:6px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; }
-  .settings-nav button:hover { background:var(--bg-hover); color:var(--text-1); }
-  .settings-nav button.active { color:var(--text-1); background:var(--bg-selected); }
-  .settings-content { min-height:0; overflow-y:auto; padding:0 20px; }
-  .settings-content:focus-visible { outline:none; }
-  .settings-content > label, .preference-row { min-height:68px; display:flex; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid var(--hairline); }
-  .settings-content > label > span, .preference-row > span { display:flex; flex-direction:column; gap:3px; }
-  .settings-content strong { color:var(--text-1); font-size:13px; font-weight:600; }
-  .settings-content small { color:var(--text-3); font-size:11px; }
-  .settings-content select { min-width:116px; padding:7px 28px 7px 9px; border:1px solid var(--hairline); border-radius:6px; color:var(--text-1); background:var(--bg-raised); }
-  .settings-content input { width:18px; height:18px; accent-color:var(--text-1); }
-  .update-head { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 0; border-bottom:1px solid var(--hairline); }
-  .update-head > span { display:flex; flex-direction:column; gap:3px; }
-  .update-toggle { display:flex; align-items:center; gap:8px; color:var(--text-2); font-size:12px; }
-  .update-toggle span { display:block; }
-  .update-card { display:flex; flex-direction:column; gap:10px; margin-top:16px; padding:14px; border-radius:8px; background:var(--bg-raised); }
-  .update-card-head { display:flex; justify-content:space-between; gap:12px; }
-  .update-card p { max-height:120px; overflow:auto; white-space:pre-wrap; color:var(--text-2); font-size:12px; line-height:1.5; }
-  .update-card progress { width:100%; accent-color:var(--action); }
-  .update-actions { display:flex; justify-content:flex-end; gap:8px; }
-  .update-check { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
-  .update-check span, .update-note { color:var(--text-2); font-size:12px; }
-  .update-check span.error, .update-note.error { color:var(--danger); }
-  .update-note { display:block; margin-top:10px; }
-  .about { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; }
-  .about-mark { width:56px; height:56px; margin-bottom:6px; border-radius:12px; object-fit:contain; }
-  .about h2 { font-size:16px; }
-  .about p { max-width:280px; color:var(--text-2); font-size:12px; line-height:1.5; }
-  .about-links { display:flex; gap:8px; margin-top:12px; }
-  .about-links .github { width:34px; height:34px; display:grid; place-items:center; padding:0; border-radius:8px; color:var(--text-2); background:var(--bg-hover); }
-  .about-links .github:hover { color:var(--text-1); background:var(--bg-selected); }
-  .about-links .github svg { width:18px; height:18px; fill:currentColor; }
-  .danger-action { padding:7px 10px; border:1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius:6px; color:var(--danger); background:transparent; }
-  .danger-action:hover:not(:disabled) { background:color-mix(in srgb, var(--danger) 8%, transparent); }
-  .ignored-apps { padding:16px 0; display:flex; flex-direction:column; gap:8px; }
-  .ignored-apps > strong { margin-bottom:2px; }
-  .ignored-apps div { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:7px 9px; border-radius:6px; background:var(--bg-raised); }
-  .ignored-apps code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2); font:11px var(--mono); }
-  .ignored-apps button { color:var(--text-2); background:transparent; font-size:12px; }
-  .settings-loading { height:100%; display:grid; place-items:center; color:var(--text-3); font-size:12px; }
-  .settings-actions { grid-column:1 / -1; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .settings-actions > span { margin-right:auto; color:var(--text-2); font-size:11px; }
-  .settings-actions > span.error { color:var(--danger); }
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }
   @media (prefers-reduced-motion:no-preference) { .panel { animation:enter 120ms ease-out; } @keyframes enter { from { opacity:0; transform:scale(.98); } } }

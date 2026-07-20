@@ -8,6 +8,14 @@ export type ContentType =
 
 export type SourceApp = { id: string; name: string };
 
+export type ClipMetadata = {
+  char_count?: number;
+  width?: number;
+  height?: number;
+  files?: string[];
+  file_sizes?: Array<number | null>;
+};
+
 export type ClipSummary = {
   id: string;
   content_type: ContentType;
@@ -15,7 +23,7 @@ export type ClipSummary = {
   source_app: SourceApp | null;
   created_at: string;
   byte_size: number;
-  metadata: Record<string, unknown>;
+  metadata: ClipMetadata;
 };
 
 export type FlavorInfo = { format: string; byte_size: number };

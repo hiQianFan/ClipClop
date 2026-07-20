@@ -11,20 +11,16 @@ export function getClip(id: string): Promise<ClipDetail> {
   return invoke("get_clip", { id });
 }
 
-export function getClipAsset(id: string): Promise<{ data_url: string | null }> {
+export function getClipAsset(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
   return invoke("get_clip_asset", { id });
 }
 
-export function getClipFileAsset(id: string, index: number): Promise<{ data_url: string | null }> {
+export function getClipFileAsset(id: string, index: number): Promise<{ data_url: string | null; byte_size: number | null }> {
   return invoke("get_clip_file_asset", { id, index });
 }
 
-export function getClipThumbnail(id: string): Promise<{ data_url: string | null }> {
+export function getClipThumbnail(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
   return invoke("get_clip_thumbnail", { id });
-}
-
-export function getClipFileThumbnail(id: string, index: number): Promise<{ data_url: string | null }> {
-  return invoke("get_clip_file_thumbnail", { id, index });
 }
 
 export function openClip(id: string): Promise<void> {
@@ -39,7 +35,7 @@ export function toggleClipPreview(id: string, index = 0): Promise<boolean> {
   return invoke("toggle_clip_preview", { id, index });
 }
 
-export function getSourceAppIcon(appId: string): Promise<{ data_url: string | null }> {
+export function getSourceAppIcon(appId: string): Promise<{ data_url: string | null; byte_size: number | null }> {
   return invoke("get_source_app_icon", { appId });
 }
 
@@ -47,8 +43,8 @@ export function hidePanel(): Promise<void> {
   return invoke("hide_panel");
 }
 
-export function copyClip(id: string): Promise<void> {
-  return invoke("copy_clip", { id });
+export function copyClip(id: string, plainText = false): Promise<void> {
+  return invoke("copy_clip", { id, plainText });
 }
 
 export type PasteOutcome =
@@ -57,11 +53,11 @@ export type PasteOutcome =
   | "copied_target_lost"
   | "copied_focus_failed"
   | "copied_injection_failed"
-  | "copied_already_in_progress"
+  | "already_in_progress"
   | "copied_unsupported_platform";
 
-export function pasteClip(id: string): Promise<PasteOutcome> {
-  return invoke("paste_clip", { id });
+export function pasteClip(id: string, plainText = false): Promise<PasteOutcome> {
+  return invoke("paste_clip", { id, plainText });
 }
 
 export function deleteClip(id: string): Promise<void> {
