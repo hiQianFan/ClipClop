@@ -6,11 +6,13 @@
 
 ## 功能
 
-- 捕获纯文本、图片和文件引用，并在本地搜索与预览。
-- 在列表中按 Enter 复制，`⌘/Ctrl+K` 打开操作菜单。
-- 全局快捷键呼出：macOS 为 `⌃⌘C`，Windows 为 `Ctrl+Alt+C`。托盘常驻、Light/Dark、保留期限与忽略来源应用；退出应用即停止记录。
+- 捕获纯文本及其已有 HTML/RTF flavor、图片和文件引用；界面只安全展示纯文本。
+- 在列表中按 Enter 保留格式粘贴，按 Shift+Enter 粘贴纯文本；直接粘贴失败时内容仍留在系统剪贴板。
+- 全局快捷键呼出：macOS 为 `⌃⌘C`，Windows 为 `Ctrl+Alt+C`。托盘常驻，支持 Light/Dark 与保留期限；退出应用即停止记录。
 - macOS 与 Windows 双端构建；无账号、云同步、遥测或链接联网增强。
 - 通过 GitHub Releases 检查经过 Tauri updater 签名验证的新版本；自动检查最多每天一次，下载和安装由用户确认。
+
+macOS 首次直接粘贴会请求辅助功能/Post Event 权限；拒绝后仍可复制并手动粘贴。Windows 通常无需弹窗，但普通权限进程不能向管理员窗口注入输入，此时同样回退为已复制。
 
 ## 安装
 
@@ -20,7 +22,7 @@
 
 ## 隐私边界
 
-ClipClop 会在本机保存剪贴板内容、来源应用信息和文件路径引用。数据不会上传，复制的 URL 也不会触发联网抓取。应用默认不判断或过滤“敏感内容”；请使用忽略来源、删除、清空历史、保留期限或退出应用来控制记录。完整说明见 [隐私说明](docs/privacy.md)。
+ClipClop 会在本机保存剪贴板内容、来源应用信息和文件路径引用。数据不会上传，复制的 URL 也不会触发联网抓取。应用默认不判断或过滤“敏感内容”；请使用删除、清空历史、保留期限或退出应用来控制记录。完整说明见 [隐私说明](docs/privacy.md)。
 
 ## 命名约定
 
@@ -54,7 +56,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-当前还没有前端自动化测试脚本；`pnpm check` 与 `pnpm build` 不能替代行为测试。这是公开发布前的已知缺口。
+前端使用 Vitest 覆盖更新节流、格式化、缓存上限和粘贴回退等纯逻辑；完整桌面交互仍需 macOS 与 Windows 实机冒烟测试。
 
 ## 参与项目
 

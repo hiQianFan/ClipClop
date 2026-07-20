@@ -4,6 +4,7 @@
 
 - [ ] 冻结范围，清空阻塞发布的 issue；更新 `CHANGELOG.md`。
 - [ ] `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 版本一致。
+- [ ] 目标 `vX.Y.Z` tag 与上述三处版本一致；发布 workflow 的版本校验步骤通过。
 - [ ] README 的状态、能力和已知限制与代码一致。
 - [ ] 新权限、联网行为和数据处理已完成安全/隐私审查。
 

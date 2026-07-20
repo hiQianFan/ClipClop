@@ -56,6 +56,6 @@ Tauri updater 签名用于验证更新来源，不等同于 Apple/Windows 平台
 ## CI
 
 - `quality.yml` 在 macOS 与 Windows 执行前后端检查和测试。
-- `bundle.yml` 可手动运行，或在推送语义化 `vX.Y.Z` tag 时构建 Universal DMG 和 Windows x64 NSIS，生成 updater artifacts/`latest.json` 并创建 Draft GitHub Release。
+- `bundle.yml` 可手动运行，或在推送语义化 `vX.Y.Z` tag 时构建 Universal DMG 和 Windows x64 NSIS，生成 updater artifacts/`latest.json` 并创建 Draft GitHub Release。tag 发布前会校验 tag、`package.json`、Cargo package 与 Tauri 配置四处版本一致；两个平台串行更新共享的 `latest.json`，避免并发覆盖。
 - 签名密钥只能通过 CI secrets 注入，禁止提交到仓库。
 - Draft Release 先检查安装包、签名文件和 `latest.json`；确认无误后由维护者发布为普通 Release（不要标记为 prerelease，否则 `/releases/latest` 无法发现它）。旧版本自动升级需要在 Release 发布后完成验证，如有问题立即撤回 Release 并修复。

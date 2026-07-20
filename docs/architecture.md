@@ -64,95 +64,45 @@ clips_changed event（只发轻量失效通知）
 
 ## 3. 文件结构
 
-目录随真实功能增长。以下是 v1 目标结构，不要求在第一天创建所有空文件。
+目录只随真实职责增长。当前结构如下，不为未来功能预建空文件。
 
 ```text
 ClipClop/
-├── docs/
-│   └── architecture.md
-├── src/                              # Svelte 前端
-│   ├── app.html
-│   ├── routes/
-│   │   ├── +layout.ts
-│   │   ├── +page.svelte              # Quick Panel 页面组装
-│   │   └── settings/
-│   │       └── +page.svelte          # 设置窗口页面
+├── src/
+│   ├── routes/+page.svelte           # 历史面板和会话状态
 │   └── lib/
-│       ├── ipc/
-│       │   ├── client.ts             # 唯一直接调用 invoke/listen 的位置
-│       │   ├── types.ts              # IPC DTO 与错误类型
-│       │   └── events.ts             # 监听、清理 Tauri event
-│       ├── clips/
-│       │   ├── api.ts                # list/get/copy/delete
-│       │   ├── state.svelte.ts       # 当前页、选中项、搜索状态
-│       │   ├── ClipList.svelte
-│       │   ├── ClipRow.svelte
-│       │   └── ClipPreview.svelte
-│       ├── search/
-│       │   └── SearchField.svelte
-│       ├── settings/
-│       │   ├── api.ts
-│       │   └── SettingsForm.svelte
-│       ├── shortcuts/
-│       │   └── keyboard.ts            # 面板内快捷键映射
-│       ├── ui/                         # 至少被两个 feature 使用才放入
-│       │   ├── Keycap.svelte
-│       │   └── EmptyState.svelte
-│       └── styles/
-│           ├── tokens.css
-│           └── global.css
+│       ├── clips/                    # DTO、IPC client、展示辅助函数
+│       ├── settings/                 # 设置 IPC 与独立设置视图
+│       └── updater/                  # 更新检查、缓存与安装
 ├── src-tauri/
-│   ├── capabilities/
-│   │   └── default.json               # 最小权限白名单
-│   ├── migrations/
-│   │   └── 0001_init.sql
-│   ├── src/
-│   │   ├── main.rs                    # 保持极薄，只调用 run()
-│   │   ├── lib.rs                     # 组合根：初始化、manage、插件、commands
-│   │   ├── state.rs                   # AppState 及共享资源句柄
-│   │   ├── error.rs                   # AppError、ErrorCode、IPC 序列化
-│   │   ├── commands/                  # Tauri 传输适配层
-│   │   │   ├── mod.rs
-│   │   │   ├── clips.rs
-│   │   │   └── settings.rs
-│   │   ├── clips/                     # 核心领域模块
-│   │   │   ├── mod.rs                 # 对外公开 ClipService
-│   │   │   ├── model.rs               # Clip、Flavor、ContentType
-│   │   │   ├── capture.rs             # 捕获编排、去重、持久化
-│   │   │   ├── copy.rs                # 剪贴板写回规则（按增长需要拆分）
-│   │   │   └── query.rs               # 列表与详情用例
-│   │   ├── clipboard/                 # 系统剪贴板适配
-│   │   │   ├── mod.rs
-│   │   │   ├── macos.rs
-│   │   │   └── windows.rs
-│   │   ├── storage/                   # SQLite 与缓存
-│   │   │   ├── mod.rs
-│   │   │   ├── db.rs
-│   │   │   ├── clips.rs
-│   │   │   └── blobs.rs
-│   │   ├── preview/                   # 缩略图与本地系统图标
-│   │   │   ├── mod.rs
-│   │   │   ├── thumbnail.rs
-│   │   │   └── app_icon.rs
-│   │   ├── settings/
-│   │   │   ├── mod.rs
-│   │   │   └── model.rs
-│   │   └── window/
-│   │       ├── mod.rs
-│   │       └── hotkey.rs
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── package.json
-└── vite.config.js
+│   ├── schema.sql                    # 开发期唯一的当前 SQLite schema
+│   └── src/
+│       ├── main.rs                   # 只调用 run()
+│       ├── lib.rs                    # Tauri 组合根
+│       ├── state.rs                  # AppState
+│       ├── error.rs                  # 稳定 IPC 错误
+│       ├── settings.rs               # 设置模型与默认值
+│       ├── paste.rs                  # 目标捕获与平台直接粘贴
+│       ├── window.rs                 # 面板、焦点和 Quick Look 生命周期
+│       ├── commands/
+│       │   ├── clips.rs              # 历史、复制与粘贴 commands
+│       │   ├── preview.rs            # 资源、打开与预览 commands
+│       │   └── settings.rs
+│       ├── clips/                    # 类型化模型与薄 ClipService
+│       ├── clipboard/
+│       │   ├── system.rs             # 捕获、格式读写与图片资源
+│       │   └── source.rs             # 来源归因与平台应用图标
+│       └── storage/database.rs        # SQLite、FTS、schema 初始化与事务
+└── package.json
 ```
 
 ### 3.1 目录规则
 
-- `commands/` 只做 DTO 转换、输入校验、权限边界和服务调用；禁止写 SQL、剪贴板判断或复制规则。
+- `commands/` 只做 DTO 转换、输入校验、权限边界和能力编排；不写 SQL、剪贴板格式判断或历史规则。
 - `clips/` 拥有剪贴板历史的业务规则；不直接依赖 Tauri command 类型或 Svelte DTO。
-- `clipboard/` 只解决 macOS/Windows 格式读取与写回差异；平台代码不得决定保留期、去重或 UI 类型。
-- `storage/` 拥有事务、迁移和磁盘一致性；SQL 行模型不直接暴露给前端。
-- 前端 `lib/ipc/client.ts` 是唯一直接使用 `invoke` 的位置；feature 通过自己的 `api.ts` 调用它。
+- `clipboard/system.rs` 负责系统格式捕获、写回和 watcher 生命周期；`source.rs` 负责来源归因。平台代码不决定历史查询或 UI 状态。
+- `storage/` 拥有事务、schema 初始化和磁盘一致性；SQL 行模型不直接暴露给前端。
+- 前端每个 feature 的 `api.ts` 是该 feature 唯一直接使用 `invoke` 的位置；当前规模不增加一层通用 IPC wrapper。
 - 前端状态只保存当前界面需要的数据；SQLite 是历史记录的唯一真相来源。
 - 组件、类型或工具至少出现两个真实调用者后再提升到共享目录。
 
@@ -162,7 +112,7 @@ ClipClop/
 
 `lib.rs` 是 composition root，只负责：
 
-1. 初始化应用数据目录和数据库迁移。
+1. 初始化应用数据目录和当前数据库 schema。
 2. 创建 `AppState`。
 3. 启动剪贴板监听与保留期清理任务。
 4. 注册托盘、窗口、全局快捷键和 commands。
@@ -171,11 +121,12 @@ ClipClop/
 ```rust
 pub struct AppState {
     pub clips: ClipService,
-    pub settings: SettingsService,
+    pub database: Arc<Database>,
+    pub paste: PasteController,
 }
 ```
 
-command 通过 `tauri::State<'_, AppState>` 获取服务。Tauri 官方支持 managed state；并发可变资源必须使用合适的锁。数据库采用单连接所有者或小连接池，不把一个全局 `Mutex` 持有到文件读取、图片编码等慢操作结束。[Tauri State Management](https://v2.tauri.app/develop/state-management/)
+command 通过 `tauri::State<'_, AppState>` 获取能力。数据库当前使用一个 `Mutex<Connection>` 串行 SQL 操作；图片编码、源文件读取和系统调用都发生在数据库锁之外。对本地单用户负载这是最小且可预测的方案，只有实测 SQL 竞争影响交互时才升级连接池。[Tauri State Management](https://v2.tauri.app/develop/state-management/)
 
 ### 4.2 领域模型
 
@@ -205,14 +156,14 @@ pub enum ContentType {
 }
 ```
 
-`Clip` 是一次剪贴板变化的完整记录，`Flavor` 是同一次复制携带的一种受支持表示。v1 对文字只读取和写回纯文本；链接、代码与色值是纯文本的轻量识别结果。
+`Clip` 是一次剪贴板变化的完整记录，`Flavor` 是同一次复制携带的一种受支持表示。文字始终以纯文本分类、搜索和预览；系统已有的 HTML/RTF 作为额外 flavor 不透明保存。
 
 ### 4.3 剪贴板写回
 
-- `copy_clip(id)` 写回该记录保存的受支持 payload。
-- 文本只保存和写回纯文本；不读取、保存、渲染或重建 HTML/RTF。
+- `copy_clip(id, plain_text?)` 与 `paste_clip(id, plain_text?)` 写回该记录保存的受支持 payload。
+- 默认写回 plain text、HTML、RTF 等已有受支持 flavor；纯文本模式只写 `text/plain`。不解析、渲染或重建 HTML/RTF。
 - 图片与文件引用由平台适配层按系统格式写回；前端不直接处理原始二进制。
-- Enter 触发复制并关闭面板；v1 没有“保留格式/纯文本”双模式。
+- Enter 默认保留格式并直接粘贴，Shift+Enter 只粘贴纯文本；失败时均保留已写入系统剪贴板的结果。
 
 ### 4.4 用户控制与隐私
 
@@ -221,7 +172,6 @@ ClipClop **不识别、不分类、不拦截所谓敏感内容**。密码管理�
 用户通过以下显式动作控制数据：
 
 - 完全退出应用以停止记录。
-- 忽略用户指定的来源应用。
 - 删除单条或清空全部。
 - 设置保留期限。
 
@@ -255,23 +205,19 @@ CREATE TABLE clip_flavors (
 );
 ```
 
-- 可搜索纯文本进入 SQLite；图片和较大 payload 可写入应用数据目录。
-- 数据库只存应用数据目录内的相对路径，避免迁移目录后失效。
+- 可搜索纯文本进入 SQLite/FTS5；v1 将单条上限 20 MiB 的受支持 flavor 内联存入 SQLite。
 - 插入 Clip、Flavor 元数据和 FTS 索引必须处于同一事务。
-- 文件缓存采用“先写临时文件 → `fsync`/关闭 → 原子重命名 → 提交数据库引用”；失败时不留下数据库悬空路径。
-- 删除使用相反顺序：事务删除数据库记录并记录待清理文件，提交后删除缓存；下次启动清理孤儿文件。
-- migrations 只向前执行；已经发布的 migration 不修改，新增编号文件。
+- 首次公开发布前直接维护唯一的当前 schema，不保留开发期数据补丁；发布后才启用只向前执行的 migration 策略。
 
-文件引用不复制原文件。缩略图通过系统 API 异步生成，失败或超时回退到系统文件类型图标，不阻塞捕获事务。
+文件引用不复制原文件，捕获时也不读取大小或生成缩略图。用户明确选择、切换或预览文件后才按需读取；失败回退到中性文件图标，不阻塞捕获。
 
 ### 4.6 并发模型
 
-- 剪贴板监听器只负责读取快照并投递到单消费者 capture worker。
-- capture worker 串行完成去重和写事务，避免同一 clipboard change 乱序。
-- 缩略图生成进入有界后台队列，完成后单独更新 `thumb_ref`。
-- 查询 command 可以并发执行，但不与长时间图片编码共享锁。
-- 应用退出时停止接收新任务，等待正在提交的数据库事务完成；缩略图任务可以取消并在下次启动补做。
-- event 只在事务成功后发送，前端不会看到尚未持久化的数据。
+- 单个后台 watcher 串行处理变化：先冻结来源，再读取受支持 flavor、应用 20 MiB 上限、去重并事务入库。
+- watcher 返回或上下文创建失败时在同一后台线程内延迟重建，不让一次平台错误永久停止捕获。
+- 查询只在执行 SQL 时持有单连接锁；文件读取与图片编码在锁外完成。
+- 文件预览由明确的前端请求触发，不建立常驻缩略图队列。
+- `clips_changed` 只在事务提交后发送，前端收到后重新请求当前页。
 
 ## 5. IPC 契约
 
@@ -280,7 +226,9 @@ IPC 使用少量粗粒度 commands，不把每个 Rust 函数暴露给前端。
 ```text
 list_clips(request)             -> ClipPageDto
 get_clip(id)                    -> ClipDetailDto
-copy_clip(id)                   -> Unit
+copy_clip(id, plain_text?)      -> Unit
+paste_clip(id, plain_text?)     -> PasteOutcome
+get_clip_asset/thumbnail(...)   -> ClipAssetDto
 delete_clip(id)                 -> Unit
 clear_history()                 -> Unit
 get_settings()                  -> SettingsDto
@@ -290,17 +238,16 @@ update_settings(patch)          -> SettingsDto
 事件：
 
 ```text
-clips_changed { revision, latest_id? }
-settings_changed { revision }
+clips_changed { latest_id? }
 ```
 
 规则：
 
 - command 名称稳定，参数使用对象，便于以后增加可选字段。
-- DTO 显式包含 `kind`，不依赖字段是否为空猜类型。
+- DTO 显式包含 `content_type` 和类型化 `metadata`，不依赖字段是否为空猜类型。
 - 列表 DTO 不包含原始 flavor 或大二进制；详情按需返回安全预览信息。
 - 原始 payload 不发送给 WebView；文件路径只在已定义的文件详情中按需返回。
-- 错误返回稳定 `code + message + details?`；UI 根据 `code` 决定恢复动作，不解析错误字符串。
+- 错误返回稳定 `code + message`；UI 展示 message，结构化恢复路径使用 code 或 `PasteOutcome`，不解析文本内容。
 - events 只做失效通知。Tauri 官方说明 event 无类型安全、无返回值且只支持 JSON；需要有序高吞吐数据时应使用 channel，但 ClipClop 的 UI 更新没有必要发送高吞吐流。[Tauri 前端事件](https://v2.tauri.app/develop/_sections/frontend-listen/)
 - Svelte 组件卸载时必须执行 `unlisten`，防止 SPA 中重复监听和内存泄漏。
 
@@ -318,7 +265,7 @@ settings_changed { revision }
 
 | 状态 | 所有者 | 示例 |
 |---|---|---|
-| 持久化业务状态 | Rust/SQLite | 历史记录、设置、忽略应用 |
+| 持久化业务状态 | Rust/SQLite | 历史记录、设置 |
 | 会话 UI 状态 | Svelte | 当前页、选中行、搜索词、菜单开关 |
 | OS 状态 | Rust | 剪贴板、窗口可见性、全局快捷键 |
 
@@ -366,7 +313,7 @@ ClipRow.svelte                   # 展示与触发
 ### 8.3 测试
 
 - Rust 单元测试：格式归一化、类型识别、去重、保留期和资源上限。
-- SQLite 集成测试：migration、事务回滚、分页、FTS、级联删除和孤儿缓存清理。
+- SQLite 集成测试：schema、事务回滚、分页、FTS、级联删除和孤儿缓存清理。
 - 平台冒烟测试：macOS/Windows 各验证纯文本、图片、文件引用的读写回环；系统剪贴板测试串行执行。
 - 前端测试：键盘映射、状态转换、IPC 错误恢复。Tauri 官方提供 `mockIPC` 和 event mock，可在不启动真实 Rust 后端时测试前端调用。[Tauri Mock APIs](https://v2.tauri.app/develop/tests/mocking/)
 - 最小端到端路径：捕获纯文本 → 列表出现 → 复制 → 删除。
