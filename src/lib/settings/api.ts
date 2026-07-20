@@ -8,11 +8,13 @@ export type Settings = {
   hotkey: string;
   ignored_apps: string[];
   theme: Theme;
+  check_updates: boolean;
+  last_update_check: string | null;
 };
 
 export const getSettings = () => invoke<Settings>("get_settings");
 export const updateSettings = (settings: Settings) => invoke<Settings>("update_settings", { settings });
-export const openSettings = () => invoke<void>("open_settings");
+export const recordUpdateCheck = () => invoke<string>("record_update_check");
 export const quitApp = () => invoke<void>("quit_app");
 export const ignoreSource = (appId: string) => invoke<Settings>("ignore_source", { appId });
 

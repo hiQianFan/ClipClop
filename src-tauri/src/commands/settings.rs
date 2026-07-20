@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::{error::AppResult, state::AppState};
@@ -20,6 +20,8 @@ pub struct Settings {
     pub hotkey: String,
     pub ignored_apps: Vec<String>,
     pub theme: Theme,
+    pub check_updates: bool,
+    pub last_update_check: Option<String>,
 }
 
 impl Default for Settings {
@@ -30,6 +32,8 @@ impl Default for Settings {
             hotkey: DEFAULT_HOTKEY.into(),
             ignored_apps: Vec::new(),
             theme: Theme::System,
+            check_updates: true,
+            last_update_check: None,
         }
     }
 }
@@ -59,7 +63,7 @@ pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> AppResult<Set
 pub fn update_settings(
     app: AppHandle,
     state: State<'_, AppState>,
-    settings: Settings,
+    mut settings: Settings,
 ) -> AppResult<Settings> {
     if !matches!(settings.retention_days, 7 | 30 | 90) {
         return Err(crate::error::AppError::Validation(
@@ -78,29 +82,27 @@ pub fn update_settings(
         autostart.disable()
     };
     result.map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    // last_update_check 由后台更新流程维护；保存表单时用库中现值覆盖前端传来的
+    // 快照，避免用一份陈旧的时间戳把刚完成的检查记录冲掉。
+    let existing: Settings = state
+        .database
+        .get_setting(SETTINGS_KEY)?
+        .unwrap_or_default();
+    settings.last_update_check = existing.last_update_check;
     state.database.set_setting(SETTINGS_KEY, &settings)?;
     Ok(settings)
 }
 
 #[tauri::command]
-pub fn open_settings(app: AppHandle) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("settings") {
-        window
-            .show()
-            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
-        window
-            .set_focus()
-            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
-        return Ok(());
-    }
-    WebviewWindowBuilder::new(&app, "settings", WebviewUrl::App("settings".into()))
-        .title("ClipClop 设置")
-        .inner_size(480.0, 420.0)
-        .min_inner_size(440.0, 380.0)
-        .resizable(false)
-        .build()
-        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
-    Ok(())
+pub fn record_update_check(state: State<'_, AppState>) -> AppResult<String> {
+    let checked_at = chrono::Utc::now().to_rfc3339();
+    let mut settings: Settings = state
+        .database
+        .get_setting(SETTINGS_KEY)?
+        .unwrap_or_default();
+    settings.last_update_check = Some(checked_at.clone());
+    state.database.set_setting(SETTINGS_KEY, &settings)?;
+    Ok(checked_at)
 }
 
 #[tauri::command]
@@ -137,5 +139,17 @@ mod tests {
         assert_eq!(settings.retention_days, 30);
         assert!(settings.ignored_apps.is_empty());
         assert_eq!(settings.theme, Theme::System);
+        assert!(settings.check_updates);
+        assert!(settings.last_update_check.is_none());
+    }
+
+    #[test]
+    fn old_settings_gain_update_defaults() {
+        let settings: Settings = serde_json::from_str(
+            r#"{"retention_days":30,"launch_at_login":false,"hotkey":"test","ignored_apps":[],"theme":"system"}"#,
+        )
+        .expect("old settings should remain readable");
+        assert!(settings.check_updates);
+        assert!(settings.last_update_check.is_none());
     }
 }

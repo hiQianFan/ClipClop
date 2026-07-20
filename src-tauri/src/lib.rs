@@ -11,8 +11,8 @@ pub mod storage;
 use commands::{
     clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
     get_clip_file_thumbnail, get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel,
-    ignore_source, list_clips, open_clip, open_clip_file, open_settings, paste_clip, quit_app,
-    toggle_clip_preview, update_settings, DEFAULT_HOTKEY,
+    ignore_source, list_clips, open_clip, open_clip_file, paste_clip, quit_app,
+    record_update_check, toggle_clip_preview, update_settings, DEFAULT_HOTKEY,
 };
 #[cfg(target_os = "macos")]
 use objc::{sel, sel_impl};
@@ -190,6 +190,8 @@ fn toggle_panel(app: &tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_panel(app);
@@ -272,7 +274,7 @@ pub fn run() {
             paste_clip,
             get_settings,
             update_settings,
-            open_settings,
+            record_update_check,
             quit_app,
             ignore_source
         ])

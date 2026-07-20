@@ -7,6 +7,9 @@
   import { clearHistory, copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, toggleClipPreview, type PasteOutcome } from "$lib/clips/api";
   import type { AppError, ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
   import { applyTheme, getSettings, ignoreSource, quitApp, updateSettings, type Settings } from "$lib/settings/api";
+  import { cachedUpdate, checkForUpdate, currentVersion, downloadAndInstall, openLatestRelease, type AvailableUpdate } from "$lib/updater/api";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { ArrowLeft, ChevronLeft, ChevronRight, File, Image, Search } from "@lucide/svelte";
 
   let page = $state<ClipPage>({ items: [], page: 1, page_size: 10, total: 0, total_pages: 0 });
   let selectedId = $state<string | null>(null);
@@ -27,6 +30,12 @@
   let view = $state<"history" | "settings">("history");
   let settings = $state<Settings | null>(null);
   let settingsStatus = $state("");
+  let activeSettingsTab = $state<"general" | "updates" | "about">("general");
+  let appVersion = $state("…");
+  let update = $state<AvailableUpdate | null>(null);
+  let updateStatus = $state<"idle" | "checking" | "current" | "downloading" | "installing" | "error">("idle");
+  let updateMessage = $state("");
+  let updateProgress = $state<number | null>(null);
   let pendingAction = $state<"delete" | "clear" | null>(null);
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
@@ -35,6 +44,7 @@
   let menuButton = $state<HTMLButtonElement>();
   let appMenuButton = $state<HTMLButtonElement>();
   let settingsFirstControl = $state<HTMLInputElement>();
+  let settingsTabEls = $state<HTMLButtonElement[]>([]);
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
   let requestVersion = 0;
@@ -328,7 +338,12 @@
   async function openSettingsView() {
     appMenuOpen = false;
     settingsStatus = "";
+    activeSettingsTab = "general";
+    updateStatus = "idle";
+    updateMessage = "";
     settings = null;
+    appVersion = await currentVersion();
+    update = cachedUpdate();
     view = "settings";
     try {
       settings = await getSettings();
@@ -343,6 +358,68 @@
     view = "history";
     settingsStatus = "";
     requestAnimationFrame(() => listbox?.focus());
+  }
+
+  const settingsTabs = ["general", "updates", "about"] as const;
+
+  function selectSettingsTab(tab: (typeof settingsTabs)[number]) {
+    activeSettingsTab = tab;
+  }
+
+  function onSettingsTabKeydown(event: KeyboardEvent) {
+    const index = settingsTabs.indexOf(activeSettingsTab);
+    let next = index;
+    if (event.key === "ArrowDown") next = (index + 1) % settingsTabs.length;
+    else if (event.key === "ArrowUp") next = (index - 1 + settingsTabs.length) % settingsTabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = settingsTabs.length - 1;
+    else return;
+    event.preventDefault();
+    activeSettingsTab = settingsTabs[next];
+    requestAnimationFrame(() => settingsTabEls[next]?.focus());
+  }
+
+  async function checkUpdates() {
+    updateStatus = "checking";
+    updateMessage = "";
+    try {
+      const result = await checkForUpdate();
+      if (result.kind === "available") {
+        appVersion = result.update.currentVersion;
+        update = result.update;
+        updateStatus = "idle";
+      } else if (result.kind === "current") {
+        appVersion = result.currentVersion;
+        update = null;
+        updateStatus = "current";
+        updateMessage = "当前已是最新版本";
+      } else {
+        appVersion = result.currentVersion;
+        updateStatus = "error";
+        updateMessage = "开发环境不执行自动更新";
+      }
+    } catch (reason) {
+      updateStatus = "error";
+      updateMessage = `检查失败：${errorMessage(reason)}`;
+    }
+  }
+
+  async function installUpdate() {
+    if (!update) return;
+    updateStatus = "downloading";
+    updateProgress = null;
+    updateMessage = "正在下载更新…";
+    try {
+      await downloadAndInstall(update.version, (progress) => {
+        updateProgress = progress;
+        updateMessage = progress === null ? "正在下载更新…" : `正在下载更新 ${progress}%`;
+      });
+      updateStatus = "installing";
+      updateMessage = "正在安装并重新启动…";
+    } catch (reason) {
+      updateStatus = "error";
+      updateMessage = `安装失败：${errorMessage(reason)}`;
+    }
   }
 
   async function saveSettings() {
@@ -675,14 +752,14 @@
           <button bind:this={appMenuButton} class="app-menu-trigger" aria-label="ClipClop 应用菜单" aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
           {#if appMenuOpen}
             <div class="menu app-menu" role="menu" tabindex="-1" aria-label="ClipClop 应用菜单" onkeydown={onMenuKeydown}>
-              <button data-menu-item role="menuitem" onclick={() => void openSettingsView()}>设置… <kbd>{settingsShortcut}</kbd></button>
+              <button data-menu-item role="menuitem" onclick={() => { appMenuOpen = false; void openSettingsView(); }}>设置… <kbd>{settingsShortcut}</kbd></button>
               <button data-menu-item role="menuitem" class="danger" onclick={() => void quitApp()}>退出 ClipClop</button>
             </div>
           {/if}
         </div>
       </div>
     {:else}
-      <button class="back" aria-label="返回历史记录" onclick={closeSettingsView}>←</button>
+      <button class="back" aria-label="返回历史记录" onclick={closeSettingsView}><ArrowLeft size={16} aria-hidden="true" /></button>
       <span class="settings-title">设置</span>
     {/if}
     <div class="titlebar-drag" data-tauri-drag-region></div>
@@ -690,7 +767,7 @@
   {#if view === "history"}
   <section class="left">
     <form class="search" onsubmit={(e) => { e.preventDefault(); onSearch(); }}>
-      <span aria-hidden="true">⌕</span>
+      <span aria-hidden="true"><Search size={15} /></span>
       <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label="搜索剪贴板历史" placeholder="搜索剪贴板…" />
       <kbd>/</kbd>
     </form>
@@ -708,11 +785,11 @@
               <span class="num">{index === 9 ? 0 : index + 1}</span>
               <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
                 {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
-                {:else if item.content_type === "image"}<span aria-hidden="true">▧</span>
-                {:else if item.content_type === "file"}<span class="file-icon" aria-hidden="true"></span>{/if}
+                {:else if item.content_type === "image"}<span aria-hidden="true"><Image size={16} /></span>
+                {:else if item.content_type === "file"}<File size={16} aria-hidden="true" />{/if}
               </span>
               <span class="snippet">{item.preview}</span>
-              {#if canExpand(item)}<span class="disclosure" aria-hidden="true">›</span>{/if}
+              {#if canExpand(item)}<span class="disclosure" aria-hidden="true"><ChevronRight size={16} /></span>{/if}
             </div>
             {#if canExpand(item) && expandedId === item.id}
               <div class="row-details" role="group" in:fade={{ duration: reducedMotion ? 0 : 120 }} out:fade={{ duration: reducedMotion ? 0 : 90 }}>
@@ -749,7 +826,7 @@
             {#each filePaths(detail) as path, index}
               <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={`查看文件 ${index + 1}：${fileName(path)}`} title={fileName(path)} onclick={() => void selectFile(index)} onkeydown={onFileNavigatorKeydown}>
                 {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
-                {:else}<span class="file-icon" aria-hidden="true"></span>{/if}
+                {:else}<File size={16} aria-hidden="true" />{/if}
               </button>
             {/each}
           </div>
@@ -792,9 +869,9 @@
   </section>
 
   <footer class="pager">
-    <button disabled={page.page <= 1} onclick={() => refresh(page.page - 1)} aria-label="上一页">←</button>
+    <button disabled={page.page <= 1} onclick={() => refresh(page.page - 1)} aria-label="上一页"><ChevronLeft size={16} aria-hidden="true" /></button>
     <span>{page.total_pages === 0 ? 0 : page.page}/{page.total_pages}</span>
-    <button disabled={page.page >= page.total_pages} onclick={() => refresh(page.page + 1)} aria-label="下一页">→</button>
+    <button disabled={page.page >= page.total_pages} onclick={() => refresh(page.page + 1)} aria-label="下一页"><ChevronRight size={16} aria-hidden="true" /></button>
   </footer>
   <footer class="actions">
     {#if pendingAction}
@@ -822,20 +899,50 @@
     {/if}
   </footer>
   {:else}
-    <section class="preferences" aria-label="ClipClop 设置">
-      {#if settings}
-        <label><span><strong>开机启动</strong><small>登录系统后在后台启动 ClipClop。</small></span><input bind:this={settingsFirstControl} type="checkbox" bind:checked={settings.launch_at_login} /></label>
-        <label><span><strong>保留期限</strong><small>超出期限的历史会在后续捕获时清理。</small></span><select bind:value={settings.retention_days}><option value={7}>7 天</option><option value={30}>30 天</option><option value={90}>90 天</option></select></label>
-        <label><span><strong>外观</strong><small>跟随系统，或固定使用 Light/Dark。</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">跟随系统</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-        <div class="preference-row"><span><strong>全局快捷键</strong><small>当前版本使用平台默认值；暂不支持自定义。</small></span><kbd>{settings.hotkey}</kbd></div>
-        <div class="preference-row"><span><strong>数据管理</strong><small>清除 ClipClop 保存的全部历史，不影响原始文件或系统剪贴板。</small></span><button class="danger-action" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}>清空全部历史</button></div>
-        {#if settings.ignored_apps.length > 0}
-          <div class="ignored-apps"><strong>已忽略的应用</strong>{#each settings.ignored_apps as appId}<div><code title={appId}>{appLabel(appId)}</code><button onclick={() => removeIgnoredApp(appId)}>移除</button></div>{/each}</div>
+    <div class="settings-body">
+      <div class="settings-nav" role="tablist" aria-orientation="vertical" aria-label="设置分类">
+        <button bind:this={settingsTabEls[0]} role="tab" id="settings-tab-general" aria-controls="settings-panel" aria-selected={activeSettingsTab === "general"} tabindex={activeSettingsTab === "general" ? 0 : -1} class:active={activeSettingsTab === "general"} onclick={() => selectSettingsTab("general")} onkeydown={onSettingsTabKeydown}>常规</button>
+        <button bind:this={settingsTabEls[1]} role="tab" id="settings-tab-updates" aria-controls="settings-panel" aria-selected={activeSettingsTab === "updates"} tabindex={activeSettingsTab === "updates" ? 0 : -1} class:active={activeSettingsTab === "updates"} onclick={() => selectSettingsTab("updates")} onkeydown={onSettingsTabKeydown}>软件更新</button>
+        <button bind:this={settingsTabEls[2]} role="tab" id="settings-tab-about" aria-controls="settings-panel" aria-selected={activeSettingsTab === "about"} tabindex={activeSettingsTab === "about" ? 0 : -1} class:active={activeSettingsTab === "about"} onclick={() => selectSettingsTab("about")} onkeydown={onSettingsTabKeydown}>关于</button>
+      </div>
+      <div id="settings-panel" class="settings-content" role="tabpanel" aria-labelledby={`settings-tab-${activeSettingsTab}`} tabindex="0">
+        {#if settings}
+          {#if activeSettingsTab === "general"}
+            <label><span><strong>开机启动</strong><small>登录系统后在后台启动 ClipClop。</small></span><input bind:this={settingsFirstControl} type="checkbox" bind:checked={settings.launch_at_login} /></label>
+            <label><span><strong>保留期限</strong><small>超出期限的历史会在后续捕获时清理。</small></span><select bind:value={settings.retention_days}><option value={7}>7 天</option><option value={30}>30 天</option><option value={90}>90 天</option></select></label>
+            <label><span><strong>外观</strong><small>跟随系统，或固定使用 Light/Dark。</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">跟随系统</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+            <div class="preference-row"><span><strong>全局快捷键</strong><small>当前版本使用平台默认值；暂不支持自定义。</small></span><kbd>{settings.hotkey}</kbd></div>
+            <div class="preference-row"><span><strong>数据管理</strong><small>清除 ClipClop 保存的全部历史，不影响原始文件或系统剪贴板。</small></span><button class="danger-action" onclick={() => void requestPendingAction("clear")} disabled={page.total === 0}>清空全部历史</button></div>
+            {#if settings.ignored_apps.length > 0}
+              <div class="ignored-apps"><strong>已忽略的应用</strong>{#each settings.ignored_apps as appId}<div><code title={appId}>{appLabel(appId)}</code><button onclick={() => removeIgnoredApp(appId)}>移除</button></div>{/each}</div>
+            {/if}
+          {:else if activeSettingsTab === "updates"}
+            <div class="update-head"><span><strong>保持 ClipClop 为最新版本</strong><small>当前版本 {appVersion}；最多每天自动检查一次。</small></span><label class="update-toggle"><span>自动检查</span><input type="checkbox" bind:checked={settings.check_updates} /></label></div>
+            {#if update}
+              <div class="update-card">
+                <div class="update-card-head"><strong>ClipClop {update.version} 可用</strong>{#if update.date}<small>{new Date(update.date).toLocaleDateString()}</small>{/if}</div>
+                {#if update.notes}<p>{update.notes}</p>{/if}
+                {#if updateStatus === "downloading" && updateProgress !== null}<progress max="100" value={updateProgress}></progress>{/if}
+                <div class="update-actions"><button class="ghost" onclick={() => void openLatestRelease()}>查看发布页</button><button class="copy" disabled={updateStatus === "downloading" || updateStatus === "installing"} onclick={installUpdate}>下载并安装</button></div>
+              </div>
+            {:else}
+              <div class="update-check"><span class:error={updateStatus === "error"} aria-live="polite">{updateMessage}</span><button class="ghost" disabled={updateStatus === "checking"} onclick={checkUpdates}>{updateStatus === "checking" ? "正在检查…" : "检查更新"}</button></div>
+            {/if}
+            {#if update && updateMessage}<small class="update-note" class:error={updateStatus === "error"} aria-live="polite">{updateMessage}</small>{/if}
+          {:else}
+            <div class="about">
+              <img class="about-mark" src="/app-icon.png" alt="ClipClop 图标" />
+              <h2>ClipClop</h2>
+              <p>轻量、离线优先的跨平台剪贴板历史工具。</p>
+              <small>版本 {appVersion} · MIT License</small>
+              <div class="about-links"><button class="github" aria-label="在 GitHub 查看 ClipClop 项目" title="GitHub" onclick={() => void openUrl("https://github.com/hiQianFan/ClipClop")}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.2c-3.23.7-3.91-1.37-3.91-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.58-.29-5.29-1.29-5.29-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18A10.9 10.9 0 0 1 12 6.12c.98 0 1.95.13 2.86.38 2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.72 5.39-5.3 5.68.42.36.79 1.07.79 2.16v3.21c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></button></div>
+            </div>
+          {/if}
+        {:else}
+          <div class="settings-loading">{settingsStatus || "正在读取设置…"}</div>
         {/if}
-      {:else}
-        <div class="settings-loading">{settingsStatus || "正在读取设置…"}</div>
-      {/if}
-    </section>
+      </div>
+    </div>
     <footer class="settings-actions">
       {#if pendingAction === "clear"}
         <div class="confirmation" role="alertdialog" aria-label="确认清空历史">
@@ -846,7 +953,7 @@
       {:else}
         <span aria-live="polite" class:error={settingsStatus !== "" && !["已保存", "历史已清空"].includes(settingsStatus)}>{settingsStatus}</span>
         <button class="ghost" onclick={closeSettingsView}>返回 <kbd>Esc</kbd></button>
-        <button class="copy" onclick={() => void saveSettings()} disabled={!settings}>保存</button>
+        {#if activeSettingsTab !== "about"}<button class="copy" onclick={() => void saveSettings()} disabled={!settings}>保存</button>{/if}
       {/if}
     </footer>
   {/if}
@@ -880,10 +987,8 @@
   .lead.swatch { color:transparent; border:1px solid var(--hairline); }
   .lead.media { overflow:hidden; background:var(--bg-raised); font:15px/1 system-ui; }
   .lead.media img { width:100%; height:100%; object-fit:cover; }
-  .file-icon { width:13px; height:16px; position:relative; border:1px solid var(--text-2); border-radius:2px; }
-  .file-icon::after { content:""; position:absolute; top:-1px; right:-1px; width:5px; height:5px; border-left:1px solid var(--text-2); border-bottom:1px solid var(--text-2); background:var(--bg-raised); }
   .snippet { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:13px/1.5 var(--mono); }
-  .disclosure { width:12px; flex:none; color:var(--text-3); font:16px/1 system-ui; text-align:center; transform:rotate(0deg); transition:transform 160ms cubic-bezier(.16, 1, .3, 1), color 120ms ease-out; }
+  .disclosure { width:16px; flex:none; display:flex; align-items:center; justify-content:center; color:var(--text-3); transform:rotate(0deg); transition:transform 160ms cubic-bezier(.16, 1, .3, 1), color 120ms ease-out; }
   .clip-item.expanded .disclosure { color:var(--text-2); transform:rotate(90deg); }
   .row-details { margin:0 8px 4px 50px; padding:3px 8px 7px; }
   .row-child { width:100%; display:block; overflow:hidden; padding:4px 6px; border-radius:4px; color:var(--text-2); background:transparent; font:11px/1.45 var(--mono); text-align:left; text-overflow:ellipsis; white-space:nowrap; }
@@ -966,13 +1071,40 @@
   .confirmation { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
   .confirmation > span { margin-right:auto; color:var(--text-1); font-size:12px; font-weight:600; }
   .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:10px; font-weight:400; }
-  .preferences { grid-column:1 / -1; grid-row:2; min-height:0; overflow:auto; padding:0 20px; }
-  .preferences label, .preference-row { min-height:68px; display:flex; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid var(--hairline); }
-  .preferences label > span, .preference-row > span { display:flex; flex-direction:column; gap:3px; }
-  .preferences strong { color:var(--text-1); font-size:13px; font-weight:600; }
-  .preferences small { color:var(--text-3); font-size:11px; }
-  .preferences select { min-width:116px; padding:7px 28px 7px 9px; border:1px solid var(--hairline); border-radius:6px; color:var(--text-1); background:var(--bg-raised); }
-  .preferences input { width:18px; height:18px; accent-color:var(--text-1); }
+  .settings-body { grid-column:1 / -1; grid-row:2; min-height:0; display:grid; grid-template-columns:148px 1fr; }
+  .settings-nav { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:12px 10px; border-right:1px solid var(--hairline); }
+  .settings-nav button { text-align:left; padding:8px 10px; border-radius:6px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; }
+  .settings-nav button:hover { background:var(--bg-hover); color:var(--text-1); }
+  .settings-nav button.active { color:var(--text-1); background:var(--bg-selected); }
+  .settings-content { min-height:0; overflow-y:auto; padding:0 20px; }
+  .settings-content:focus-visible { outline:none; }
+  .settings-content > label, .preference-row { min-height:68px; display:flex; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid var(--hairline); }
+  .settings-content > label > span, .preference-row > span { display:flex; flex-direction:column; gap:3px; }
+  .settings-content strong { color:var(--text-1); font-size:13px; font-weight:600; }
+  .settings-content small { color:var(--text-3); font-size:11px; }
+  .settings-content select { min-width:116px; padding:7px 28px 7px 9px; border:1px solid var(--hairline); border-radius:6px; color:var(--text-1); background:var(--bg-raised); }
+  .settings-content input { width:18px; height:18px; accent-color:var(--text-1); }
+  .update-head { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 0; border-bottom:1px solid var(--hairline); }
+  .update-head > span { display:flex; flex-direction:column; gap:3px; }
+  .update-toggle { display:flex; align-items:center; gap:8px; color:var(--text-2); font-size:12px; }
+  .update-toggle span { display:block; }
+  .update-card { display:flex; flex-direction:column; gap:10px; margin-top:16px; padding:14px; border-radius:8px; background:var(--bg-raised); }
+  .update-card-head { display:flex; justify-content:space-between; gap:12px; }
+  .update-card p { max-height:120px; overflow:auto; white-space:pre-wrap; color:var(--text-2); font-size:12px; line-height:1.5; }
+  .update-card progress { width:100%; accent-color:var(--action); }
+  .update-actions { display:flex; justify-content:flex-end; gap:8px; }
+  .update-check { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
+  .update-check span, .update-note { color:var(--text-2); font-size:12px; }
+  .update-check span.error, .update-note.error { color:var(--danger); }
+  .update-note { display:block; margin-top:10px; }
+  .about { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; }
+  .about-mark { width:56px; height:56px; margin-bottom:6px; border-radius:12px; object-fit:contain; }
+  .about h2 { font-size:16px; }
+  .about p { max-width:280px; color:var(--text-2); font-size:12px; line-height:1.5; }
+  .about-links { display:flex; gap:8px; margin-top:12px; }
+  .about-links .github { width:34px; height:34px; display:grid; place-items:center; padding:0; border-radius:8px; color:var(--text-2); background:var(--bg-hover); }
+  .about-links .github:hover { color:var(--text-1); background:var(--bg-selected); }
+  .about-links .github svg { width:18px; height:18px; fill:currentColor; }
   .danger-action { padding:7px 10px; border:1px solid color-mix(in srgb, var(--danger) 45%, transparent); border-radius:6px; color:var(--danger); background:transparent; }
   .danger-action:hover:not(:disabled) { background:color-mix(in srgb, var(--danger) 8%, transparent); }
   .ignored-apps { padding:16px 0; display:flex; flex-direction:column; gap:8px; }
