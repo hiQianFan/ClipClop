@@ -21,6 +21,8 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
+      # tauri-action updates a shared latest.json; serialize platforms to avoid lost updates.
+      max-parallel: 1
       matrix:
         include:
           - name: macOS Universal DMG
@@ -44,6 +46,14 @@ jobs:
         with:
           targets: ${{ matrix.rust_targets }}
       - run: pnpm install --frozen-lockfile
+      - name: Verify release version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          app_version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME#v}" = "$app_version"
+          test "$(node -p "require('./src-tauri/tauri.conf.json').version")" = "$app_version"
+          test "$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).packages[0].version))")" = "$app_version"
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
