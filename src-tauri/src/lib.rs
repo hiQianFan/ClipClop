@@ -16,7 +16,7 @@ use commands::{
     open_clip_file, paste_clip, quit_app, record_update_check, toggle_clip_preview,
     update_settings,
 };
-use settings::DEFAULT_HOTKEY;
+use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
 use storage::Database;
 use tauri::{Manager, WindowEvent};
@@ -62,16 +62,36 @@ pub fn run() {
 
             let data_dir = app.path().app_data_dir()?;
             let database = Database::open(&data_dir.join("clipclop.db"))?;
+            let mut startup_settings: Settings =
+                database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
+            if let Err(message) = validate_hotkey(&startup_settings.hotkey) {
+                eprintln!(
+                    "stored global shortcut is invalid; restoring the platform default: {message}"
+                );
+                startup_settings.hotkey = DEFAULT_HOTKEY.into();
+                database.set_setting(SETTINGS_KEY, &startup_settings)?;
+            }
+            let startup_hotkey = startup_settings.hotkey.clone();
             app.manage(AppState::new(database));
             app.manage(window::PreviewState::default());
             clipboard::start_watcher(app.handle().clone())?;
 
-            app.global_shortcut()
-                .on_shortcut(DEFAULT_HOTKEY, |app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        window::toggle_panel(app);
+            if let Err(error) = register_panel_hotkey(app.handle(), &startup_hotkey) {
+                eprintln!("failed to register stored global shortcut: {error}");
+                if startup_hotkey != DEFAULT_HOTKEY {
+                    if let Err(default_error) = register_panel_hotkey(app.handle(), DEFAULT_HOTKEY)
+                    {
+                        eprintln!(
+                            "failed to register the default global shortcut: {default_error}"
+                        );
+                    } else {
+                        startup_settings.hotkey = DEFAULT_HOTKEY.into();
+                        app.state::<AppState>()
+                            .database
+                            .set_setting(SETTINGS_KEY, &startup_settings)?;
                     }
-                })?;
+                }
+            }
 
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
@@ -124,4 +144,16 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn register_panel_hotkey(
+    app: &tauri::AppHandle,
+    hotkey: &str,
+) -> Result<(), tauri_plugin_global_shortcut::Error> {
+    app.global_shortcut()
+        .on_shortcut(hotkey, |app, _shortcut, event| {
+            if event.state() == ShortcutState::Pressed {
+                window::toggle_panel(app);
+            }
+        })
 }

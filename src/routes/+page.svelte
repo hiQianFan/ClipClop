@@ -60,6 +60,9 @@
     motionQuery.addEventListener("change", updateReducedMotion);
     const captureEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "Esc" || event.code === "Escape") {
+        // Settings owns its nested Escape hierarchy (recording, confirmation,
+        // then return). Let its window handler receive the event.
+        if (view === "settings") return;
         event.preventDefault();
         event.stopImmediatePropagation();
         if (deletePending) {
@@ -68,8 +71,6 @@
           closeMenu();
         } else if (appMenuOpen) {
           closeAppMenu();
-        } else if (view === "settings") {
-          closeSettingsView();
         } else {
           void hidePanel();
         }

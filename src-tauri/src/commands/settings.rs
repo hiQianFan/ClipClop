@@ -1,9 +1,10 @@
 use tauri::{AppHandle, State};
 use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::{
     error::AppResult,
-    settings::{Settings, DEFAULT_HOTKEY, SETTINGS_KEY},
+    settings::{validate_hotkey, Settings, SETTINGS_KEY},
     state::AppState,
 };
 
@@ -13,8 +14,6 @@ pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> AppResult<Set
         .database
         .get_setting(SETTINGS_KEY)?
         .unwrap_or_default();
-    // 快捷键录制尚未开放；设置页只展示实际生效的固定值。
-    settings.hotkey = DEFAULT_HOTKEY.into();
     settings.launch_at_login = app.autolaunch().is_enabled().unwrap_or(false);
     Ok(settings)
 }
@@ -30,11 +29,16 @@ pub fn update_settings(
             "retention_days must be 7, 30, or 90".into(),
         ));
     }
-    if settings.hotkey.trim().is_empty() || settings.hotkey.chars().count() > 80 {
-        return Err(crate::error::AppError::Validation(
-            "hotkey must contain between 1 and 80 characters".into(),
-        ));
-    }
+    validate_hotkey(&settings.hotkey)
+        .map_err(|message| crate::error::AppError::Validation(message.into()))?;
+
+    let previous: Settings = state
+        .database
+        .get_setting(SETTINGS_KEY)?
+        .unwrap_or_default();
+    let hotkey_changed = previous.hotkey != settings.hotkey;
+    let registered_new_hotkey = hotkey_changed && prepare_hotkey(&app, &settings.hotkey)?;
+
     let autostart = app.autolaunch();
     let previous_autostart = autostart.is_enabled().unwrap_or(false);
     let result = if settings.launch_at_login {
@@ -42,7 +46,10 @@ pub fn update_settings(
     } else {
         autostart.disable()
     };
-    result.map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    if let Err(error) = result {
+        cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
+        return Err(crate::error::AppError::Platform(error.to_string()));
+    }
     // last_update_check 由后台更新流程维护；保存表单时用库中现值覆盖前端传来的
     // 快照，避免用一份陈旧的时间戳把刚完成的检查记录冲掉。
     let saved = state
@@ -60,8 +67,52 @@ pub fn update_settings(
         if let Err(error) = rollback {
             eprintln!("failed to restore autostart after settings write failure: {error}");
         }
+        cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
+    } else if hotkey_changed
+        && app
+            .global_shortcut()
+            .is_registered(previous.hotkey.as_str())
+    {
+        // All user-visible state is committed before the old shortcut is
+        // removed. If OS cleanup fails, both shortcuts may work until restart,
+        // but the saved and primary shortcut remains the new one.
+        if let Err(error) = app.global_shortcut().unregister(previous.hotkey.as_str()) {
+            eprintln!("failed to unregister previous global shortcut: {error}");
+        }
     }
     saved
+}
+
+fn register_hotkey(
+    app: &AppHandle,
+    hotkey: &str,
+) -> Result<(), tauri_plugin_global_shortcut::Error> {
+    app.global_shortcut()
+        .on_shortcut(hotkey, |app, _shortcut, event| {
+            if event.state() == ShortcutState::Pressed {
+                crate::window::toggle_panel(app);
+            }
+        })
+}
+
+fn prepare_hotkey(app: &AppHandle, next: &str) -> AppResult<bool> {
+    if app.global_shortcut().is_registered(next) {
+        return Ok(false);
+    }
+    if let Err(error) = register_hotkey(app, next) {
+        return Err(crate::error::AppError::Platform(format!(
+            "无法注册该快捷键，可能已被其他应用占用：{error}"
+        )));
+    }
+    Ok(true)
+}
+
+fn cleanup_prepared_hotkey(app: &AppHandle, hotkey: &str, registered: bool) {
+    if registered {
+        if let Err(error) = app.global_shortcut().unregister(hotkey) {
+            eprintln!("failed to clean up prepared global shortcut: {error}");
+        }
+    }
 }
 
 #[tauri::command]

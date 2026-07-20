@@ -8,7 +8,7 @@
 
 - 捕获纯文本及其已有 HTML/RTF flavor、图片和文件引用；界面只安全展示纯文本。
 - 在列表中按 Enter 保留格式粘贴，按 Shift+Enter 粘贴纯文本；直接粘贴失败时内容仍留在系统剪贴板。
-- 全局快捷键呼出：macOS 为 `⌃⌘C`，Windows 为 `Ctrl+Alt+C`。托盘常驻，支持 Light/Dark 与保留期限；退出应用即停止记录。
+- 全局快捷键呼出：macOS 默认为 `⌃⌘C`，Windows 默认为 `Ctrl+Alt+C`，可在“设置 → 快捷键”中修改。托盘常驻，支持 Light/Dark 与保留期限；退出应用即停止记录。
 - macOS 与 Windows 双端构建；无账号、云同步、遥测或链接联网增强。
 - 通过 GitHub Releases 检查经过 Tauri updater 签名验证的新版本；自动检查最多每天一次，下载和安装由用户确认。
 
