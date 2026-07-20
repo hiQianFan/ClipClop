@@ -114,7 +114,7 @@ Lead slot is empty for text/code (text aligns on one x-edge); filled only for co
 - **Header:** search glyph + borderless input (auto-focused on open) + one compact type control at right (O-1). No chip row.
 - **List (~60%):** pinned items float at top under a hairline (FR-11, no separate view). Then recent newest-first, continuous — NO Today/Yesterday section headers (time is row meta). Row = `[fixed 28px lead slot: empty for text, else swatch/thumbnail/file-icon/favicon] [1–2 line monospace snippet] … [source app · relative time]`. No per-row type icons for text. Hover = `--bg-hover`; selected = neutral `--bg-selected` fill only. List scrolls.
 - **Preview (~40%):** faithful render of the selected payload only; metadata as quiet plain tertiary text below (source · type · size/chars · time) — NOT filled capsule pills. Empty query still shows recent list + preview of the top item.
-- **Footer (~44px):** primary `⏎ Paste` (amber) + `⌘K Actions`. Everything secondary (Copy, Copy-only, Pin/Unpin, Delete, Paste as text, Ignore source) lives behind the ⌘K action menu — this prevents footer/action-bar bloat (the earlier prototype's mistake).
+- **Footer (~44px):** primary `⏎ Paste` + `⌘K Actions`. Secondary view, copy, plain-text, and delete actions live behind the action menu.
 - **Keyboard (G-2):** ↑/↓ select · Enter paste+dismiss · ⌘/Ctrl+Enter paste as text (v1.1) · ⌘K actions · Esc dismiss. Optional later: 1–9 quick-select.
 - **Empty state:** centered quiet line with the shortcut hint and a touch of the clip-clop cadence in copy — no illustration.
 - **Reduced-transparency / Windows-solid:** shell falls back to solid `--bg-shell`; layout is identical.

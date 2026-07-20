@@ -2,19 +2,19 @@
 title: ClipClop
 status: draft
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-20
 ---
 
 # PRD: ClipClop
 
-> **2026-07-13 MVP 修订（优先于下文旧章节）**
+> **当前 MVP 范围**
 >
 > - 产品品牌统一为 `ClipClop`。
 > - v1 默认捕获平台允许读取的全部受支持 flavor，不因 concealed/transient 标记或内容语义自动过滤。
-> - 用户通过暂停记录、忽略指定来源应用、删除、清空和保留期限控制数据。
-> - v1 采用 copy-only：Enter/双击将原始 flavor 写回系统剪贴板并关闭面板，不模拟直接粘贴，不申请 Accessibility 权限。
-> - 默认保留格式复制；`⌘⇧C` / `Ctrl+Shift+C` 和操作菜单支持复制为纯文本。
-> - Pin、类型筛选和 direct paste 延后到用户需求得到验证后；不属于 v1。
+> - 用户通过退出应用、删除、清空和保留期限控制数据；v1 不提供暂停记录。
+> - Enter 默认将原始受支持 flavor 写回系统剪贴板并直接粘贴；失败时保留已复制结果。macOS 仅为直接粘贴请求 Accessibility/Post Event 权限，Windows 使用系统输入注入并受 UIPI 限制。
+> - 文本始终按纯文本搜索、分类和安全预览；已有 HTML/RTF 仅作为不透明 flavor 保存。默认保留格式，`Shift+Enter`、`⌘⇧C` / `Ctrl+Shift+C` 和操作菜单提供纯文本模式。
+> - Pin 与类型筛选延后到用户需求得到验证后；不属于 v1。
 > - UI、颜色和布局以根目录 `DESIGN.md` 为准；技术边界以 `docs/architecture.md` 为准。
 
 ## 0. Document Purpose
@@ -55,18 +55,13 @@ The intended launch posture is a public, free desktop utility. The product shoul
 - **UJ-2. Writer confirms a copied paragraph before pasting.**
   A writer opens the Quick Panel, selects a recent text item, reviews the preview, checks the source app and basic content metadata, then confirms. ClipClop pastes the selected content into the active editor and updates the system clipboard to that item.
 
-- **UJ-3. User filters mixed clipboard history by content type.**
-  A user has copied text, links, images, and files during the day. They open ClipClop, filter to the needed type, find the item by recency or search, preview it, then paste it into the current app.
-
 ## 3. Glossary
 
 - **Clipboard History** — The local list of captured clipboard items.
 - **Clipboard Item** — One captured clipboard entry.
-- **Pinned Item** — A Clipboard Item fixed above normal recent history.
 - **Quick Panel** — The keyboard-invoked ClipClop surface for browsing, searching, and reusing Clipboard Items.
-- **Ignored App** — An application whose copied content ClipClop does not store.
 - **Source App** — The application active when a Clipboard Item was captured.
-- **Content Type** — The primary detected kind of a Clipboard Item, such as text, formatted text, link, image, file, or color.
+- **Content Type** — The primary detected kind of a Clipboard Item, such as text, code, link, image, file, or color.
 - **Preview Pane** — The area that displays the selected Clipboard Item content and metadata before reuse.
 
 ## 4. Features
@@ -79,7 +74,7 @@ The intended launch posture is a public, free desktop utility. The product shoul
 
 #### FR-1: Capture clipboard items
 
-ClipClop can capture new Clipboard Items when the system clipboard changes. Realizes UJ-1, UJ-2, UJ-3.
+ClipClop can capture new Clipboard Items when the system clipboard changes. Realizes UJ-1 and UJ-2.
 
 **Consequences (testable):**
 - Copying supported content creates a new Clipboard Item.
@@ -88,16 +83,15 @@ ClipClop can capture new Clipboard Items when the system clipboard changes. Real
 
 #### FR-2: Capture multiple content types
 
-ClipClop can capture common Content Types including plain text, formatted text, links, images, files, and colors where the platform exposes them reliably. Realizes UJ-3.
+ClipClop can capture common Content Types including text, code, links, images, files, and colors where the platform exposes them reliably.
 
 **Consequences (testable):**
 - Each item has a Content Type.
-- Users can filter history by Content Type.
 - Unsupported clipboard payloads fail silently without breaking capture of later items.
 
 #### FR-3: Capture source metadata
 
-ClipClop records the Source App and capture time for each Clipboard Item when available. Realizes UJ-2, UJ-3.
+ClipClop records the Source App and capture time for each Clipboard Item when available. Realizes UJ-2.
 
 **Consequences (testable):**
 - The Preview Pane shows Source App for captured items when available.
@@ -135,14 +129,6 @@ Users can view selected Clipboard Item content and metadata before reuse. Realiz
 - Preview Pane shows the original Clipboard Item payload, Source App, Content Type, character count for text-like items, and capture time.
 - ClipClop does not summarize, explain, rewrite, classify, title, or enrich copied content with generated meaning.
 - Large content is previewed without freezing the panel.
-
-#### FR-7: Filter by content type
-
-Users can filter Clipboard History by Content Type. Realizes UJ-3.
-
-**Consequences (testable):**
-- All Types shows every supported item.
-- Selecting a type hides unrelated items.
 
 ### 4.3 Search
 
@@ -184,17 +170,9 @@ Users can copy a selected item without automatic paste. Realizes UJ-2.
 
 ### 4.5 Organization and Cleanup
 
-**Description:** ClipClop supports the minimum organization needed for daily use: pin, delete, clear, and ignore sources.
+**Description:** ClipClop supports direct deletion and clearing of locally saved history.
 
 **Functional Requirements:**
-
-#### FR-11: Pin items
-
-Users can pin and unpin Clipboard Items. Realizes UJ-1.
-
-**Consequences (testable):**
-- Pinned Items remain available above normal recent history.
-- Unpinning returns the item to normal history ordering.
 
 #### FR-12: Delete and clear history
 
@@ -202,24 +180,7 @@ Users can delete individual Clipboard Items and clear Clipboard History. Realize
 
 **Consequences (testable):**
 - Deleting an item removes it from search and browse results.
-- Clearing history removes non-pinned items after confirmation.
-
-#### FR-13: Ignore apps
-
-Users can exclude selected apps from Clipboard History capture. Realizes UJ-2.
-
-**Consequences (testable):**
-- Content copied while an Ignored App is active is not stored.
-- Users can add and remove Ignored Apps in Settings.
-
-#### FR-15: Ignore sensitive/concealed clipboard content
-
-ClipClop does not store clipboard payloads that the source marks as concealed or transient (e.g. macOS `org.nspasteboard.ConcealedType` / `TransientType`; Windows clipboard-history exclusion flags). This makes "private by default" true for password managers and secure fields without user configuration. Realizes the privacy principle behind UJ-2.
-
-**Consequences (testable):**
-- Content copied from a password manager marked concealed is not captured.
-- This filtering is on by default and requires no setup.
-- Non-sensitive content copied later still captures normally.
+- Clearing history removes all items after confirmation.
 
 ### 4.6 Settings
 
@@ -229,7 +190,7 @@ ClipClop does not store clipboard payloads that the source marks as concealed or
 
 #### FR-14: Configure core behavior
 
-Users can configure global shortcut, launch at login, history retention, direct-paste behavior, and Ignored Apps.
+Users can configure launch at login, history retention, theme, and update checks. The global shortcut is displayed but not editable in v1.
 
 **Consequences (testable):**
 - Changes persist after restart.
@@ -257,12 +218,9 @@ Users can configure global shortcut, launch at login, history retention, direct-
 - Preview Pane with content and metadata.
 - Source App tracking when available.
 - Copy or paste selected item, with Enter or double-click mapped to direct paste by default.
-- Content type filtering.
-- Pin and unpin items.
 - Delete individual items.
 - Clear all history.
 - Local storage.
-- Ignored App list.
 - System light/dark theme support.
 
 ### 6.2 Out of Scope for MVP
@@ -281,13 +239,13 @@ Users can configure global shortcut, launch at login, history retention, direct-
 **Primary**
 
 - **SM-1:** First successful reuse time — a new user can install, copy content, open ClipClop, and paste a historical item within 60 seconds. Validates FR-4, FR-8, FR-9.
-- **SM-2:** Quick Panel responsiveness — opening the Quick Panel and filtering recent history feels instant on normal hardware. Validates FR-4, FR-8.
+- **SM-2:** Quick Panel responsiveness — opening the Quick Panel and searching recent history feels instant on normal hardware. Validates FR-4 and FR-8.
 - **SM-3:** Default usefulness — a user can get value without changing Settings. Validates FR-1, FR-4, FR-9, FR-14.
 
 **Secondary**
 
 - **SM-4:** Source clarity — users can identify where a selected item came from when Source App metadata is available. Validates FR-3, FR-6.
-- **SM-5:** Mixed-content usefulness — users can find non-text items through type filtering. Validates FR-2, FR-7.
+- **SM-5:** Mixed-content usefulness — users can recognize and reuse non-text items through the list and preview. Validates FR-2 and FR-6.
 
 **Counter-metrics**
 
@@ -296,7 +254,7 @@ Users can configure global shortcut, launch at login, history retention, direct-
 
 ## 8. Open Questions
 
-1. Which clipboard types are mandatory for public MVP beyond text, formatted text, links, images, files, and colors?
+1. Which additional clipboard types should be considered after the public MVP?
 2. What is the target implementation stack for v1 UI: React, Svelte, Vue, or plain Web UI inside Tauri?
 3. Should clipboard data be encrypted at rest for MVP?
 

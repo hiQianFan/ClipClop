@@ -24,7 +24,7 @@ Open-source comparables generally emphasize local-first privacy, ignored sources
 Recommendation for MVP:
 
 - Do not add custom full-database encryption as a v1 blocker.
-- Do require local-only storage, no cloud, no account, no telemetry, retention limits, ignored apps, sensitive pasteboard-type ignoring, and explicit clear-history controls.
+- Do require local-only storage, no cloud, no account, no telemetry, retention limits, and explicit clear-history controls.
 - Keep the storage layer narrow enough to add encryption later if user feedback or distribution positioning requires it.
 
 ## Frontend UI Stack Assessment
