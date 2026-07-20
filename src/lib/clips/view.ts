@@ -1,48 +1,47 @@
-import type { AppError, ClipDetail, ClipSummary } from "./types";
+import type { ClipDetail, ClipSummary } from "./types";
+import { formatDateTime, formatNumber, localizedError, t } from "$lib/i18n/index.svelte";
 
 export function pasteFallbackMessage(outcome: string) {
-  if (outcome === "copied_permission_required") return "已复制；请允许辅助功能权限后自动粘贴";
-  if (outcome === "copied_target_lost") return "已复制；原窗口已关闭，请手动粘贴";
-  if (outcome === "copied_focus_failed") return "已复制；无法恢复原窗口，请手动粘贴";
-  if (outcome === "copied_injection_failed") return "已复制；系统拦截了自动粘贴，请手动粘贴";
-  if (outcome === "already_in_progress") return "正在处理上一次粘贴，请稍后重试";
-  return "已复制；当前平台暂不支持自动粘贴";
+  if (outcome === "copied_permission_required") return t("paste.permission");
+  if (outcome === "copied_target_lost") return t("paste.targetLost");
+  if (outcome === "copied_focus_failed") return t("paste.focusFailed");
+  if (outcome === "copied_injection_failed") return t("paste.injectionFailed");
+  if (outcome === "already_in_progress") return t("paste.inProgress");
+  return t("paste.unsupported");
 }
 
 export function errorMessage(reason: unknown) {
-  if (typeof reason === "object" && reason && "message" in reason) return String((reason as AppError).message);
-  return String(reason ?? "未知错误");
+  return localizedError(reason);
 }
 
-export function exactTime(value: string) {
-  const date = new Date(value);
-  const pad = (number: number) => String(number).padStart(2, "0");
-  const year = date.getFullYear() === new Date().getFullYear() ? "" : `${date.getFullYear()}-`;
-  return `${year}${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+export const exactTime = formatDateTime;
 
 export function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
+  if (bytes < 1024 * 1024) {
+    const digits = bytes < 10 * 1024 ? 1 : 0;
+    return `${formatNumber(bytes / 1024, { minimumFractionDigits: digits, maximumFractionDigits: digits })} KB`;
+  }
+  const digits = bytes < 10 * 1024 * 1024 ? 1 : 0;
+  return `${formatNumber(bytes / (1024 * 1024), { minimumFractionDigits: digits, maximumFractionDigits: digits })} MB`;
 }
 
 export function metadataFacts(detail: ClipDetail, fileIndex: number) {
   const facts: Array<{ label: string; value: string }> = [];
   if (detail.content_type === "image") {
     if (detail.metadata.width && detail.metadata.height) {
-      facts.push({ label: "尺寸", value: `${detail.metadata.width} × ${detail.metadata.height}` });
+      facts.push({ label: t("meta.dimensions"), value: `${formatNumber(detail.metadata.width)} × ${formatNumber(detail.metadata.height)}` });
     }
-    facts.push({ label: "大小", value: formatBytes(detail.byte_size) });
+    facts.push({ label: t("meta.size"), value: formatBytes(detail.byte_size) });
   } else if (detail.content_type === "file") {
     const files = filePaths(detail);
-    facts.push({ label: "文件", value: `${fileIndex + 1}/${files.length || 1}` });
+    facts.push({ label: t("meta.file"), value: `${formatNumber(fileIndex + 1)}/${formatNumber(files.length || 1)}` });
     const size = detail.metadata.file_sizes?.[fileIndex];
-    if (typeof size === "number") facts.push({ label: "大小", value: formatBytes(size) });
+    if (typeof size === "number") facts.push({ label: t("meta.size"), value: formatBytes(size) });
   } else {
     const count = detail.metadata.char_count ?? detail.plain_text?.length ?? 0;
-    if (count) facts.push({ label: "字符", value: count.toLocaleString() });
-    facts.push({ label: "大小", value: formatBytes(detail.byte_size) });
+    if (count) facts.push({ label: t("meta.characters"), value: formatNumber(count) });
+    facts.push({ label: t("meta.size"), value: formatBytes(detail.byte_size) });
   }
   return facts;
 }
@@ -61,7 +60,11 @@ export function filePaths(record: ClipDetail) {
 
 export function fileName(path: string) {
   const normalized = path.replace(/^file:\/\//, "");
-  return normalized.split(/[\\/]/).pop() || normalized;
+  return normalized.split(/[\\/]/).pop() || normalized || t("meta.file");
+}
+
+export function clipPreview(item: Pick<ClipSummary, "content_type" | "preview">) {
+  return item.preview || (item.content_type === "file" ? t("meta.file") : "");
 }
 
 export function cacheSet<K, V>(cache: Map<K, V>, key: K, value: V, limit = 100) {

@@ -6,6 +6,12 @@ import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { getSettings, recordUpdateCheck } from "$lib/settings/api";
 
 export const RELEASE_URL = "https://github.com/hiQianFan/ClipClop/releases/latest";
+export const DEVELOPMENT_VERSION = "__clipclop_development__";
+type UpdaterErrorCode = "UPDATE_UNSUPPORTED" | "UPDATE_CHANGED";
+
+function updaterError(code: UpdaterErrorCode) {
+  return { code };
+}
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const AUTO_CHECK_DELAY_MS = 15_000;
@@ -53,7 +59,7 @@ export function cachedUpdate() {
 }
 
 export async function currentVersion() {
-  return isTauri() ? getVersion() : "开发预览";
+  return isTauri() ? getVersion() : DEVELOPMENT_VERSION;
 }
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
@@ -95,11 +101,11 @@ export async function downloadAndInstall(
   expectedVersion: string,
   onProgress: (percent: number | null) => void,
 ) {
-  if (!isTauri() || import.meta.env.DEV) throw new Error("当前环境不支持自动更新");
+  if (!isTauri() || import.meta.env.DEV) throw updaterError("UPDATE_UNSUPPORTED");
   const found = await check({ timeout: 30_000 });
   if (!found || found.version !== expectedVersion) {
     await found?.close();
-    throw new Error("更新版本已经变化，请重新检查");
+    throw updaterError("UPDATE_CHANGED");
   }
 
   let downloaded = 0;

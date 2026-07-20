@@ -41,4 +41,4 @@ export type ClipPage = {
   total_pages: number;
 };
 
-export type AppError = { code: string; message: string };
+export type AppError = { code: string };

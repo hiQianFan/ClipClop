@@ -13,12 +13,15 @@ pub enum AppError {
     Clipboard(String),
     #[error("Platform integration failed: {0}")]
     Platform(String),
+    #[error("Hotkey validation failed")]
+    Hotkey(&'static str),
+    #[error("Hotkey unavailable: {0}")]
+    HotkeyUnavailable(String),
 }
 
 #[derive(Debug, Serialize)]
 pub struct ErrorDto {
     pub code: &'static str,
-    pub message: String,
 }
 
 impl Serialize for AppError {
@@ -32,12 +35,16 @@ impl Serialize for AppError {
             Self::Storage(_) => "STORAGE_ERROR",
             Self::Clipboard(_) => "CLIPBOARD_ERROR",
             Self::Platform(_) => "PLATFORM_ERROR",
+            Self::Hotkey(code) => code,
+            Self::HotkeyUnavailable(_) => "HOTKEY_UNAVAILABLE",
         };
-        ErrorDto {
-            code,
-            message: self.to_string(),
+        match self {
+            Self::HotkeyUnavailable(diagnostic) => {
+                eprintln!("IPC error {code}: global-shortcut plugin: {diagnostic}");
+            }
+            _ => eprintln!("IPC error {code}"),
         }
-        .serialize(serializer)
+        ErrorDto { code }.serialize(serializer)
     }
 }
 
@@ -54,3 +61,16 @@ impl From<serde_json::Error> for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ipc_errors_expose_codes_without_diagnostics() {
+        let value = serde_json::to_value(AppError::Storage("database path secret".into())).unwrap();
+        assert_eq!(value, serde_json::json!({ "code": "STORAGE_ERROR" }));
+        let hotkey = serde_json::to_value(AppError::HotkeyUnavailable("os detail".into())).unwrap();
+        assert_eq!(hotkey, serde_json::json!({ "code": "HOTKEY_UNAVAILABLE" }));
+    }
+}

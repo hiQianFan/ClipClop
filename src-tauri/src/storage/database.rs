@@ -14,7 +14,7 @@ use crate::error::{AppError, AppResult};
 
 const SCHEMA: &str = include_str!("../../schema.sql");
 // Development schema revisions are not migrated. Any mismatch requires a reset.
-const SCHEMA_VERSION: u32 = 3;
+const SCHEMA_VERSION: u32 = 4;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -330,7 +330,10 @@ fn conversion_error(error: impl std::error::Error + Send + Sync + 'static) -> ru
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clips::{Flavor, SourceApp};
+    use crate::{
+        clips::{Flavor, SourceApp},
+        settings::{LanguagePreference, Settings},
+    };
     use chrono::Duration;
 
     fn sample(text: &str, created_at: DateTime<Utc>) -> NewClip {
@@ -415,6 +418,16 @@ mod tests {
         assert_eq!(
             database.get_setting::<u32>("retention_days").unwrap(),
             Some(30)
+        );
+
+        let settings = Settings {
+            language: LanguagePreference::ChineseSimplified,
+            ..Settings::default()
+        };
+        database.set_setting("app", &settings).unwrap();
+        assert_eq!(
+            database.get_setting::<Settings>("app").unwrap(),
+            Some(settings)
         );
     }
 

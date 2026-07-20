@@ -15,6 +15,7 @@ pub struct Settings {
     pub launch_at_login: bool,
     pub hotkey: String,
     pub theme: Theme,
+    pub language: LanguagePreference,
     pub check_updates: bool,
     pub last_update_check: Option<String>,
 }
@@ -26,10 +27,31 @@ impl Default for Settings {
             launch_at_login: false,
             hotkey: DEFAULT_HOTKEY.into(),
             theme: Theme::System,
+            language: LanguagePreference::System,
             check_updates: true,
             last_update_check: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum LanguagePreference {
+    #[serde(rename = "zh-CN")]
+    ChineseSimplified,
+    #[serde(rename = "en")]
+    English,
+    #[default]
+    #[serde(rename = "system")]
+    System,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyValidationError {
+    InvalidFormat,
+    MissingModifier,
+    UnsupportedKey,
+    DuplicateModifier,
+    Reserved,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -41,17 +63,21 @@ pub enum Theme {
     System,
 }
 
-pub fn validate_hotkey(hotkey: &str) -> Result<(), &'static str> {
+pub fn validate_hotkey(hotkey: &str) -> Result<(), HotkeyValidationError> {
     if hotkey.is_empty() || hotkey.chars().count() > 80 || hotkey.trim() != hotkey {
-        return Err("快捷键格式无效");
+        return Err(HotkeyValidationError::InvalidFormat);
     }
 
     let parts: Vec<_> = hotkey.split('+').collect();
     let Some((key, modifiers)) = parts.split_last() else {
-        return Err("快捷键必须包含修饰键和主键");
+        return Err(HotkeyValidationError::MissingModifier);
     };
     if modifiers.is_empty() || key.is_empty() || !supported_key(key) {
-        return Err("快捷键必须包含修饰键和受支持的主键");
+        return Err(if modifiers.is_empty() {
+            HotkeyValidationError::MissingModifier
+        } else {
+            HotkeyValidationError::UnsupportedKey
+        });
     }
 
     #[cfg(target_os = "macos")]
@@ -62,11 +88,11 @@ pub fn validate_hotkey(hotkey: &str) -> Result<(), &'static str> {
     if modifiers.iter().enumerate().any(|(index, modifier)| {
         !allowed.contains(modifier) || modifiers[..index].contains(modifier)
     }) {
-        return Err("快捷键包含无效或重复的修饰键");
+        return Err(HotkeyValidationError::DuplicateModifier);
     }
 
     if is_reserved_hotkey(modifiers, key) {
-        return Err("该组合是常用系统或窗口快捷键");
+        return Err(HotkeyValidationError::Reserved);
     }
 
     Ok(())
@@ -144,11 +170,32 @@ mod tests {
     }
 
     #[test]
+    fn language_is_required_and_strict() {
+        let value = serde_json::to_value(Settings::default()).unwrap();
+        assert_eq!(value["language"], "system");
+        let mut old = value.clone();
+        old.as_object_mut().unwrap().remove("language");
+        assert!(serde_json::from_value::<Settings>(old).is_err());
+        let mut invalid = value;
+        invalid["language"] = serde_json::json!("fr");
+        assert!(serde_json::from_value::<Settings>(invalid).is_err());
+    }
+
+    #[test]
     fn validates_default_and_rejects_incomplete_hotkeys() {
         assert_eq!(validate_hotkey(DEFAULT_HOTKEY), Ok(()));
-        assert!(validate_hotkey("Ctrl").is_err());
-        assert!(validate_hotkey("C").is_err());
-        assert!(validate_hotkey("Ctrl+Ctrl+C").is_err());
+        assert_eq!(
+            validate_hotkey("Ctrl"),
+            Err(HotkeyValidationError::MissingModifier)
+        );
+        assert_eq!(
+            validate_hotkey("C"),
+            Err(HotkeyValidationError::MissingModifier)
+        );
+        assert_eq!(
+            validate_hotkey("Ctrl+Ctrl+C"),
+            Err(HotkeyValidationError::DuplicateModifier)
+        );
     }
 
     #[test]

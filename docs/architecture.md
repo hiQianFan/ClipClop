@@ -71,6 +71,7 @@ ClipClop/
 ├── src/
 │   ├── routes/+page.svelte           # 历史面板和会话状态
 │   └── lib/
+│       ├── i18n/                     # 类型完整目录、语言解析与 Intl 格式化
 │       ├── clips/                    # DTO、IPC client、展示辅助函数
 │       ├── settings/                 # 设置 IPC 与独立设置视图
 │       └── updater/                  # 更新检查、缓存与安装
@@ -247,13 +248,21 @@ clips_changed { latest_id? }
 - DTO 显式包含 `content_type` 和类型化 `metadata`，不依赖字段是否为空猜类型。
 - 列表 DTO 不包含原始 flavor 或大二进制；详情按需返回安全预览信息。
 - 原始 payload 不发送给 WebView；文件路径只在已定义的文件详情中按需返回。
-- 错误返回稳定 `code + message`；UI 展示 message，结构化恢复路径使用 code 或 `PasteOutcome`，不解析文本内容。
+- 错误跨 IPC 只暴露稳定语义 `code` 和明确批准的安全参数；数据库、剪贴板、插件与操作系统原始诊断不得进入 UI。前端按 `code` 映射本地化文案，结构化恢复路径使用 code 或 `PasteOutcome`，不解析文本内容。
 - events 只做失效通知。Tauri 官方说明 event 无类型安全、无返回值且只支持 JSON；需要有序高吞吐数据时应使用 channel，但 ClipClop 的 UI 更新没有必要发送高吞吐流。[Tauri 前端事件](https://v2.tauri.app/develop/_sections/frontend-listen/)
 - Svelte 组件卸载时必须执行 `unlisten`，防止 SPA 中重复监听和内存泄漏。
 
 ## 6. Svelte 前端设计
 
 前端采用 feature-first，不采用前端版四层 DDD。
+
+### 6.1 本地化边界
+
+- Rust 在 `Settings` 中严格持久化 `system | zh-CN | en`；默认偏好为 `system`，不保留旧字段、别名或迁移分支。
+- 前端根布局在交互界面渲染前一次性读取设置，并同步应用主题、语言和 `document.documentElement.lang`。随后才启动自动更新调度。
+- `system` 只查看 WebView 的第一系统语言：任意有效 `zh-*` 解析为 `zh-CN`，其他、缺失或无效值均解析为 `en`。显式选择不受系统语言变化影响。
+- `src/lib/i18n/` 的英文目录定义静态类型结构，简体中文目录必须完整满足同一结构。应用自有的可见与辅助文案只能来自目录；日期和数字由当前有效语言的 `Intl` 格式化。
+- 设置页语言选择立即预览但仅在保存时持久化；取消或离开设置会恢复上次保存的语言。剪贴板内容、路径、应用名、版本、键帽和发布说明正文作为数据原样展示。
 
 每个 feature 可以包含：
 

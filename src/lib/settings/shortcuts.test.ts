@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, validateShortcut } from "./shortcuts";
+import { setLanguagePreference } from "$lib/i18n/index.svelte";
 
 const keyEvent = (overrides: Partial<KeyboardEvent>) => ({
   altKey: false, code: "", ctrlKey: false, key: "", metaKey: false, shiftKey: false,
@@ -38,6 +39,7 @@ describe("shortcut recording", () => {
   });
 
   it("formats platform keycaps and defaults", () => {
+    setLanguagePreference("zh-CN");
     expect(defaultShortcut("macos")).toBe("Control+Command+C");
     expect(defaultShortcut("windows")).toBe("Ctrl+Alt+C");
     expect(shortcutKeycaps("Control+Command+C", "macos")).toEqual(["⌃", "⌘", "C"]);

@@ -1,12 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type Theme = "light" | "dark" | "system";
+export type LanguagePreference = "system" | "zh-CN" | "en";
 
 export type Settings = {
   retention_days: 7 | 30 | 90;
   launch_at_login: boolean;
   hotkey: string;
   theme: Theme;
+  language: LanguagePreference;
   check_updates: boolean;
   last_update_check: string | null;
 };

@@ -1,8 +1,10 @@
+import { t } from "$lib/i18n/index.svelte";
+
 export type ShortcutPlatform = "macos" | "windows";
 
 export type ShortcutValidation =
   | { valid: true; shortcut: string }
-  | { valid: false; message: string };
+  | { valid: false; code: "invalid_input" | "invalid_combination" | "reserved" };
 
 const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"]);
 const supportedNamedKeys = new Map([
@@ -40,7 +42,7 @@ export function shortcutFromKeyboardEvent(
   platform: ShortcutPlatform,
 ): ShortcutValidation {
   const key = mainKey(event);
-  if (!key) return { valid: false, message: "请同时按下修饰键和一个字母、数字或功能键。" };
+  if (!key) return { valid: false, code: "invalid_input" };
 
   const modifiers: string[] = [];
   if (event.ctrlKey) modifiers.push(platform === "macos" ? "Control" : "Ctrl");
@@ -61,11 +63,11 @@ export function validateShortcut(shortcut: string, platform: ShortcutPlatform): 
 
   if (!supportedMainKey(key) || modifiers.size === 0 || modifiers.size !== modifierParts.length
     || [...modifiers].some((part) => !accepted.has(part))) {
-    return { valid: false, message: "快捷键必须包含至少一个修饰键和一个主键。" };
+    return { valid: false, code: "invalid_combination" };
   }
 
   if (isReservedShortcut(modifiers, key, platform)) {
-    return { valid: false, message: "该组合是常用系统或窗口快捷键，请选择其他组合。" };
+    return { valid: false, code: "reserved" };
   }
   return { valid: true, shortcut: [...parts.slice(0, -1), key].join("+") };
 }
@@ -112,10 +114,10 @@ export function shortcutSpokenLabel(shortcut: string, platform: ShortcutPlatform
     ? { Control: "Control", Ctrl: "Control", Alt: "Option", Shift: "Shift", Command: "Command", Super: "Command" }
     : { Control: "Control", Ctrl: "Control", Alt: "Alt", Shift: "Shift", Command: "Windows", Super: "Windows" };
   const keys: Record<string, string> = {
-    ArrowUp: "上方向键", ArrowDown: "下方向键", ArrowLeft: "左方向键", ArrowRight: "右方向键",
-    Enter: "回车键", Backspace: "退格键", Delete: "删除键", Space: "空格键",
-    Escape: "Escape 键", Home: "Home 键", End: "End 键", PageUp: "Page Up 键", PageDown: "Page Down 键",
-    Tab: "Tab 键", ",": "逗号键", "/": "斜杠键",
+    ArrowUp: t("shortcut.up"), ArrowDown: t("shortcut.down"), ArrowLeft: t("shortcut.left"), ArrowRight: t("shortcut.right"),
+    Enter: t("shortcut.enter"), Backspace: t("shortcut.backspace"), Delete: t("shortcut.delete"), Space: t("shortcut.space"),
+    Escape: t("shortcut.key", { key: "Escape" }), Home: t("shortcut.key", { key: "Home" }), End: t("shortcut.key", { key: "End" }), PageUp: t("shortcut.key", { key: "Page Up" }), PageDown: t("shortcut.key", { key: "Page Down" }),
+    Tab: t("shortcut.key", { key: "Tab" }), ",": t("shortcut.key", { key: "," }), "/": t("shortcut.key", { key: "/" }),
   };
-  return shortcut.split("+").map((part) => keys[part] ?? labels[part] ?? part).join(" 加 ");
+  return shortcut.split("+").map((part) => keys[part] ?? labels[part] ?? part).join(t("shortcut.join"));
 }

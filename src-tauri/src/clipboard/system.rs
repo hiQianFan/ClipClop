@@ -349,7 +349,7 @@ fn preview_for(content_type: ContentType, text: Option<&str>, files: Option<&[St
             .and_then(|items| items.first())
             .and_then(|path| std::path::Path::new(path).file_name())
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "文件".into());
+            .unwrap_or_default();
     }
     text.unwrap_or_default()
         .split_whitespace()

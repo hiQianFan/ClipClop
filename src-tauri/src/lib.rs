@@ -66,7 +66,7 @@ pub fn run() {
                 database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
             if let Err(message) = validate_hotkey(&startup_settings.hotkey) {
                 eprintln!(
-                    "stored global shortcut is invalid; restoring the platform default: {message}"
+                    "stored global shortcut is invalid; restoring the platform default: {message:?}"
                 );
                 startup_settings.hotkey = DEFAULT_HOTKEY.into();
                 database.set_setting(SETTINGS_KEY, &startup_settings)?;

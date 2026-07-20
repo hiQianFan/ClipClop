@@ -4,7 +4,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::{
     error::AppResult,
-    settings::{validate_hotkey, Settings, SETTINGS_KEY},
+    settings::{validate_hotkey, HotkeyValidationError, Settings, SETTINGS_KEY},
     state::AppState,
 };
 
@@ -29,8 +29,16 @@ pub fn update_settings(
             "retention_days must be 7, 30, or 90".into(),
         ));
     }
-    validate_hotkey(&settings.hotkey)
-        .map_err(|message| crate::error::AppError::Validation(message.into()))?;
+    validate_hotkey(&settings.hotkey).map_err(|error| {
+        let code = match error {
+            HotkeyValidationError::InvalidFormat => "HOTKEY_INVALID_FORMAT",
+            HotkeyValidationError::MissingModifier => "HOTKEY_MISSING_MODIFIER",
+            HotkeyValidationError::UnsupportedKey => "HOTKEY_UNSUPPORTED_KEY",
+            HotkeyValidationError::DuplicateModifier => "HOTKEY_DUPLICATE_MODIFIER",
+            HotkeyValidationError::Reserved => "HOTKEY_RESERVED",
+        };
+        crate::error::AppError::Hotkey(code)
+    })?;
 
     let previous: Settings = state
         .database
@@ -50,8 +58,8 @@ pub fn update_settings(
         cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
         return Err(crate::error::AppError::Platform(error.to_string()));
     }
-    // last_update_check 由后台更新流程维护；保存表单时用库中现值覆盖前端传来的
-    // 快照，避免用一份陈旧的时间戳把刚完成的检查记录冲掉。
+    // The updater owns last_update_check. Preserve its current value when a
+    // stale settings form is saved after an automatic check completes.
     let saved = state
         .database
         .update_setting(SETTINGS_KEY, |existing: &mut Settings| {
@@ -100,9 +108,7 @@ fn prepare_hotkey(app: &AppHandle, next: &str) -> AppResult<bool> {
         return Ok(false);
     }
     if let Err(error) = register_hotkey(app, next) {
-        return Err(crate::error::AppError::Platform(format!(
-            "无法注册该快捷键，可能已被其他应用占用：{error}"
-        )));
+        return Err(crate::error::AppError::HotkeyUnavailable(error.to_string()));
     }
     Ok(true)
 }
@@ -135,13 +141,14 @@ pub fn quit_app(app: AppHandle) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::Theme;
+    use crate::settings::{LanguagePreference, Theme};
 
     #[test]
     fn defaults_are_minimal_and_local() {
         let settings = Settings::default();
         assert_eq!(settings.retention_days, 30);
         assert_eq!(settings.theme, Theme::System);
+        assert_eq!(settings.language, LanguagePreference::System);
         assert!(settings.check_updates);
         assert!(settings.last_update_check.is_none());
     }

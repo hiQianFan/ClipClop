@@ -6,8 +6,9 @@
   import { listen } from "@tauri-apps/api/event";
   import { copyClip, deleteClip, getClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, listClips, openClip, openClipFile, pasteClip, toggleClipPreview } from "$lib/clips/api";
   import type { ClipDetail, ClipPage, ClipSummary } from "$lib/clips/types";
-  import { cacheSet, canExpand, errorMessage, exactTime, fileName, filePaths, groupedFiles, metadataFacts, pasteFallbackMessage } from "$lib/clips/view";
-  import { applyTheme, getSettings, quitApp } from "$lib/settings/api";
+  import { cacheSet, canExpand, clipPreview, errorMessage, exactTime, fileName, filePaths, groupedFiles, metadataFacts, pasteFallbackMessage } from "$lib/clips/view";
+  import { quitApp } from "$lib/settings/api";
+  import { effectiveLocale, formatNumber, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft, ChevronLeft, ChevronRight, File, Image, Search } from "@lucide/svelte";
 
@@ -53,6 +54,12 @@
   const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
   const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
 
+  $effect(() => {
+    effectiveLocale();
+    copied = "";
+    error = "";
+  });
+
   onMount(() => {
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updateReducedMotion = () => { reducedMotion = motionQuery.matches; };
@@ -77,7 +84,6 @@
       }
     };
     document.addEventListener("keydown", captureEscape, true);
-    getSettings().then((settings) => applyTheme(settings.theme)).catch(() => {});
     void refresh(1);
     const unlistenClips = listen("clips_changed", () => refresh(page.page));
     // Only an explicit panel show is a new browsing session. Quick Look also
@@ -198,7 +204,7 @@
     if (plainText && detail?.plain_text == null) return;
     try {
       await copyClip(selectedId, plainText);
-      copied = plainText ? "已复制纯文本，可手动粘贴" : "已复制，可手动粘贴";
+      copied = plainText ? t("history.copiedPlain") : t("history.copied");
       setTimeout(() => copied = "", 1800);
     } catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
@@ -539,23 +545,23 @@
 
 <svelte:window onkeydown={onKeydown} oncontextmenu={suppressContextMenu} />
 
-<main class="panel" aria-label="ClipClop 剪贴板历史">
+<main class="panel" aria-label={t("history.panel")}>
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
         <div class="app-menu-wrap">
-          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label="ClipClop 应用菜单" aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
+          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")} aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
           {#if appMenuOpen}
-            <div class="menu app-menu" role="menu" tabindex="-1" aria-label="ClipClop 应用菜单" onkeydown={onMenuKeydown}>
-              <button data-menu-item role="menuitem" onclick={() => { appMenuOpen = false; void openSettingsView(); }}>设置… <kbd>{settingsShortcut}</kbd></button>
-              <button data-menu-item role="menuitem" class="danger" onclick={() => void quitApp()}>退出 ClipClop</button>
+            <div class="menu app-menu" role="menu" tabindex="-1" aria-label={t("history.appMenu")} onkeydown={onMenuKeydown}>
+              <button data-menu-item role="menuitem" onclick={() => { appMenuOpen = false; void openSettingsView(); }}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></button>
+              <button data-menu-item role="menuitem" class="danger" onclick={() => void quitApp()}>{t("history.quit")}</button>
             </div>
           {/if}
         </div>
       </div>
     {:else}
-      <button class="back" aria-label="返回历史记录" onclick={closeSettingsView}><ArrowLeft size={16} aria-hidden="true" /></button>
-      <span class="settings-title">设置</span>
+      <button class="back" aria-label={t("history.back")} onclick={closeSettingsView}><ArrowLeft size={16} aria-hidden="true" /></button>
+      <span class="settings-title">{t("settings.title")}</span>
     {/if}
     <div class="titlebar-drag" data-tauri-drag-region></div>
   </header>
@@ -563,27 +569,27 @@
   <section class="left">
     <form class="search" onsubmit={(e) => { e.preventDefault(); onSearch(); }}>
       <span aria-hidden="true"><Search size={15} /></span>
-      <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label="搜索剪贴板历史" placeholder="搜索剪贴板…" />
+      <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
       <kbd>/</kbd>
     </form>
-    <div bind:this={listbox} class="list" role="listbox" aria-label="剪贴板历史" aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
+    <div bind:this={listbox} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
       {#if loading && page.items.length === 0}
-        <div class="empty">正在读取历史…</div>
+        <div class="empty">{t("history.loading")}</div>
       {:else if error && page.items.length === 0}
-        <button class="empty retry" onclick={() => refresh(1)}>读取失败，点击重试</button>
+        <button class="empty retry" onclick={() => refresh(1)}>{t("history.retry")}</button>
       {:else if page.items.length === 0}
-        <div class="empty">{query ? "没有匹配结果" : "复制一点内容，然后再回来听见哒哒声。"}</div>
+        <div class="empty">{query ? t("history.noMatches") : t("history.empty")}</div>
       {:else}
         {#each page.items as item, index (item.id)}
           <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
             <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="option" tabindex="-1" aria-selected={item.id === selectedId} aria-posinset={index + 1} aria-setsize={page.items.length} ondblclick={() => pasteSelected()} onclick={() => selectFromList(item.id)} onkeydown={onListKeydown}>
-              <span class="num">{index === 9 ? 0 : index + 1}</span>
+              <span class="num">{formatNumber(index === 9 ? 0 : index + 1)}</span>
               <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class:file={item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
                 {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
                 {:else if item.content_type === "image"}<span aria-hidden="true"><Image size={16} /></span>
                 {:else if item.content_type === "file"}<File size={16} aria-hidden="true" />{/if}
               </span>
-              <span class="snippet">{item.preview}</span>
+              <span class="snippet">{clipPreview(item)}</span>
               {#if canExpand(item)}<span class="disclosure" aria-hidden="true"><ChevronRight size={16} /></span>{/if}
             </div>
             {#if canExpand(item) && expandedId === item.id}
@@ -605,28 +611,28 @@
         {#if detail.content_type === "color"}
           <div class="color-preview"><span style:background={detail.preview}></span><code>{detail.preview}</code></div>
         {:else if detail.content_type === "file"}
-          {#if assetUrl}<img class="asset" src={assetUrl} alt="文件缩略图" />
-          {:else}<div class="file-preview-placeholder">无可用预览</div>{/if}
+          {#if assetUrl}<img class="asset" src={assetUrl} alt={t("history.fileThumbnail")} />
+          {:else}<div class="file-preview-placeholder">{t("history.noPreview")}</div>{/if}
         {:else if detail.content_type === "image"}
-          {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt="剪贴板图片预览" /></div>
-          {:else}<div class="image-placeholder">图片 · {String(detail.metadata.width ?? "?")}×{String(detail.metadata.height ?? "?")}</div>{/if}
+          {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt={t("history.imagePreview")} /></div>
+          {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}
         {:else}
           <pre>{detail.plain_text ?? detail.preview}</pre>
         {/if}
       </div>
       {#if detail.content_type === "file" && filePaths(detail).length > 1}
-        <nav class="file-nav" aria-label="已复制文件导航；使用左右方向键切换文件">
-          <button tabindex="-1" class="file-nav-arrow" aria-label={`上一个文件，列表中快捷键${previousFileShortcut}，导航内使用左方向键`} title={`上一个文件（${previousFileShortcut}；导航内 ←）`} disabled={fileIndex === 0} onclick={() => void selectFile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
-          <div class="file-strip" role="tablist" aria-label={`${filePaths(detail).length} 个已复制文件`}>
+        <nav class="file-nav" aria-label={t("history.fileNavigation")}>
+          <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} title={t("history.previousFileTitle", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => void selectFile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
+          <div class="file-strip" role="tablist" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
             {#each filePaths(detail) as path, index}
-              <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={`查看文件 ${index + 1}：${fileName(path)}`} title={fileName(path)} onclick={() => void selectFile(index)} onkeydown={onFileNavigatorKeydown}>
+              <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path) })} title={fileName(path)} onclick={() => void selectFile(index)} onkeydown={onFileNavigatorKeydown}>
                 {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
                 {:else}<File size={16} aria-hidden="true" />{/if}
               </button>
             {/each}
           </div>
-          <button tabindex="-1" class="file-nav-arrow" aria-label={`下一个文件，列表中快捷键${nextFileShortcut}，导航内使用右方向键`} title={`下一个文件（${nextFileShortcut}；导航内 →）`} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => void selectFile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
-          <span class="file-nav-count" aria-live="polite">{fileIndex + 1}/{filePaths(detail).length}</span>
+          <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.nextFile", { shortcut: nextFileShortcut })} title={t("history.nextFileTitle", { shortcut: nextFileShortcut })} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => void selectFile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
+          <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
         </nav>
       {/if}
       <div class="preview-meta">
@@ -657,42 +663,42 @@
         </div>
       </div>
     {:else if selectedId}
-      <div class="preview-loading"><span>正在读取</span><pre>{page.items.find((item) => item.id === selectedId)?.preview ?? ""}</pre></div>
+      <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!) : ""}</pre></div>
     {:else}
-      <div class="empty">选择一条记录查看内容</div>
+      <div class="empty">{t("history.select")}</div>
     {/if}
   </section>
 
   <footer class="pager">
-    <button disabled={page.page <= 1} onclick={() => refresh(page.page - 1)} aria-label="上一页"><ChevronLeft size={16} aria-hidden="true" /></button>
-    <span>{page.total_pages === 0 ? 0 : page.page}/{page.total_pages}</span>
-    <button disabled={page.page >= page.total_pages} onclick={() => refresh(page.page + 1)} aria-label="下一页"><ChevronRight size={16} aria-hidden="true" /></button>
+    <button disabled={page.page <= 1} onclick={() => refresh(page.page - 1)} aria-label={t("history.previousPage")}><ChevronLeft size={16} aria-hidden="true" /></button>
+    <span>{formatNumber(page.total_pages === 0 ? 0 : page.page)}/{formatNumber(page.total_pages)}</span>
+    <button disabled={page.page >= page.total_pages} onclick={() => refresh(page.page + 1)} aria-label={t("history.nextPage")}><ChevronRight size={16} aria-hidden="true" /></button>
   </footer>
   <footer class="actions">
     {#if deletePending}
-      <div class="confirmation" role="alertdialog" aria-label="确认删除记录">
-        <span>从 ClipClop 删除此记录？<small>不会删除原始文件，也不会更改系统剪贴板。</small></span>
-        <button bind:this={cancelActionButton} class="ghost" onclick={cancelDelete}>取消 <kbd>Esc</kbd></button>
-        <button bind:this={confirmActionButton} class="destructive" onclick={confirmDelete}>删除</button>
+      <div class="confirmation" role="alertdialog" aria-label={t("history.confirmDeleteLabel")}>
+        <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
+        <button bind:this={cancelActionButton} class="ghost" onclick={cancelDelete}>{t("common.cancel")} <kbd>Esc</kbd></button>
+        <button bind:this={confirmActionButton} class="destructive" onclick={confirmDelete}>{t("history.delete")}</button>
       </div>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{/if}
       <div class="menu-wrap">
-        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> 操作</button>
+        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> {t("history.actions")}</button>
         {#if menuOpen}
-          <div class="menu action-menu" role="menu" tabindex="-1" aria-label="操作菜单" onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()} disabled={!selectedId}><span>查看所选内容</span><kbd>Space</kbd></button>
+          <div class="menu action-menu" role="menu" tabindex="-1" aria-label={t("history.actionMenu")} onkeydown={onMenuKeydown}>
+            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()} disabled={!selectedId}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></button>
             <div class="menu-separator" role="separator"></div>
-            <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()} disabled={detail?.plain_text == null}><span>粘贴为纯文本</span><kbd>⇧⏎</kbd></button>
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>复制到剪贴板</span></button>
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)} disabled={detail?.plain_text == null}><span>复制为纯文本</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()} disabled={detail?.plain_text == null}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!selectedId}><span>{t("history.copy")}</span></button>
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)} disabled={detail?.plain_text == null}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
             <div class="menu-separator" role="separator"></div>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()} disabled={!selectedId}><span>从 ClipClop 删除…</span><kbd>{deleteShortcut}</kbd></button>
+            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()} disabled={!selectedId}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></button>
           </div>
         {/if}
       </div>
-      <button class="copy" onclick={() => pasteSelected()} disabled={!selectedId}><kbd>⏎</kbd> 粘贴</button>
+      <button class="copy" onclick={() => pasteSelected()} disabled={!selectedId}><kbd>⏎</kbd> {t("history.paste")}</button>
     {/if}
   </footer>
   {:else}
