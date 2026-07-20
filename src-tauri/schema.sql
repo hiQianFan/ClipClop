@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS clips (
+CREATE TABLE clips (
   id TEXT PRIMARY KEY,
   content_type TEXT NOT NULL CHECK (content_type IN ('text', 'link', 'color', 'code', 'image', 'file')),
   plain_text TEXT,
@@ -13,12 +13,12 @@ CREATE TABLE IF NOT EXISTS clips (
   metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
-CREATE INDEX IF NOT EXISTS idx_clips_order
+CREATE INDEX idx_clips_order
   ON clips(created_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_clips_hash_created
+CREATE INDEX idx_clips_hash_created
   ON clips(content_hash, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS clip_flavors (
+CREATE TABLE clip_flavors (
   clip_id TEXT NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
   format TEXT NOT NULL,
   inline_data BLOB,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS clip_flavors (
   CHECK ((inline_data IS NULL) <> (blob_path IS NULL))
 );
 
-CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5(
+CREATE VIRTUAL TABLE clips_fts USING fts5(
   clip_id UNINDEXED,
   plain_text,
   preview,
@@ -36,19 +36,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS clips_fts USING fts5(
   tokenize = 'unicode61'
 );
 
-CREATE TABLE IF NOT EXISTS settings (
+CREATE TABLE settings (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS ignored_apps (
-  app_id TEXT PRIMARY KEY,
-  app_name TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS schema_meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '1');

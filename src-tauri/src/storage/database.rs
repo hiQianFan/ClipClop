@@ -12,9 +12,9 @@ use crate::clips::{
 };
 use crate::error::{AppError, AppResult};
 
-const MIGRATION: &str = include_str!("../../migrations/0001_init.sql");
-const LEGACY_DATA_CLEANUP: &str =
-    include_str!("../../migrations/0002_remove_legacy_formatted_text.sql");
+const SCHEMA: &str = include_str!("../../schema.sql");
+// Development schema revisions are not migrated. Any mismatch requires a reset.
+const SCHEMA_VERSION: u32 = 3;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -36,8 +36,19 @@ impl Database {
 
     fn from_connection(connection: Connection) -> AppResult<Self> {
         connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
-        connection.execute_batch(MIGRATION)?;
-        connection.execute_batch(LEGACY_DATA_CLEANUP)?;
+        let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        match version {
+            0 => {
+                connection.execute_batch(SCHEMA)?;
+                connection.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            }
+            SCHEMA_VERSION => {}
+            unsupported => {
+                return Err(AppError::Storage(format!(
+                    "unsupported development database schema {unsupported}; delete the database and restart"
+                )));
+            }
+        }
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -99,7 +110,8 @@ impl Database {
     }
 
     pub fn list_clips(&self, request: &ListClipsRequest) -> AppResult<ClipPage> {
-        if request.page == 0 || !(1..=100).contains(&request.page_size) {
+        if request.page == 0 || request.page > 1_000_000 || !(1..=100).contains(&request.page_size)
+        {
             return Err(AppError::Validation(
                 "page must be positive and page_size must be between 1 and 100".into(),
             ));
@@ -128,7 +140,9 @@ impl Database {
             params_from_iter(values.clone()),
             |row| row.get(0),
         )?;
-        let offset = (request.page - 1) * request.page_size;
+        let offset = (request.page - 1)
+            .checked_mul(request.page_size)
+            .ok_or_else(|| AppError::Validation("page offset is too large".into()))?;
         let mut page_values = values;
         page_values.push(Value::Integer(request.page_size.into()));
         page_values.push(Value::Integer(offset.into()));
@@ -252,6 +266,31 @@ impl Database {
         )?;
         Ok(())
     }
+
+    pub fn update_setting<T>(&self, key: &str, update: impl FnOnce(&mut T)) -> AppResult<T>
+    where
+        T: serde::de::DeserializeOwned + serde::Serialize + Default,
+    {
+        let connection = self.connection()?;
+        let json: Option<String> = connection
+            .query_row(
+                "SELECT value_json FROM settings WHERE key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let mut value = json
+            .map(|value| serde_json::from_str(&value).map_err(AppError::from))
+            .transpose()?
+            .unwrap_or_default();
+        update(&mut value);
+        connection.execute(
+            "INSERT INTO settings(key, value_json) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
+            params![key, serde_json::to_string(&value)?],
+        )?;
+        Ok(value)
+    }
 }
 
 fn fts_query(query: &str) -> String {
@@ -272,9 +311,10 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<ClipSummary> {
         id: row.get(0)?,
         content_type: ContentType::from_str(&content_type_text).map_err(conversion_error)?,
         preview: row.get(2)?,
-        source_app: source_id
-            .zip(source_name)
-            .map(|(id, name)| SourceApp { id, name }),
+        source_app: source_id.zip(source_name).and_then(|(id, name)| {
+            let source = SourceApp { id, name };
+            source.is_meaningful().then_some(source)
+        }),
         created_at: DateTime::parse_from_rfc3339(&created_at_text)
             .map_err(conversion_error)?
             .with_timezone(&Utc),
@@ -306,14 +346,17 @@ mod tests {
                 format: "text/plain".into(),
                 payload: text.as_bytes().to_vec(),
             }],
-            metadata: serde_json::json!({"char_count": text.chars().count()}),
+            metadata: crate::clips::ClipMetadata {
+                char_count: Some(text.chars().count() as u64),
+                ..Default::default()
+            },
             content_hash: format!("hash-{text}"),
             created_at,
         }
     }
 
     #[test]
-    fn migrates_inserts_searches_and_reads_details() {
+    fn creates_inserts_searches_and_reads_details() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
         let first_id = database.insert_clip(&sample("alpha command", now)).unwrap();
@@ -373,5 +416,32 @@ mod tests {
             database.get_setting::<u32>("retention_days").unwrap(),
             Some(30)
         );
+    }
+
+    #[test]
+    fn schema_is_versioned_and_setting_updates_are_atomic() {
+        let database = Database::in_memory().unwrap();
+        let version: u32 = database
+            .connection()
+            .unwrap()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+
+        database.set_setting("counter", &1_u32).unwrap();
+        assert_eq!(
+            database
+                .update_setting("counter", |value: &mut u32| *value += 1)
+                .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn rejects_non_current_development_schema() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.pragma_update(None, "user_version", 2).unwrap();
+        let error = Database::from_connection(connection).err().unwrap();
+        assert!(error.to_string().contains("delete the database"));
     }
 }

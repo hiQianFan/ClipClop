@@ -22,7 +22,7 @@ pub enum PasteOutcome {
     CopiedTargetLost,
     CopiedFocusFailed,
     CopiedInjectionFailed,
-    CopiedAlreadyInProgress,
+    AlreadyInProgress,
     CopiedUnsupportedPlatform,
 }
 
@@ -49,18 +49,21 @@ impl Default for PasteController {
 }
 
 impl PasteController {
-    pub fn capture_target(&self) {
+    pub(crate) fn capture_target(&self) {
         let target = platform::capture_target();
         if let Ok(mut stored) = self.target.lock() {
             *stored = target;
         }
     }
 
-    pub fn paste_to_target(&self) -> PasteOutcome {
+    pub(crate) fn try_begin(&self) -> Option<InFlightGuard<'_>> {
         if self.in_flight.swap(true, Ordering::AcqRel) {
-            return PasteOutcome::CopiedAlreadyInProgress;
+            return None;
         }
-        let _guard = InFlightGuard(&self.in_flight);
+        Some(InFlightGuard(&self.in_flight))
+    }
+
+    pub(crate) fn paste_to_target(&self, _guard: InFlightGuard<'_>) -> PasteOutcome {
         let target = self.target.lock().ok().and_then(|target| *target);
         let Some(target) = target else {
             return PasteOutcome::CopiedTargetLost;
@@ -69,7 +72,7 @@ impl PasteController {
     }
 }
 
-struct InFlightGuard<'a>(&'a AtomicBool);
+pub(crate) struct InFlightGuard<'a>(&'a AtomicBool);
 
 impl Drop for InFlightGuard<'_> {
     fn drop(&mut self) {
@@ -301,11 +304,24 @@ mod platform {
             key(VK_CONTROL, KEYEVENTF_KEYUP),
         ];
         unsafe {
-            SendInput(
+            let sent = SendInput(
                 inputs.len() as u32,
                 inputs.as_ptr(),
                 std::mem::size_of::<INPUT>() as i32,
-            ) == inputs.len() as u32
+            );
+            if sent == inputs.len() as u32 {
+                return true;
+            }
+            let releases = [
+                key(b'V' as u16, KEYEVENTF_KEYUP),
+                key(VK_CONTROL, KEYEVENTF_KEYUP),
+            ];
+            let _ = SendInput(
+                releases.len() as u32,
+                releases.as_ptr(),
+                std::mem::size_of::<INPUT>() as i32,
+            );
+            false
         }
     }
 }
@@ -358,5 +374,18 @@ mod tests {
             serde_json::to_string(&PasteOutcome::CopiedFocusFailed).unwrap(),
             "\"copied_focus_failed\""
         );
+        assert_eq!(
+            serde_json::to_string(&PasteOutcome::AlreadyInProgress).unwrap(),
+            "\"already_in_progress\""
+        );
+    }
+
+    #[test]
+    fn only_one_paste_can_hold_the_clipboard_write_permit() {
+        let controller = PasteController::default();
+        let permit = controller.try_begin().expect("first paste should start");
+        assert!(controller.try_begin().is_none());
+        drop(permit);
+        assert!(controller.try_begin().is_some());
     }
 }

@@ -51,6 +51,16 @@ pub struct SourceApp {
     pub name: String,
 }
 
+impl SourceApp {
+    pub(crate) fn is_meaningful(&self) -> bool {
+        let process_name = self.id.rsplit(['/', '\\']).next().unwrap_or(&self.id);
+        !self.name.eq_ignore_ascii_case("ClipClop")
+            && !self.name.eq_ignore_ascii_case("loginwindow")
+            && !self.id.eq_ignore_ascii_case("com.apple.loginwindow")
+            && !process_name.eq_ignore_ascii_case("loginwindow")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Flavor {
     pub format: String,
@@ -66,9 +76,23 @@ pub struct NewClip {
     pub source_app: Option<SourceApp>,
     pub flavors: Vec<Flavor>,
     #[serde(default)]
-    pub metadata: serde_json::Value,
+    pub metadata: ClipMetadata,
     pub content_hash: String,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ClipMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub char_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub file_sizes: Vec<Option<u64>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -79,7 +103,7 @@ pub struct ClipSummary {
     pub source_app: Option<SourceApp>,
     pub created_at: DateTime<Utc>,
     pub byte_size: u64,
-    pub metadata: serde_json::Value,
+    pub metadata: ClipMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
