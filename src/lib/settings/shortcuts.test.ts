@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, validateShortcut } from "./shortcuts";
+import { defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, validateShortcut } from "./shortcuts";
 
 const keyEvent = (overrides: Partial<KeyboardEvent>) => ({
   altKey: false, code: "", ctrlKey: false, key: "", metaKey: false, shiftKey: false,
@@ -42,5 +42,7 @@ describe("shortcut recording", () => {
     expect(defaultShortcut("windows")).toBe("Ctrl+Alt+C");
     expect(shortcutKeycaps("Control+Command+C", "macos")).toEqual(["⌃", "⌘", "C"]);
     expect(shortcutKeycaps("Ctrl+Alt+C", "windows")).toEqual(["Ctrl", "Alt", "C"]);
+    expect(shortcutSpokenLabel("Control+Command+C", "macos")).toBe("Control 加 Command 加 C");
+    expect(shortcutSpokenLabel("Ctrl+Shift+Enter", "windows")).toBe("Control 加 Shift 加 回车键");
   });
 });

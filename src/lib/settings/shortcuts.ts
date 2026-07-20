@@ -106,3 +106,16 @@ export function shortcutKeycaps(shortcut: string, platform: ShortcutPlatform): s
         ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Enter: "Enter", Backspace: "Backspace", Delete: "Delete", Space: "Space" };
   return shortcut.split("+").map((part) => labels[part] ?? part);
 }
+
+export function shortcutSpokenLabel(shortcut: string, platform: ShortcutPlatform): string {
+  const labels: Record<string, string> = platform === "macos"
+    ? { Control: "Control", Ctrl: "Control", Alt: "Option", Shift: "Shift", Command: "Command", Super: "Command" }
+    : { Control: "Control", Ctrl: "Control", Alt: "Alt", Shift: "Shift", Command: "Windows", Super: "Windows" };
+  const keys: Record<string, string> = {
+    ArrowUp: "上方向键", ArrowDown: "下方向键", ArrowLeft: "左方向键", ArrowRight: "右方向键",
+    Enter: "回车键", Backspace: "退格键", Delete: "删除键", Space: "空格键",
+    Escape: "Escape 键", Home: "Home 键", End: "End 键", PageUp: "Page Up 键", PageDown: "Page Down 键",
+    Tab: "Tab 键", ",": "逗号键", "/": "斜杠键",
+  };
+  return shortcut.split("+").map((part) => keys[part] ?? labels[part] ?? part).join(" 加 ");
+}

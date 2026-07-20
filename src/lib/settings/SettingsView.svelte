@@ -3,7 +3,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/clips/api";
   import { applyTheme, getSettings, updateSettings, type Settings } from "./api";
-  import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, type ShortcutPlatform } from "./shortcuts";
+  import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { cachedUpdate, checkForUpdate, currentVersion, downloadAndInstall, openLatestRelease, type AvailableUpdate } from "$lib/updater/api";
 
   type Tab = "general" | "shortcuts" | "updates" | "about";
@@ -36,27 +36,30 @@
     { name: "搜索", description: "将焦点移到搜索框", keys: [[platform === "macos" ? "Command" : "Ctrl", "F"], ["/"]] },
     { name: "打开设置", description: "从历史面板进入设置", keys: [[platform === "macos" ? "Command" : "Ctrl", ","]] },
     { name: "当前记录操作", description: "打开所选记录的操作菜单", keys: [[platform === "macos" ? "Command" : "Ctrl", "K"], ...(platform === "windows" ? [["Shift", "F10"]] : [])] },
-    { name: "操作菜单导航", description: "在菜单中移动到上一项、下一项或首末项", keys: [["ArrowUp"], ["ArrowDown"], ["Home"], ["End"]] },
-    { name: "关闭面板或菜单", description: "Escape 按层级返回；窗口快捷键直接关闭面板", keys: [["Escape"], [platform === "macos" ? "Command" : "Ctrl", "W"]] },
+    { name: "操作菜单导航", description: "上、下方向键逐项移动；Home、End 跳到第一项或最后一项", keys: [["ArrowUp"], ["ArrowDown"], ["Home"], ["End"]] },
+    { name: "逐层返回", description: "先关闭操作菜单，再关闭历史面板", keys: [["Escape"]] },
+    { name: "直接关闭面板", description: "无论当前位于面板哪个区域，都关闭历史面板", keys: [[platform === "macos" ? "Command" : "Ctrl", "W"]] },
   ];
   const listShortcuts: ShortcutRow[] = [
-    { name: "移动选择", description: "选择上一条或下一条记录", keys: [["ArrowUp"], ["ArrowDown"]] },
-    { name: "首条或末条", description: "跳到当前页首尾", keys: [["Home"], ["End"]] },
-    { name: "翻页", description: "切换上一页或下一页", keys: [["ArrowLeft"], ["ArrowRight"], ["PageUp"], ["PageDown"]] },
+    { name: "移动选择", description: "上方向键选择上一条，下方向键选择下一条", keys: [["ArrowUp"], ["ArrowDown"]] },
+    { name: "首条或末条", description: "Home 跳到当前页首条，End 跳到末条", keys: [["Home"], ["End"]] },
+    { name: "翻页", description: "左方向键或 Page Up 返回上一页；右方向键或 Page Down 前往下一页", keys: [["ArrowLeft"], ["PageUp"], ["ArrowRight"], ["PageDown"]] },
     { name: "跳到可见记录", description: "1–9 对应前九条，0 对应第十条", keys: [["1"], ["…"], ["0"]] },
-    { name: "粘贴", description: "保留原格式；加 Shift 仅粘贴纯文本", keys: [["Enter"], ["Shift", "Enter"]] },
+    { name: "粘贴", description: "按原有格式粘贴当前记录", keys: [["Enter"]] },
+    { name: "粘贴为纯文本", description: "去除原有格式后粘贴当前记录", keys: [["Shift", "Enter"]] },
     { name: "在默认应用查看", description: "打开当前记录", keys: [["Space"]] },
     { name: "复制为纯文本", description: "仅在记录包含纯文本时生效", keys: [[platform === "macos" ? "Command" : "Ctrl", "Shift", "C"]] },
     { name: "删除", description: "先进入删除确认", keys: [[platform === "macos" ? "Command" : "Ctrl", platform === "macos" ? "Backspace" : "Delete"]] },
-    { name: "切换组内文件", description: "列表聚焦且记录含多个文件时生效", keys: [[platform === "macos" ? "Command" : "Ctrl", "ArrowLeft"], [platform === "macos" ? "Command" : "Ctrl", "ArrowRight"]] },
+    { name: "切换组内文件", description: "组合左方向键查看上一个文件，组合右方向键查看下一个文件", keys: [[platform === "macos" ? "Command" : "Ctrl", "ArrowLeft"], [platform === "macos" ? "Command" : "Ctrl", "ArrowRight"]] },
   ];
   const fileShortcuts: ShortcutRow[] = [
-    { name: "上一个或下一个文件", description: "文件导航取得焦点时生效", keys: [["ArrowLeft"], ["ArrowRight"]] },
-    { name: "首个或末个文件", description: "文件导航取得焦点时生效", keys: [["Home"], ["End"]] },
+    { name: "上一个或下一个文件", description: "左方向键查看上一个文件，右方向键查看下一个文件", keys: [["ArrowLeft"], ["ArrowRight"]] },
+    { name: "首个或末个文件", description: "Home 跳到首个文件，End 跳到末个文件", keys: [["Home"], ["End"]] },
   ];
   const settingsShortcuts: ShortcutRow[] = [
-    { name: "切换分类", description: "侧栏聚焦时循环切换或跳到首末分类", keys: [["ArrowUp"], ["ArrowDown"], ["Home"], ["End"]] },
-    { name: "进入或返回详情", description: "从侧栏进入详情，或回到当前分类", keys: [["ArrowRight"], ["Tab"], ["ArrowLeft"]] },
+    { name: "切换分类", description: "上、下方向键逐项切换；Home、End 跳到第一个或最后一个分类", keys: [["ArrowUp"], ["ArrowDown"], ["Home"], ["End"]] },
+    { name: "进入详情", description: "从侧栏进入当前分类的设置项", keys: [["ArrowRight"], ["Tab"]] },
+    { name: "返回分类", description: "从设置项回到左侧当前分类", keys: [["ArrowLeft"]] },
     { name: "保存设置", description: "保存当前设置", keys: [[platform === "macos" ? "Command" : "Ctrl", "S"]] },
     { name: "返回历史", description: "取消确认或离开设置", keys: [["Escape"]] },
   ];
@@ -160,7 +163,7 @@
     settings.hotkey = result.shortcut;
     recording = false;
     shortcutError = "";
-    status = `已录制 ${displayShortcut(result.shortcut)}，保存后生效`;
+    status = `已录制 ${shortcutSpokenLabel(result.shortcut, platform)}，保存后生效`;
   }
 
   function restoreDefaultShortcut() {
@@ -222,8 +225,8 @@
       ? String((reason as { message: unknown }).message) : String(reason ?? "未知错误");
   }
 
-  function displayShortcut(shortcut: string) { return shortcutKeycaps(shortcut, platform).join(" "); }
   function displayKeys(keys: string[]) { return shortcutKeycaps(keys.join("+"), platform); }
+  function speakKeys(keys: string[]) { return shortcutSpokenLabel(keys.join("+"), platform); }
 
   function onKeydown(event: KeyboardEvent) {
     if (event.key === "Escape") {
@@ -259,12 +262,18 @@
         {:else if tab === "shortcuts"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">快捷键</h1>
           <p class="section-intro">集中查看 ClipClop 的键盘操作。只有全局呼出快捷键可以修改。</p>
+          <p class="shortcut-help">
+            <strong>怎么看：</strong>相连的按键需要同时按，组合之间的 / 表示任选一种。
+            {#if platform === "macos"}⌘ 是 Command，⌃ 是 Control，⌥ 是 Option，⇧ 是 Shift。{:else}Ctrl 是 Control，Win 是 Windows 键。{/if}
+          </p>
           <section class="shortcut-group" aria-labelledby="global-shortcut-title">
             <h2 id="global-shortcut-title">全局</h2>
             <div class="shortcut-row editable">
               <span><strong>呼出或隐藏 ClipClop</strong><small>在其他应用中也能使用。</small></span>
               <div class="shortcut-actions">
-                <kbd aria-label={`当前快捷键 ${displayShortcut(settings.hotkey)}`}>{displayShortcut(settings.hotkey)}</kbd>
+                <kbd class="key-combination" aria-label={`当前快捷键：${shortcutSpokenLabel(settings.hotkey, platform)}`}>
+                  {#each shortcutKeycaps(settings.hotkey, platform) as key, index}{#if index > 0}<span class="key-plus" aria-hidden="true">+</span>{/if}<span class="keycap" aria-hidden="true">{key}</span>{/each}
+                </kbd>
                 <button bind:this={recorder} class:recording onclick={() => { recording = true; shortcutError = ""; status = "请按下新的快捷键，按 Escape 取消"; }} onkeydown={recordShortcut}>{recording ? "请按快捷键…" : "更改"}</button>
                 <button onclick={restoreDefaultShortcut} disabled={settings.hotkey === defaultShortcut(platform)}>恢复默认</button>
               </div>
@@ -275,7 +284,7 @@
             <section class="shortcut-group" aria-labelledby={`shortcut-${group[0]}`}>
               <h2 id={`shortcut-${group[0]}`}>{group[0]}</h2>
               {#each group[1] as item}
-                <div class="shortcut-row"><span><strong>{item.name}</strong><small>{item.description}</small></span><div class="key-list">{#each item.keys as keys}<kbd>{#each displayKeys(keys) as key}<span>{key}</span>{/each}</kbd>{/each}</div></div>
+                <div class="shortcut-row"><span><strong>{item.name}</strong><small>{item.description}</small></span><div class="key-list">{#each item.keys as keys, alternativeIndex}{#if alternativeIndex > 0}<span class="alternative" aria-label="或">/</span>{/if}<kbd class="key-combination" aria-label={speakKeys(keys)}>{#each displayKeys(keys) as key, keyIndex}{#if keyIndex > 0}<span class="key-plus" aria-hidden="true">+</span>{/if}<span class="keycap" aria-hidden="true">{key}</span>{/each}</kbd>{/each}</div></div>
               {/each}
             </section>
           {/each}
@@ -300,5 +309,5 @@
 </div>
 
 <style>
-  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:13px;font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:18px;line-height:1.3}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 18px;color:var(--text-2);font-size:12px;line-height:1.5}.settings-content>label,.row,.update-head{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{display:flex;flex-direction:column;gap:3px}strong{font-size:13px}small{color:var(--text-3);font-size:12px;line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:6px;color:var(--text-1);background:var(--bg-raised);font-size:12px}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:12px;color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.shortcut-actions kbd{min-width:92px;text-align:center}.key-list kbd{display:flex;gap:3px;border:0;background:transparent}.key-list kbd span,.shortcut-actions kbd{padding:3px 6px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-1);background:var(--bg-raised);font:12px/1.3 ui-monospace,monospace;white-space:nowrap}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:12px}.update-head label{display:flex;align-items:center;gap:8px}.update-card{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding:14px;border-radius:8px;background:var(--bg-raised)}.update-card p{max-height:120px;overflow:auto;white-space:pre-wrap;color:var(--text-2);font-size:12px}.update-card>div,.update-check{display:flex;justify-content:flex-end;gap:8px}.update-check{justify-content:space-between;margin-top:16px}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:12px}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{margin-right:auto}.primary{color:var(--action-on);background:var(--action)}.danger,.error{color:var(--danger)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:13px;font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:18px;line-height:1.3}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:12px;line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:6px;color:var(--text-2);background:var(--bg-raised);font-size:12px;line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{display:flex;flex-direction:column;gap:3px}strong{font-size:13px}small{color:var(--text-3);font-size:12px;line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:6px;color:var(--text-1);background:var(--bg-raised);font-size:12px}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:12px;color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-1);background:var(--bg-raised);font:12px/1.3 ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:11px;line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:12px}.update-head label{display:flex;align-items:center;gap:8px}.update-card{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding:14px;border-radius:8px;background:var(--bg-raised)}.update-card p{max-height:120px;overflow:auto;white-space:pre-wrap;color:var(--text-2);font-size:12px}.update-card>div,.update-check{display:flex;justify-content:flex-end;gap:8px}.update-check{justify-content:space-between;margin-top:16px}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:12px}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{margin-right:auto}.primary{color:var(--action-on);background:var(--action)}.danger,.error{color:var(--danger)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>
