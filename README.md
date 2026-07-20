@@ -10,10 +10,13 @@
 - 在列表中按 Enter 复制，`⌘/Ctrl+K` 打开操作菜单。
 - 全局快捷键呼出：macOS 为 `⌃⌘C`，Windows 为 `Ctrl+Alt+C`。托盘常驻、Light/Dark、保留期限与忽略来源应用；退出应用即停止记录。
 - macOS 与 Windows 双端构建；无账号、云同步、遥测或链接联网增强。
+- 通过 GitHub Releases 检查经过 Tauri updater 签名验证的新版本；自动检查最多每天一次，下载和安装由用户确认。
 
 ## 安装
 
 项目暂未发布经过签名、公证的公开安装包。开发者可从源码运行；维护者构建测试安装包的方法见 [构建与分发](docs/distribution.md)。不要把本地未签名构建当作正式发行版分发。
+
+公开预览版发布后，设置页可以检查、下载并安装更新。macOS 首次安装使用一个兼容 Intel 与 Apple Silicon 的 Universal DMG，Windows 使用 x64 setup EXE；自动更新不会上传剪贴板内容或设备资料。
 
 ## 隐私边界
 

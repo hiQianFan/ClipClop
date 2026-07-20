@@ -16,8 +16,10 @@
 
 ## 产物
 
-- [ ] macOS `.app`/`.dmg` 使用 Developer ID 签名并通过公证、staple 和 Gatekeeper 验证。
-- [ ] Windows `.msi`/NSIS `.exe` 使用可信证书签名并在干净环境安装/卸载。
+- [ ] macOS Universal `.dmg`、`.app.tar.gz` 与 updater `.sig` 完整；若未使用 Developer ID/公证，Release 明确标注首次打开方式。
+- [ ] Windows x64 NSIS `.exe` 与 updater `.sig` 完整；若未使用 Authenticode，Release 明确标注未知发布者/SmartScreen 风险。
+- [ ] Draft 阶段检查 macOS、Windows 安装包、updater `.sig` 和 `latest.json`，随后发布为普通 Release（不能标记为 prerelease）。
+- [ ] Release 发布后立即从上一公开版本分别完成 macOS 和 Windows 自动更新，验证 updater 签名、安装、重启以及历史/设置保留；失败时撤回 Release。
 - [ ] 记录产物文件名、架构、大小和 SHA-256；验证 CI 产物来自目标 tag。
 - [ ] 确认 bundle 标识、图标、许可证和第三方许可证材料完整。
 

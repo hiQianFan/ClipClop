@@ -4,6 +4,7 @@
 
 ```bash
 pnpm install --frozen-lockfile
+pnpm test
 pnpm check
 pnpm build
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
