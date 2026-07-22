@@ -29,7 +29,7 @@ thiserror = "2"
 url = "2"
 uuid = { version = "1", features = ["serde", "v7"] }
 clipboard-rs = "0.3.5"
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 tauri-plugin-global-shortcut = "2"
 active-win-pos-rs = "0.11"
