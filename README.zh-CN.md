@@ -48,13 +48,13 @@ ClipClop 安静地记住你复制过的文本、链接、颜色、图片和文�
 - **Windows：**x64 安装程序
 
 > [!NOTE]
-> 当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。安装前请阅读[分发说明](docs/distribution.md)。
+> 当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。
 
 ## 隐私不是附加功能
 
 ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。剪贴板内容与设置留在当前设备；只有可关闭的更新检查会访问 GitHub Releases。
 
-你可以删除单条记录、清空历史、设置保留期限，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](docs/privacy.md)。
+你可以删除单条记录、清空历史、设置保留期限，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](PRIVACY.zh-CN.md)。
 
 ## 项目状态
 
@@ -63,7 +63,7 @@ ClipClop 当前为 `0.1.0` 预览版。macOS 与 Windows 构建均接受持续�
 <details>
 <summary><strong>参与开发</strong></summary>
 
-开发环境和项目约定统一放在[贡献指南](CONTRIBUTING.zh-CN.md)中。安全问题请按照[安全策略](SECURITY.zh-CN.md)私下报告，不要发布公开 Issue。
+开发环境、项目约定和安全问题私密报告入口统一放在[贡献指南](CONTRIBUTING.zh-CN.md)中。
 
 </details>
 

@@ -2,18 +2,17 @@
 
 [简体中文](CONTRIBUTING.zh-CN.md) | English
 
-Thank you for helping improve ClipClop. The project is a `0.1.0` development preview. Before proposing a larger change, check the v1 boundaries in [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md).
+Thank you for helping improve ClipClop. This is the single starting point for setting up the project, proposing changes, and submitting a pull request.
 
 ## Before you start
 
 1. Bug fixes, documentation corrections, and small reversible changes can go directly to a pull request.
 2. Open an issue first for new features, data migrations, dependency upgrades, or changes to permissions or privacy boundaries. Describe the motivation, user impact, and alternatives.
-3. Do not disclose security vulnerabilities publicly. Follow the [security policy](SECURITY.md).
-4. Never include real clipboard contents, tokens, full private URLs, or personal file paths in an issue, test fixture, screenshot, log, or pull request.
+3. Never include real clipboard contents, tokens, full private URLs, or personal file paths in an issue, test fixture, screenshot, log, or pull request.
 
 ## Local development
 
-You need Node.js from `.nvmrc`, pnpm `9.15.3`, Rust stable, and the Tauri prerequisites for your platform.
+You need Node.js from `.nvmrc`, pnpm `9.15.3`, Rust stable, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform: Xcode Command Line Tools on macOS, or Microsoft C++ Build Tools and WebView2 on Windows.
 
 ```bash
 nvm use
@@ -21,6 +20,8 @@ corepack enable
 pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
+
+The Svelte interface lives in `src/`; the Rust/Tauri application lives in `src-tauri/`.
 
 Before submitting a pull request, run:
 
@@ -33,15 +34,26 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Changes involving keyboard behavior, focus, the system clipboard, permissions, or window lifecycle also require manual verification. Record the platform and non-sensitive results in the pull request; see [docs/testing.md](docs/testing.md).
+Changes involving keyboard behavior, focus, the system clipboard, permissions, or window lifecycle also require manual verification. Record the platform and non-sensitive results in the pull request.
 
 ## Change conventions
 
 - Keep Rust business rules in their feature modules and Tauri commands thin. Svelte code should call IPC through feature `api.ts` modules.
-- Do not modify a released migration. Add an ordered migration and document upgrade and rollback verification.
+- Until a migration system is introduced, database schema changes must increment `SCHEMA_VERSION`; development databases with an older version must be reset.
 - Update relevant documentation in the same pull request when user behavior, permissions, data handling, or release behavior changes.
 - Keep changes focused. Suggested commit format: `type(scope): summary`, using types such as `feat`, `fix`, `docs`, `test`, `refactor`, `build`, or `ci`.
 
 ## Pull requests
 
 Describe the problem and solution, affected platforms, verification evidence, privacy/permission impact, UI screenshots when applicable, and unresolved risks. Use synthetic data in all evidence.
+
+## Security reports
+
+Do not disclose an unpatched vulnerability in a public issue or pull request. Use [GitHub Private Vulnerability Reporting](https://github.com/hiQianFan/ClipClop/security/advisories/new) and include the affected version, platform, reproduction steps, and impact using synthetic data only.
+
+## Maintainer release
+
+1. Update the matching version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+2. Run the **Release** workflow from `main` with that version. It creates a Draft Release, not a public release.
+3. Check the macOS DMG, Windows installer, updater signatures, and `latest.json`; install the packages on both platforms when possible.
+4. Review the generated notes, then publish the Draft as a normal Release. Keep it as a Draft if any artifact or smoke test is incomplete.

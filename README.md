@@ -48,13 +48,13 @@ Preview builds will be available from [GitHub Releases](https://github.com/hiQia
 - **Windows:** x64 installer
 
 > [!NOTE]
-> Preview installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity. See the [distribution notes](docs/distribution.md) before installing.
+> Preview installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity.
 
 ## Private by design
 
 ClipClop has no account, telemetry, advertising, cloud clipboard, or network enrichment. Clipboard contents and settings remain on your current device; only the optional update check contacts GitHub Releases.
 
-Delete individual items, clear the history, choose a retention period, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice (Simplified Chinese)](docs/privacy.md).
+Delete individual items, clear the history, choose a retention period, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice](PRIVACY.md).
 
 ## Project status
 
@@ -63,7 +63,7 @@ ClipClop is currently a `0.1.0` preview. macOS and Windows builds are continuous
 <details>
 <summary><strong>For contributors</strong></summary>
 
-Development instructions and project conventions live in the [contributing guide](CONTRIBUTING.md). Please report security issues through the [security policy](SECURITY.md), not a public issue.
+Development setup, project conventions, and private security reporting live in the [contributing guide](CONTRIBUTING.md).
 
 </details>
 

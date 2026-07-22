@@ -9,3 +9,8 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Local planning and review artifacts
+/.impeccable/critique/
+/openspec/
+/outputs/
