@@ -24,7 +24,9 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::GetWindowThreadProcessId,
 };
 
-use clipboard_rs::{Clipboard, ClipboardContext};
+#[cfg(target_os = "macos")]
+use clipboard_rs::Clipboard;
+use clipboard_rs::ClipboardContext;
 
 use crate::{
     clips::SourceApp,

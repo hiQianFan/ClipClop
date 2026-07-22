@@ -172,6 +172,7 @@ pub fn toggle_clip_preview(
     Ok(false)
 }
 
+#[cfg(target_os = "macos")]
 fn clip_preview_path(
     app: &AppHandle,
     state: &State<'_, AppState>,
