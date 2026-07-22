@@ -61,6 +61,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ## 维护者发布流程
 
 1. 同步更新 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号。
-2. 从 `main` 手动运行 **Release** workflow 并填写该版本；它只创建 Draft Release，不会立即公开。
-3. 检查 macOS DMG、Windows 安装包、更新签名和 `latest.json`；条件允许时在两个平台实际安装。
-4. 检查自动生成的版本说明后，将 Draft 发布为普通 Release。任何产物或冒烟测试未完成时都继续保留 Draft；发布后的 `vX.Y.Z` 标签与 Release 是版本的正式记录。
+2. 等待 `main` 必需检查通过后，从 `main` 手动运行 **Release** workflow 并填写该版本；仅修改版本号或创建标签都不会启动发布。
+3. workflow 创建 Draft Release，并自动验证 macOS DMG、Windows 安装包、更新签名和 `latest.json`；它不会自动公开。
+4. 条件允许时在两个平台实际安装，并检查自动生成的版本说明。仅在验收完成后将 Draft 发布为普通 Release；公开时创建的 `vX.Y.Z` 标签是版本的正式记录，同时让客户端检测到更新。

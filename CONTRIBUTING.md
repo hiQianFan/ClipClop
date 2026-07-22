@@ -61,6 +61,6 @@ Do not disclose an unpatched vulnerability in a public issue or pull request. Us
 ## Maintainer release
 
 1. Update the matching version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-2. Run the **Release** workflow from `main` with that version. It creates a Draft Release, not a public release.
-3. Check the macOS DMG, Windows installer, updater signatures, and `latest.json`; install the packages on both platforms when possible.
-4. Review the generated notes, then publish the Draft as a normal Release. Keep it as a Draft if any artifact or smoke test is incomplete. The published `vX.Y.Z` tag and Release are the canonical version record.
+2. After the required `main` checks pass, manually run the **Release** workflow from `main` with that version. A version change or tag alone does not start a release.
+3. The workflow creates a Draft Release and verifies the macOS DMG, Windows installer, updater signatures, and `latest.json`; it never publishes automatically.
+4. Install the packages on both platforms when possible and review the generated notes. Publish the Draft as a normal Release only when verification is complete; publishing creates the canonical `vX.Y.Z` tag and makes the update visible to clients.
