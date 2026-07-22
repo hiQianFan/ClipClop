@@ -128,7 +128,12 @@ jobs:
           MANUAL_VERSION: ${{ inputs.version }}
         run: |
           release_version="${MANUAL_VERSION#v}"
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$release_version")"
+          release_json="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              | jq -c --arg tag "v$release_version" \
+                '[.[] | select(.tag_name == $tag)] | first'
+          )"
+          test "$release_json" != "null"
           test "$(jq -r .draft <<<"$release_json")" = "true"
 
           asset_names="$(jq -r '.assets[].name' <<<"$release_json")"
@@ -143,10 +148,14 @@ jobs:
           done
 
           manifest_dir="$(mktemp -d)"
-          gh release download "v$release_version" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern latest.json \
-            --dir "$manifest_dir"
+          manifest_api_url="$(
+            jq -r '.assets[] | select(.name == "latest.json") | .url' \
+              <<<"$release_json"
+          )"
+          test -n "$manifest_api_url"
+          gh api \
+            --header "Accept: application/octet-stream" \
+            "$manifest_api_url" > "$manifest_dir/latest.json"
           jq -e --arg version "$release_version" '
             . as $manifest
             | .version == $version
