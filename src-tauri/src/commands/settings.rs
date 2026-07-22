@@ -48,16 +48,36 @@ pub fn update_settings(
     let registered_new_hotkey = hotkey_changed && prepare_hotkey(&app, &settings.hotkey)?;
 
     let autostart = app.autolaunch();
-    let previous_autostart = autostart.is_enabled().unwrap_or(false);
-    let result = if settings.launch_at_login {
-        autostart.enable()
-    } else {
-        autostart.disable()
-    };
-    if let Err(error) = result {
-        cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
-        return Err(crate::error::AppError::Platform(error.to_string()));
+    let previous_autostart = autostart.is_enabled().unwrap_or_else(|error| {
+        eprintln!("failed to read autostart state before settings update: {error}");
+        false
+    });
+    let changed_autostart = previous_autostart != settings.launch_at_login;
+    if changed_autostart {
+        let result = if settings.launch_at_login {
+            autostart.enable()
+        } else {
+            autostart.disable()
+        };
+        if let Err(error) = result {
+            eprintln!("failed to update autostart state: {error}");
+            cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
+            return Err(crate::error::AppError::Platform(error.to_string()));
+        }
     }
+
+    let committed_autostart = autostart.is_enabled().unwrap_or_else(|error| {
+        eprintln!("failed to read autostart state after settings update: {error}");
+        settings.launch_at_login
+    });
+    if committed_autostart != settings.launch_at_login {
+        cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
+        return Err(crate::error::AppError::Platform(
+            "autostart state did not match requested value".into(),
+        ));
+    }
+    settings.launch_at_login = committed_autostart;
+
     // The updater owns last_update_check. Preserve its current value when a
     // stale settings form is saved after an automatic check completes.
     let saved = state
@@ -66,7 +86,7 @@ pub fn update_settings(
             settings.last_update_check = existing.last_update_check.clone();
             *existing = settings.clone();
         });
-    if saved.is_err() {
+    if saved.is_err() && changed_autostart {
         let rollback = if previous_autostart {
             autostart.enable()
         } else {
@@ -75,6 +95,8 @@ pub fn update_settings(
         if let Err(error) = rollback {
             eprintln!("failed to restore autostart after settings write failure: {error}");
         }
+        cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
+    } else if saved.is_err() {
         cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
     } else if hotkey_changed
         && app
