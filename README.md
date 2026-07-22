@@ -1,54 +1,63 @@
 # ClipClop
 
-轻量、离线优先的跨平台剪贴板历史工具。技术栈为 Tauri 2、Rust、Svelte 5、TypeScript 和 Vite。
+[简体中文](README.zh-CN.md) | English
 
-> 当前状态：`0.1.0` 开发预览版。macOS 已完成本地构建验证；Windows 构建工作流已配置，但公开安装包、代码签名与双平台实机验收尚未完成。
+**A lightweight, offline-first, cross-platform clipboard history tool.**
 
-## 功能
+ClipClop is built with Tauri 2, Rust, Svelte 5, TypeScript, and Vite.
 
-- 捕获纯文本及其已有 HTML/RTF flavor、图片和文件引用；界面只安全展示纯文本。
-- 在列表中按 Enter 保留格式粘贴，按 Shift+Enter 粘贴纯文本；直接粘贴失败时内容仍留在系统剪贴板。
-- 全局快捷键呼出：macOS 默认为 `⌃⌘C`，Windows 默认为 `Ctrl+Alt+C`，可在“设置 → 快捷键”中修改。托盘常驻，支持 Light/Dark 与保留期限；退出应用即停止记录。
-- macOS 与 Windows 双端构建；无账号、云同步、遥测或链接联网增强。
-- 通过 GitHub Releases 检查经过 Tauri updater 签名验证的新版本；自动检查最多每天一次，下载和安装由用户确认。
+> Status: `0.1.0` development preview. Local macOS builds have been verified. The Windows build workflow is configured, but Windows device testing is still pending.
 
-macOS 首次直接粘贴会请求辅助功能/Post Event 权限；拒绝后仍可复制并手动粘贴。Windows 通常无需弹窗，但普通权限进程不能向管理员窗口注入输入，此时同样回退为已复制。
+## Features
 
-## 安装
+- Captures plain text and its existing HTML/RTF flavors, images, and file references. The interface renders only safe plain text.
+- Press Enter to paste with available formatting, or Shift+Enter to paste plain text. If direct paste fails, the content remains on the system clipboard for manual paste.
+- Open ClipClop with `⌃⌘C` on macOS or `Ctrl+Alt+C` on Windows. The shortcut can be changed under Settings → Shortcuts.
+- Runs in the tray and supports Light/Dark themes, retention settings, and launch at login. Quitting ClipClop stops capture.
+- Checks GitHub Releases for Tauri-updater-signed updates. Automatic checks run at most once per day; download and installation require confirmation.
+- No account, cloud sync, telemetry, advertising, or network enrichment of copied links.
 
-项目暂未发布经过签名、公证的公开安装包。开发者可从源码运行；维护者构建测试安装包的方法见 [构建与分发](docs/distribution.md)。不要把本地未签名构建当作正式发行版分发。
+On macOS, direct paste requests Accessibility/Post Event permission. If permission is denied, ClipClop still copies the selected item for manual paste. On Windows, a normal process cannot inject input into an elevated application and uses the same fallback.
 
-公开预览版发布后，设置页可以检查、下载并安装更新。macOS 首次安装使用一个兼容 Intel 与 Apple Silicon 的 Universal DMG，Windows 使用 x64 setup EXE；自动更新不会上传剪贴板内容或设备资料。
+## Install
 
-## 隐私边界
+Preview installers are published from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) when available: a Universal DMG for macOS and an x64 setup EXE for Windows.
 
-ClipClop 会在本机保存剪贴板内容、来源应用信息和文件路径引用。数据不会上传，复制的 URL 也不会触发联网抓取。应用默认不判断或过滤“敏感内容”；请使用删除、清空历史、保留期限或退出应用来控制记录。完整说明见 [隐私说明](docs/privacy.md)。
+The preview installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require you to allow the app in System Settings → Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity, but they do not replace operating-system publisher signing. If you do not want to bypass an operating-system warning, build ClipClop from source or wait for a signed release.
 
-## 命名约定
+## Privacy
 
-- 用户可见的产品名统一使用 `ClipClop`，包括窗口标题、macOS 应用名和 Windows 开始菜单名称。
-- 包、仓库、数据库和普通代码标识使用小写 `clipclop`。
-- Rust 应用库目标使用 `clipclop_lib`；它是 Tauri 应用入口库，不等同于独立业务内核。
-- Bundle Identifier 使用 `com.clipclop.desktop`。
+ClipClop stores clipboard contents, source-application metadata, file-path references, and settings on the current device. It does not upload this data, and copied URLs do not trigger network requests. ClipClop does not try to identify or filter sensitive content; use item deletion, Clear History, retention settings, or quit the app to control capture.
 
-## 开发环境
+The local database is not encrypted by ClipClop and relies on operating-system account permissions and disk encryption such as FileVault or BitLocker. See the [privacy notice (Simplified Chinese)](docs/privacy.md) for additional details.
 
-- Node.js：通过 nvm 使用 `.nvmrc` 指定版本。
-- 包管理器：pnpm。
-- Rust：通过 rustup 使用 stable toolchain。
-- macOS：需要 Xcode Command Line Tools。
+## Platform status
+
+| Platform | Package | Status |
+| --- | --- | --- |
+| macOS (Apple Silicon and Intel) | Universal DMG | Local build verified; device smoke testing remains pending |
+| Windows x64 | NSIS setup EXE | CI configured; device smoke testing remains pending |
+
+## Develop from source
+
+Requirements:
+
+- Node.js version from `.nvmrc`
+- pnpm `9.15.3`
+- Rust stable via rustup
+- Tauri's platform prerequisites: Xcode Command Line Tools on macOS, or Microsoft C++ Build Tools and WebView2 on Windows
 
 ```bash
 nvm use
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-Windows 开发还需要 Microsoft C++ Build Tools 与 WebView2。项目使用 pnpm 锁文件和 Cargo 锁文件；提交前请使用 `pnpm install --frozen-lockfile` 验证依赖可复现。
-
-## 基础检查
+Run all local quality checks before submitting a change:
 
 ```bash
+pnpm test
 pnpm check
 pnpm build
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
@@ -56,14 +65,14 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-前端使用 Vitest 覆盖更新节流、格式化、缓存上限和粘贴回退等纯逻辑；完整桌面交互仍需 macOS 与 Windows 实机冒烟测试。
+Vitest covers frontend logic such as update throttling, list-state behavior, shortcut formatting, and paste fallback. Complete desktop interaction still requires macOS and Windows smoke testing.
 
-## 参与项目
+## Contributing and support
 
-- 文档导航与项目状态：[docs/index.md](docs/index.md)
-- 开发与提交约定：[CONTRIBUTING.md](CONTRIBUTING.md)
-- 安全问题报告：[SECURITY.md](SECURITY.md)
-- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- 版本变化：[CHANGELOG.md](CHANGELOG.md)
+- [Documentation](docs/index.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md) — do not disclose vulnerabilities in public issues
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog (Simplified Chinese)](CHANGELOG.md)
 
-项目采用 [MIT License](LICENSE)。提交安全漏洞时请不要创建公开 issue；当前仓库尚未填写私密报告渠道，维护者应在公开发布前完成 `SECURITY.md` 中的占位项。
+ClipClop is available under the [MIT License](LICENSE).

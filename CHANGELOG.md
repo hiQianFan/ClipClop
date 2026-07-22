@@ -7,10 +7,12 @@
 ### Added
 
 - 开源贡献、安全、行为准则、测试、发布和文档索引。
+- 英文默认与简体中文公共文档、Issue/PR 模板和 Dependabot 配置。
 
 ### Changed
 
 - 统一文档中的 v1 文本捕获与隐私控制边界。
+- Release workflow 在打包前统一校验版本并运行完整质量门，且继续只创建 Draft Release。
 
 ## [0.1.0] - 未发布
 

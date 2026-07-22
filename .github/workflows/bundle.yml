@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to package (must match package, Cargo, and Tauri versions; for example 0.1.0)
+        required: true
+        type: string
   push:
     tags: ["v*.*.*"]
 
@@ -44,16 +49,54 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           targets: ${{ matrix.rust_targets }}
       - run: pnpm install --frozen-lockfile
       - name: Verify release version
-        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           app_version="$(node -p "require('./package.json').version")"
-          test "${GITHUB_REF_NAME#v}" = "$app_version"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+            release_version="${MANUAL_VERSION#v}"
+          else
+            test "$GITHUB_REF" = "refs/tags/$GITHUB_REF_NAME"
+            release_version="${GITHUB_REF_NAME#v}"
+          fi
+          test -n "$release_version"
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$release_version" = "$app_version"
           test "$(node -p "require('./src-tauri/tauri.conf.json').version")" = "$app_version"
           test "$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).packages[0].version))")" = "$app_version"
+      - name: Frontend tests
+        run: pnpm test
+      - name: Frontend diagnostics
+        run: pnpm check
+      - name: Frontend production build
+        run: pnpm build
+      - name: Rust formatting
+        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+      - name: Rust lint
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Verify updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+      - name: Protect published release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          app_version="$(node -p "require('./package.json').version")"
+          if release_draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$app_version" --jq .draft 2>/dev/null)"; then
+            test "$release_draft" = "true"
+          fi
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,7 +105,10 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: ClipClop v__VERSION__
-          releaseBody: See CHANGELOG.md for release notes. This preview is not notarized or code-signed by Apple or Microsoft.
+          releaseBody: |
+            See CHANGELOG.md for release notes.
+
+            Preview installation note: these installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require approval in Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity but do not provide operating-system publisher identity.
           releaseDraft: true
           prerelease: false
           generateReleaseNotes: true

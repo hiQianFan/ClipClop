@@ -44,7 +44,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM1Qjc2MjVBOUNBOEM0QjgKUldTNHhLaWNXbUszeGQvNXZvY0J4OTl0MEV3WS9YUUdYRXNINjR5L0hPb2J0ZllQQUpUQjFMY1MK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU2RDg4NDcyREQxQ0QxNTMKUldSVDBSemRjb1RZVmx5K2xTSkEzbEsyTmREcndYUnJVVURDdS90ZHhoRTNUT2l1TW5iTE5XSS8K",
       "endpoints": [
         "https://github.com/hiQianFan/ClipClop/releases/latest/download/latest.json"
       ],

@@ -1,21 +1,23 @@
-# 安全策略
+# Security Policy
 
-## 支持范围
+[简体中文](SECURITY.zh-CN.md) | English
 
-ClipClop 尚未发布稳定版本。目前只对默认分支上的最新代码接受安全报告；`0.1.x` 构建属于开发预览，不承诺长期安全更新。
+## Supported versions
 
-## 报告漏洞
+ClipClop has not reached a stable release. Security reports are accepted for the latest code on the default branch. `0.1.x` builds are development previews and do not receive a long-term support commitment.
 
-请不要通过公开 issue 披露未修复漏洞，尤其是可读取剪贴板内容、绕过 IPC/路径校验、执行任意程序或泄露本地数据的问题。
+## Report a vulnerability
 
-**公开发布前必须将此处替换为可用的私密联系方式或启用 GitHub Private Vulnerability Reporting。** 当前仓库未提供经过确认的私密报告渠道，因此还不具备公开接收安全报告的完整条件。
+Do not disclose an unpatched vulnerability in a public issue, pull request, or discussion. This is especially important for issues that expose clipboard contents, bypass IPC or path validation, execute arbitrary programs, or leak local data.
 
-报告建议包含受影响版本/提交、平台、复现步骤、影响、概念验证和建议缓解方式。请使用虚构测试数据，不要附带真实剪贴板内容、令牌或个人文件。
+The intended private channel is [GitHub Private Vulnerability Reporting](https://github.com/hiQianFan/ClipClop/security/advisories/new). Repository maintainers must enable and test this channel before switching the repository to Public. If the private reporting form is unavailable, do not publish vulnerability details; contact the repository owner without technical details to arrange a private channel.
 
-## 响应目标
+Include the affected version or commit, platform, reproduction steps, impact, proof of concept, and suggested mitigation when possible. Use synthetic data and never attach real clipboard contents, credentials, tokens, or personal files.
 
-在私密渠道启用后，维护者目标是在 7 天内确认收到报告，在完成分级后提供修复计划。具体修复时间取决于严重程度和平台验证需求；修复发布前请保持私密。
+## Response targets
 
-## 安全边界
+Once the private channel is active, maintainers aim to acknowledge a report within seven days and provide a remediation plan after triage. Resolution time depends on severity and platform-validation requirements. Keep the report private until a fix is released or disclosure is coordinated.
 
-ClipClop 保存高度敏感的本地剪贴板数据，但当前不提供应用层数据库加密。WebView 不应加载远程页面；新权限、网络访问、shell 调用、任意文件访问或遥测都视为安全与隐私边界变化，需要专门审查和文档更新。
+## Security boundaries
+
+ClipClop stores potentially sensitive clipboard data locally and does not currently encrypt its database at the application layer. Its WebView must not load remote pages. New permissions, network access, shell execution, arbitrary file access, or telemetry are security and privacy boundary changes and require dedicated review and documentation updates.

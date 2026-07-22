@@ -1,7 +1,15 @@
 {
   "name": "clipclop",
   "version": "0.1.0",
-  "description": "轻量、离线优先的跨平台剪贴板历史工具",
+  "description": "A lightweight, offline-first, cross-platform clipboard history tool.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hiQianFan/ClipClop.git"
+  },
+  "homepage": "https://github.com/hiQianFan/ClipClop#readme",
+  "bugs": {
+    "url": "https://github.com/hiQianFan/ClipClop/issues"
+  },
   "packageManager": "pnpm@9.15.3",
   "type": "module",
   "scripts": {

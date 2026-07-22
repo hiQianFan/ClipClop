@@ -1,0 +1,69 @@
+name: Feature request
+description: Suggest a focused improvement to ClipClop
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem without posting real clipboard contents, private URLs, or personal file paths. Report security concerns privately through SECURITY.md.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues for this request.
+          required: true
+        - label: This request does not disclose a security vulnerability.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What is difficult today, and who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Potential impact
+      options:
+        - label: Changes clipboard data handling or retention
+        - label: Adds network access, telemetry, or cloud behavior
+        - label: Requires a new operating-system permission
+        - label: Changes the local database or migration path
+        - label: Changes installation or update behavior
+  - type: dropdown
+    id: impact-declaration
+    attributes:
+      label: Impact declaration
+      description: Confirm whether any impact category above applies.
+      options:
+        - None of the above
+        - One or more categories apply
+        - Unsure; maintainer review requested
+    validations:
+      required: true
+  - type: textarea
+    id: impact-details
+    attributes:
+      label: Impact details
+      description: Describe applicable impacts, or write "None".
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional non-sensitive context

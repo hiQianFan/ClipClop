@@ -1,9 +1,13 @@
-# 贡献者行为准则
+# Code of Conduct
 
-我们致力于为所有参与者提供友善、无骚扰的协作环境，不因经验、身份、背景或能力而区别对待。
+[简体中文](CODE_OF_CONDUCT.zh-CN.md) | English
 
-参与项目时，请保持尊重、针对问题给出建设性反馈、接受合理分歧，并避免侮辱、骚扰、威胁、泄露他人隐私或持续干扰协作。项目空间包括 issue、PR、讨论区及代表项目参与的其他公开渠道。
+We are committed to a welcoming, harassment-free collaboration environment for everyone, regardless of experience, identity, background, or ability.
 
-维护者可以编辑或移除违反本准则的内容，并对参与者作出警告、临时限制或永久移除。举报应通过项目维护者的私密联系方式提交；该联系方式需与 [SECURITY.md](SECURITY.md) 一并在公开发布前补齐。维护者应尊重举报者的隐私并避免利益冲突。
+Be respectful, give constructive feedback about the work, accept reasonable disagreement, and avoid insults, harassment, threats, disclosure of private information, or sustained disruption. Project spaces include issues, pull requests, discussions, and other public channels where someone represents ClipClop.
 
-本准则参考 Contributor Covenant 的核心原则，以简明中文呈现。若项目建立正式社区治理，可替换为完整的 Contributor Covenant 文本并注明版本与出处。
+Maintainers may edit or remove content that violates this policy and may warn, temporarily restrict, or permanently remove participants. For an urgent safety concern, contact the repository owner without posting incident details and request a private reporting channel. A dedicated private conduct contact is still required before the repository is made Public. Security vulnerabilities must follow the [security policy](SECURITY.md), not the conduct-reporting route.
+
+Maintainers should protect reporters' privacy, avoid conflicts of interest, and respond proportionately to the context and impact.
+
+This concise policy follows the core principles of the Contributor Covenant. It may be replaced by the complete Contributor Covenant, with version and attribution, as project governance grows.

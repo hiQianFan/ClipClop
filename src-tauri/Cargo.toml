@@ -1,8 +1,11 @@
 [package]
 name = "clipclop"
 version = "0.1.0"
-description = "轻量、离线优先的跨平台剪贴板历史工具"
+description = "A lightweight, offline-first, cross-platform clipboard history tool."
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/hiQianFan/ClipClop"
+homepage = "https://github.com/hiQianFan/ClipClop"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

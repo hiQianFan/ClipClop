@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible ClipClop problem using synthetic data
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve ClipClop. Do not include real clipboard contents, credentials, private URLs, or personal file paths. Security vulnerabilities must be reported privately through SECURITY.md.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+        - label: I replaced sensitive content with synthetic examples.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: ClipClop version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS Apple Silicon
+        - macOS Intel
+        - Windows x64
+        - Other / source build
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: Operating-system version
+      placeholder: macOS 15.x or Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use only synthetic clipboard text and generic paths.
+      placeholder: |
+        1. Copy synthetic text such as "example"
+        2. Open ClipClop
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Optional screenshots or logs must remove clipboard contents, tokens, private URLs, usernames, and personal paths.
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/hiQianFan/ClipClop/security/advisories/new
+    about: Do not disclose vulnerabilities in public issues. If this form is unavailable, follow SECURITY.md.
