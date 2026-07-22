@@ -5,32 +5,33 @@
 
   **Your clipboard, always one shortcut away.**
 
-  A fast, private clipboard history for macOS and Windows.
+  Clipboard history without breaking your flow.
 
   [![Quality](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
-  ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-555)
+  ![macOS supported](https://img.shields.io/badge/macOS-supported-000000?logo=apple&logoColor=white)
+  ![Windows supported](https://img.shields.io/badge/Windows-supported-0078D4?logo=windows11&logoColor=white)
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
   [![License](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-  [Download](https://github.com/hiQianFan/ClipClop/releases) · [Features](#why-clipclop) · [Privacy](#private-by-design) · [简体中文](README.zh-CN.md)
+  [Download](https://github.com/hiQianFan/ClipClop/releases) · [Features](#speed-shouldnt-cost-you-privacy) · [Privacy](#privacy-and-security-you-can-verify) · [简体中文](README.zh-CN.md)
 </div>
 
 ## Never lose a copy again
 
-ClipClop quietly remembers the text, links, colors, images, and files you copy. Open it from anywhere, find what you need, and paste it back without breaking your flow.
+ClipClop remembers the text, links, colors, images, and files you copy. Press one shortcut to open it, find what you need, and paste it back without breaking your flow.
 
-No account. No cloud sync. No feed, workspace, or AI layer. Just the clipboard history you expected your computer to have.
+The core clipboard experience works entirely offline and keeps your content on your device. No account, telemetry, ads, cloud sync, or complex workspace—just the clipboard history you expected your computer to have.
 
-## Why ClipClop
+## Speed shouldn't cost you privacy
 
 | | |
 | --- | --- |
-| ⚡ **One shortcut away** | Open ClipClop over any app and search your recent copies instantly. |
-| ⌨️ **Made for the keyboard** | Navigate, preview, copy, and paste without reaching for the mouse. |
-| 🎨 **More than text** | Keep text with its available formatting, plus links, colors, images, and file references. |
-| 🖥️ **At home on both platforms** | A focused desktop experience for macOS and Windows, with light and dark themes. |
-| 🔒 **Local by default** | Your clipboard history stays on your device and copied links never trigger background lookups. |
-| 🪶 **Quiet and lightweight** | Lives in the tray, stays out of the way, and appears only when you call it. |
+| ⚡ **Fast without disruption** | Opens over your current app when needed, then gets out of the way when you're done. |
+| ⌨️ **Keyboard all the way** | Search, select, preview, paste, and change settings without reaching for the mouse. |
+| ♿ **Accessibility by design** | Semantic controls, visible focus, status announcements, and reduced-motion support are built in. |
+| 📴 **Offline at the core** | Capture, storage, search, preview, and paste all happen on your device. |
+| 🔒 **Private and under your control** | No account, telemetry, ads, or cloud clipboard—and copied links never trigger background lookups. |
+| 🎨 **More than text** | Keep text with its available formatting, plus links, colors, images, and files. |
 
 ## Three keys to your clipboard
 
@@ -50,9 +51,11 @@ Preview builds will be available from [GitHub Releases](https://github.com/hiQia
 > [!NOTE]
 > Preview installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity.
 
-## Private by design
+## Privacy and security you can verify
 
-ClipClop has no account, telemetry, advertising, cloud clipboard, or network enrichment. Clipboard contents and settings remain on your current device; only the optional update check contacts GitHub Releases.
+ClipClop has no account, telemetry, advertising, cloud clipboard, or network enrichment. Clipboard capture, storage, search, preview, and paste all happen on your device; aside from the optional update check, ClipClop does not need a network connection. Even copied links are never opened in the background.
+
+ClipClop is fully open source, so anyone can inspect how clipboard content is handled, where data is stored, and when the app accesses the network. Open source is not an automatic guarantee of security, but it makes ClipClop's privacy boundaries and security claims verifiable rather than something you have to take on trust.
 
 Delete individual items, clear the history, choose a retention period, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice](PRIVACY.md).
 

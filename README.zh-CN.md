@@ -3,34 +3,35 @@
 
   # ClipClop
 
-  **剪贴历史，一键即达。**
+  **马不停贴。**
 
-  为 macOS 与 Windows 打造的快速、私密剪贴板历史工具。
+  剪贴历史，一键即达。
 
   [![构建状态](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
-  ![支持平台](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-555)
+  ![支持 macOS](https://img.shields.io/badge/macOS-支持-000000?logo=apple&logoColor=white)
+  ![支持 Windows](https://img.shields.io/badge/Windows-支持-0078D4?logo=windows11&logoColor=white)
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
   [![开源许可](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-  [下载](https://github.com/hiQianFan/ClipClop/releases) · [产品亮点](#为什么选择-clipclop) · [隐私](#隐私不是附加功能) · [English](README.md)
+  [下载](https://github.com/hiQianFan/ClipClop/releases) · [产品亮点](#快不必以隐私为代价) · [隐私](#隐私与安全公开可验证) · [English](README.md)
 </div>
 
 ## 不再弄丢复制过的内容
 
-ClipClop 安静地记住你复制过的文本、链接、颜色、图片和文件。无论正在使用什么应用，都能随时呼出、快速找到，并粘贴回去，不打断手上的工作。
+ClipClop 记住你复制过的文本、链接、颜色、图片和文件。按下快捷键，就能随时呼出、快速找到并粘贴回去，不打断手上的工作。
 
-无需账号，没有云同步，也不把剪贴板包装成信息流、工作区或 AI 工具。它只是补上电脑本该拥有的剪贴历史。
+剪贴核心功能完全离线，内容保存在本机。无需账号，没有遥测、广告、云同步或复杂工作区——ClipClop 只补上电脑本该拥有的剪贴历史。
 
-## 为什么选择 ClipClop
+## 快，不必以隐私为代价
 
 | | |
 | --- | --- |
-| ⚡ **一个快捷键就到** | 覆盖在当前应用上方，立即搜索最近复制过的内容。 |
-| ⌨️ **为键盘操作而生** | 查找、预览、复制、粘贴，全程不必离开键盘。 |
-| 🎨 **不只有纯文本** | 保存文本及其可用格式，也支持链接、颜色、图片与文件引用。 |
-| 🖥️ **真正面向双平台** | 为 macOS 与 Windows 提供专注、自然的桌面体验，并支持明暗主题。 |
-| 🔒 **默认留在本地** | 剪贴历史保存在当前设备，复制链接也不会触发后台联网请求。 |
-| 🪶 **安静而轻量** | 常驻托盘、不打扰，需要时才出现。 |
+| ⚡ **快而不扰** | 覆盖在当前应用上方，需要时立即出现，完成后自然退场。 |
+| ⌨️ **全程键盘操作** | 从搜索、选择、预览到粘贴和设置，核心流程无需鼠标。 |
+| ♿ **无障碍优先** | 提供语义化控件、清晰焦点、状态播报和减少动态效果支持。 |
+| 📴 **核心功能离线运行** | 捕获、保存、搜索、预览和粘贴都在本机完成。 |
+| 🔒 **内容私密可控** | 没有账号、遥测、广告或云剪贴板，复制网址也不会触发后台访问。 |
+| 🎨 **不只有纯文本** | 保存文本及其可用格式，也支持链接、颜色、图片和文件。 |
 
 ## 三步找回剪贴内容
 
@@ -50,9 +51,11 @@ ClipClop 安静地记住你复制过的文本、链接、颜色、图片和文�
 > [!NOTE]
 > 当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。
 
-## 隐私不是附加功能
+## 隐私与安全，公开可验证
 
-ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。剪贴板内容与设置留在当前设备；只有可关闭的更新检查会访问 GitHub Releases。
+ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。剪贴内容的捕获、保存、搜索、预览和粘贴均在本机完成；除可关闭的更新检查外，ClipClop 不需要网络连接。即使复制的是网址，也不会在后台访问它。
+
+ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数据保存在哪里，以及应用何时访问网络。开源本身不等于绝对安全，但它让隐私边界和安全承诺可以被验证，而不只是被相信。
 
 你可以删除单条记录、清空历史、设置保留期限，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](PRIVACY.zh-CN.md)。
 
