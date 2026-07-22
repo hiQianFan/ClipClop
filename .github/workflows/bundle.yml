@@ -117,7 +117,9 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # GitHub hides draft releases from tokens without release write access.
+      # This job only reads the draft and downloads latest.json.
+      contents: write
     steps:
       - name: Verify assets and updater manifest
         shell: bash
