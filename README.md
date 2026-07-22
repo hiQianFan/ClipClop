@@ -1,78 +1,72 @@
-# ClipClop
+<div align="center">
+  <img src="src-tauri/icons/icon.png" width="132" alt="ClipClop app icon">
 
-[简体中文](README.zh-CN.md) | English
+  # ClipClop
 
-**A lightweight, offline-first, cross-platform clipboard history tool.**
+  **Your clipboard, always one shortcut away.**
 
-ClipClop is built with Tauri 2, Rust, Svelte 5, TypeScript, and Vite.
+  A fast, private clipboard history for macOS and Windows.
 
-> Status: `0.1.0` development preview. Local macOS builds have been verified. The Windows build workflow is configured, but Windows device testing is still pending.
+  [![Quality](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
+  ![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-555)
+  [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
+  [![License](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-## Features
+  [Download](https://github.com/hiQianFan/ClipClop/releases) · [Features](#why-clipclop) · [Privacy](#private-by-design) · [简体中文](README.zh-CN.md)
+</div>
 
-- Captures plain text and its existing HTML/RTF flavors, images, and file references. The interface renders only safe plain text.
-- Press Enter to paste with available formatting, or Shift+Enter to paste plain text. If direct paste fails, the content remains on the system clipboard for manual paste.
-- Open ClipClop with `⌃⌘C` on macOS or `Ctrl+Alt+C` on Windows. The shortcut can be changed under Settings → Shortcuts.
-- Runs in the tray and supports Light/Dark themes, retention settings, and launch at login. Quitting ClipClop stops capture.
-- Checks GitHub Releases for Tauri-updater-signed updates. Automatic checks run at most once per day; download and installation require confirmation.
-- No account, cloud sync, telemetry, advertising, or network enrichment of copied links.
+## Never lose a copy again
 
-On macOS, direct paste requests Accessibility/Post Event permission. If permission is denied, ClipClop still copies the selected item for manual paste. On Windows, a normal process cannot inject input into an elevated application and uses the same fallback.
+ClipClop quietly remembers the text, links, colors, images, and files you copy. Open it from anywhere, find what you need, and paste it back without breaking your flow.
 
-## Install
+No account. No cloud sync. No feed, workspace, or AI layer. Just the clipboard history you expected your computer to have.
 
-Preview installers are published from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) when available: a Universal DMG for macOS and an x64 setup EXE for Windows.
+## Why ClipClop
 
-The preview installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require you to allow the app in System Settings → Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity, but they do not replace operating-system publisher signing. If you do not want to bypass an operating-system warning, build ClipClop from source or wait for a signed release.
+| | |
+| --- | --- |
+| ⚡ **One shortcut away** | Open ClipClop over any app and search your recent copies instantly. |
+| ⌨️ **Made for the keyboard** | Navigate, preview, copy, and paste without reaching for the mouse. |
+| 🎨 **More than text** | Keep text with its available formatting, plus links, colors, images, and file references. |
+| 🖥️ **At home on both platforms** | A focused desktop experience for macOS and Windows, with light and dark themes. |
+| 🔒 **Local by default** | Your clipboard history stays on your device and copied links never trigger background lookups. |
+| 🪶 **Quiet and lightweight** | Lives in the tray, stays out of the way, and appears only when you call it. |
 
-## Privacy
+## Three keys to your clipboard
 
-ClipClop stores clipboard contents, source-application metadata, file-path references, and settings on the current device. It does not upload this data, and copied URLs do not trigger network requests. ClipClop does not try to identify or filter sensitive content; use item deletion, Clear History, retention settings, or quit the app to control capture.
+1. **Open** — press `⌃⌘C` on macOS or `Ctrl+Alt+C` on Windows.
+2. **Find** — start typing or move through your recent copies.
+3. **Paste** — press `Enter` to keep available formatting, or `Shift+Enter` for plain text.
 
-The local database is not encrypted by ClipClop and relies on operating-system account permissions and disk encryption such as FileVault or BitLocker. See the [privacy notice (Simplified Chinese)](docs/privacy.md) for additional details.
+The global shortcut is customizable. If direct paste is unavailable, ClipClop leaves the selected content on the system clipboard so you can paste it normally.
 
-## Platform status
+## Download
 
-| Platform | Package | Status |
-| --- | --- | --- |
-| macOS (Apple Silicon and Intel) | Universal DMG | Local build verified; device smoke testing remains pending |
-| Windows x64 | NSIS setup EXE | CI configured; device smoke testing remains pending |
+Preview builds will be available from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) after the first release is published:
 
-## Develop from source
+- **macOS:** Universal DMG for Apple Silicon and Intel
+- **Windows:** x64 installer
 
-Requirements:
+> [!NOTE]
+> Preview installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity. See the [distribution notes](docs/distribution.md) before installing.
 
-- Node.js version from `.nvmrc`
-- pnpm `9.15.3`
-- Rust stable via rustup
-- Tauri's platform prerequisites: Xcode Command Line Tools on macOS, or Microsoft C++ Build Tools and WebView2 on Windows
+## Private by design
 
-```bash
-nvm use
-corepack enable
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
+ClipClop has no account, telemetry, advertising, cloud clipboard, or network enrichment. Clipboard contents and settings remain on your current device; only the optional update check contacts GitHub Releases.
 
-Run all local quality checks before submitting a change:
+Delete individual items, clear the history, choose a retention period, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice (Simplified Chinese)](docs/privacy.md).
 
-```bash
-pnpm test
-pnpm check
-pnpm build
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
-```
+## Project status
 
-Vitest covers frontend logic such as update throttling, list-state behavior, shortcut formatting, and paste fallback. Complete desktop interaction still requires macOS and Windows smoke testing.
+ClipClop is currently a `0.1.0` preview. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
 
-## Contributing and support
+<details>
+<summary><strong>For contributors</strong></summary>
 
-- [Documentation](docs/index.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Security policy](SECURITY.md) — do not disclose vulnerabilities in public issues
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Changelog (Simplified Chinese)](CHANGELOG.md)
+Development instructions and project conventions live in the [contributing guide](CONTRIBUTING.md). Please report security issues through the [security policy](SECURITY.md), not a public issue.
 
-ClipClop is available under the [MIT License](LICENSE).
+</details>
+
+## License
+
+ClipClop is open source under the [MIT License](LICENSE). If it helps you, a ⭐ makes the project easier for others to discover.

@@ -1,78 +1,72 @@
-# ClipClop
+<div align="center">
+  <img src="src-tauri/icons/icon.png" width="132" alt="ClipClop 应用图标">
 
-简体中文 | [English](README.md)
+  # ClipClop
 
-**轻量、离线优先的跨平台剪贴板历史工具。**
+  **剪贴历史，一键即达。**
 
-ClipClop 使用 Tauri 2、Rust、Svelte 5、TypeScript 和 Vite 构建。
+  为 macOS 与 Windows 打造的快速、私密剪贴板历史工具。
 
-> 当前状态：`0.1.0` 开发预览版。macOS 已完成本地构建验证；Windows 构建工作流已配置，Windows 实机验收仍待完成。
+  [![构建状态](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
+  ![支持平台](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-555)
+  [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
+  [![开源许可](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-## 功能
+  [下载](https://github.com/hiQianFan/ClipClop/releases) · [产品亮点](#为什么选择-clipclop) · [隐私](#隐私不是附加功能) · [English](README.md)
+</div>
 
-- 捕获纯文本及其已有 HTML/RTF flavor、图片和文件引用；界面只安全展示纯文本。
-- 按 Enter 保留可用格式粘贴，按 Shift+Enter 粘贴纯文本。直接粘贴失败时，内容仍留在系统剪贴板供手动粘贴。
-- 全局快捷键呼出：macOS 默认为 `⌃⌘C`，Windows 默认为 `Ctrl+Alt+C`，可在“设置 → 快捷键”中修改。
-- 托盘常驻，支持 Light/Dark 主题、保留期限和开机启动；退出 ClipClop 即停止捕获。
-- 通过 GitHub Releases 检查经过 Tauri updater 签名验证的新版本；自动检查最多每天一次，下载和安装由用户确认。
-- 无账号、云同步、遥测、广告或复制链接的联网增强。
+## 不再弄丢复制过的内容
 
-macOS 首次直接粘贴会请求辅助功能/Post Event 权限；拒绝后仍可复制并手动粘贴。Windows 普通权限进程不能向管理员窗口注入输入，此时使用同样的回退方式。
+ClipClop 安静地记住你复制过的文本、链接、颜色、图片和文件。无论正在使用什么应用，都能随时呼出、快速找到，并粘贴回去，不打断手上的工作。
 
-## 安装
+无需账号，没有云同步，也不把剪贴板包装成信息流、工作区或 AI 工具。它只是补上电脑本该拥有的剪贴历史。
 
-预览安装包发布后可从 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 下载：macOS 使用 Universal DMG，Windows 使用 x64 setup EXE。
+## 为什么选择 ClipClop
 
-当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名。macOS 可能要求在“系统设置 → 隐私与安全性”中允许应用，Windows 可能显示“未知发布者”或 SmartScreen 警告。Tauri updater 签名用于验证更新完整性，不能替代操作系统的发布者签名。如果不希望绕过系统警告，可以从源码构建或等待签名版本。
+| | |
+| --- | --- |
+| ⚡ **一个快捷键就到** | 覆盖在当前应用上方，立即搜索最近复制过的内容。 |
+| ⌨️ **为键盘操作而生** | 查找、预览、复制、粘贴，全程不必离开键盘。 |
+| 🎨 **不只有纯文本** | 保存文本及其可用格式，也支持链接、颜色、图片与文件引用。 |
+| 🖥️ **真正面向双平台** | 为 macOS 与 Windows 提供专注、自然的桌面体验，并支持明暗主题。 |
+| 🔒 **默认留在本地** | 剪贴历史保存在当前设备，复制链接也不会触发后台联网请求。 |
+| 🪶 **安静而轻量** | 常驻托盘、不打扰，需要时才出现。 |
 
-## 隐私
+## 三步找回剪贴内容
 
-ClipClop 会在当前设备保存剪贴板内容、来源应用信息、文件路径引用和设置，不会上传这些数据，复制的 URL 也不会触发联网请求。ClipClop 不推测或过滤敏感内容；请使用删除单条、清空历史、保留期限或退出应用来控制捕获。
+1. **呼出**——macOS 按 `⌃⌘C`，Windows 按 `Ctrl+Alt+C`。
+2. **查找**——直接输入搜索，或浏览最近复制的内容。
+3. **粘贴**——按 `Enter` 保留可用格式，按 `Shift+Enter` 粘贴纯文本。
 
-本地数据库没有由 ClipClop 进行应用层加密，依赖系统账户权限和 FileVault/BitLocker 等磁盘保护。完整说明见[隐私说明](docs/privacy.md)。
+全局快捷键可以自定义。如果系统不允许直接粘贴，ClipClop 会把选中内容留在系统剪贴板，你仍可正常手动粘贴。
 
-## 平台状态
+## 下载
 
-| 平台 | 安装包 | 状态 |
-| --- | --- | --- |
-| macOS（Apple Silicon 与 Intel） | Universal DMG | 本地构建已验证；实机冒烟待完成 |
-| Windows x64 | NSIS setup EXE | CI 已配置；实机冒烟待完成 |
+首次版本发布后，可前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 获取预览版：
 
-## 从源码开发
+- **macOS：**同时支持 Apple Silicon 与 Intel 的 Universal DMG
+- **Windows：**x64 安装程序
 
-环境要求：
+> [!NOTE]
+> 当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。安装前请阅读[分发说明](docs/distribution.md)。
 
-- `.nvmrc` 指定的 Node.js 版本
-- pnpm `9.15.3`
-- 通过 rustup 安装的 Rust stable
-- Tauri 平台依赖：macOS 需要 Xcode Command Line Tools；Windows 需要 Microsoft C++ Build Tools 和 WebView2
+## 隐私不是附加功能
 
-```bash
-nvm use
-corepack enable
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
+ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。剪贴板内容与设置留在当前设备；只有可关闭的更新检查会访问 GitHub Releases。
 
-提交改动前运行全部本地质量检查：
+你可以删除单条记录、清空历史、设置保留期限，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](docs/privacy.md)。
 
-```bash
-pnpm test
-pnpm check
-pnpm build
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
-```
+## 项目状态
 
-Vitest 覆盖更新节流、列表状态、快捷键格式化和粘贴回退等前端逻辑。完整桌面交互仍需 macOS 与 Windows 实机冒烟测试。
+ClipClop 当前为 `0.1.0` 预览版。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
 
-## 参与项目与支持
+<details>
+<summary><strong>参与开发</strong></summary>
 
-- [文档索引](docs/index.zh-CN.md)
-- [贡献指南](CONTRIBUTING.zh-CN.md)
-- [安全策略](SECURITY.zh-CN.md)——不要在公开 issue 中披露漏洞
-- [行为准则](CODE_OF_CONDUCT.zh-CN.md)
-- [变更日志](CHANGELOG.md)
+开发环境和项目约定统一放在[贡献指南](CONTRIBUTING.zh-CN.md)中。安全问题请按照[安全策略](SECURITY.zh-CN.md)私下报告，不要发布公开 Issue。
 
-ClipClop 采用 [MIT License](LICENSE)。
+</details>
+
+## 开源许可
+
+ClipClop 采用 [MIT License](LICENSE) 开源。如果它对你有帮助，欢迎点亮 ⭐，让更多人发现它。

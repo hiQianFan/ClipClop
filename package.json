@@ -1,7 +1,7 @@
 {
   "name": "clipclop",
   "version": "0.1.0",
-  "description": "A lightweight, offline-first, cross-platform clipboard history tool.",
+  "description": "Your clipboard, always one shortcut away.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hiQianFan/ClipClop.git"
