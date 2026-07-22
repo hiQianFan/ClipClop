@@ -33,7 +33,9 @@ jobs:
           - name: macOS Universal DMG
             os: macos-14
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
-            args: --target universal-apple-darwin --bundles dmg
+            # The app target produces the signed .app.tar.gz updater artifact;
+            # dmg alone is installable but is not an updater-enabled target.
+            args: --target universal-apple-darwin --bundles app,dmg
           - name: Windows x64 Setup
             os: windows-latest
             rust_targets: x86_64-pc-windows-msvc
