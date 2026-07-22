@@ -43,7 +43,7 @@ ClipClop 记住你复制过的文本、链接、颜色、图片和文件。按�
 
 ## 下载
 
-首次版本发布后，可前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 获取预览版：
+前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 下载最新预览版：
 
 - **macOS：**同时支持 Apple Silicon 与 Intel 的 Universal DMG
 - **Windows：**x64 安装程序

@@ -43,6 +43,13 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 用户行为、权限、数据处理或发布流程改变时，同一 Pull Request 必须更新相应文档。
 - 保持变更聚焦。提交信息建议使用 `type(scope): summary`，常用类型为 `feat`、`fix`、`docs`、`test`、`refactor`、`build`、`ci`。
 
+## 分支与版本
+
+- `main` 是唯一长期分支，并应始终保持可发布状态。
+- 改动使用短期功能或修复分支，通过 Pull Request 合并，并在合并后删除；项目不使用 release 分支。
+- 版本遵循语义化版本。只有发布 `vX.Y.Z` 标签与 GitHub Release 后，该版本才正式存在；分支不代表版本。
+- 依赖升级由维护者按需审查。GitHub 漏洞提醒保持开启，但不使用定时依赖升级 Pull Request。
+
 ## Pull Request
 
 请说明问题与方案、影响平台、验证证据、隐私/权限影响、适用时的 UI 截图，以及未解决风险。所有证据都应使用虚构数据。
@@ -56,4 +63,4 @@ cargo test --manifest-path src-tauri/Cargo.toml
 1. 同步更新 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号。
 2. 从 `main` 手动运行 **Release** workflow 并填写该版本；它只创建 Draft Release，不会立即公开。
 3. 检查 macOS DMG、Windows 安装包、更新签名和 `latest.json`；条件允许时在两个平台实际安装。
-4. 检查自动生成的版本说明后，将 Draft 发布为普通 Release。任何产物或冒烟测试未完成时都继续保留 Draft。
+4. 检查自动生成的版本说明后，将 Draft 发布为普通 Release。任何产物或冒烟测试未完成时都继续保留 Draft；发布后的 `vX.Y.Z` 标签与 Release 是版本的正式记录。

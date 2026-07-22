@@ -43,6 +43,13 @@ Changes involving keyboard behavior, focus, the system clipboard, permissions, o
 - Update relevant documentation in the same pull request when user behavior, permissions, data handling, or release behavior changes.
 - Keep changes focused. Suggested commit format: `type(scope): summary`, using types such as `feat`, `fix`, `docs`, `test`, `refactor`, `build`, or `ci`.
 
+## Branches and versions
+
+- `main` is the only long-lived branch and should always remain releasable.
+- Make changes on a short-lived feature or fix branch, merge through a pull request, and delete the branch after merging. Release branches are not used.
+- Versions follow Semantic Versioning. A version exists publicly when its `vX.Y.Z` tag and GitHub Release are published; branches do not represent versions.
+- Dependency updates are reviewed deliberately. GitHub vulnerability alerts remain enabled, while scheduled dependency-update pull requests are not used.
+
 ## Pull requests
 
 Describe the problem and solution, affected platforms, verification evidence, privacy/permission impact, UI screenshots when applicable, and unresolved risks. Use synthetic data in all evidence.
@@ -56,4 +63,4 @@ Do not disclose an unpatched vulnerability in a public issue or pull request. Us
 1. Update the matching version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 2. Run the **Release** workflow from `main` with that version. It creates a Draft Release, not a public release.
 3. Check the macOS DMG, Windows installer, updater signatures, and `latest.json`; install the packages on both platforms when possible.
-4. Review the generated notes, then publish the Draft as a normal Release. Keep it as a Draft if any artifact or smoke test is incomplete.
+4. Review the generated notes, then publish the Draft as a normal Release. Keep it as a Draft if any artifact or smoke test is incomplete. The published `vX.Y.Z` tag and Release are the canonical version record.

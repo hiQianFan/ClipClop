@@ -43,7 +43,7 @@ The global shortcut is customizable. If direct paste is unavailable, ClipClop le
 
 ## Download
 
-Preview builds will be available from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) after the first release is published:
+Download the latest preview from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases):
 
 - **macOS:** Universal DMG for Apple Silicon and Intel
 - **Windows:** x64 installer

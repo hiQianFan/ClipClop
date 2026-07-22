@@ -4,24 +4,21 @@
 
 ## [Unreleased]
 
-### Added
-
-- 英文与简体中文产品介绍、贡献指南和隐私说明。
-- Issue/PR 模板和 Dependabot 配置。
-
-### Changed
-
-- README 改为以产品介绍、下载和隐私价值为核心。
-- 精简公开文档，贡献指南作为唯一开发启动入口。
-- Release workflow 在打包前统一校验版本并运行完整质量门，且继续只创建 Draft Release。
-
-## [0.1.0] - 未发布
+## [0.1.0] - 2026-07-22
 
 ### Added
 
 - 本地剪贴板历史捕获、SQLite/FTS5 搜索与分页。
 - 文本、链接、代码、色值、图片和文件引用展示与复制。
 - 全局快捷键、托盘、主题、保留期限、开机启动和忽略来源应用设置。
-- macOS 本地应用/DMG 构建与 macOS/Windows CI 配置。
+- macOS Universal DMG 与 Windows x64 安装包。
+- 英文与简体中文产品介绍、贡献指南和隐私说明。
+- Issue 与 Pull Request 模板。
 
-`0.1.0` 尚未形成公开、签名且经双平台验收的正式发行版，发布日期留待发布时填写。
+### Changed
+
+- README 改为以产品介绍、下载和隐私价值为核心。
+- 精简公开文档，贡献指南作为唯一开发启动入口。
+- Release workflow 在打包前统一校验版本并运行完整质量门，生成安装包、更新签名及更新清单。
+
+> 预览版安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，系统可能显示安全确认；更新文件另有完整性签名。
