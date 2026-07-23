@@ -1,4 +1,4 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -49,7 +49,7 @@ pub fn update_settings(
 
     let autostart = app.autolaunch();
     let previous_autostart = autostart.is_enabled().unwrap_or_else(|error| {
-        eprintln!("failed to read autostart state before settings update: {error}");
+        log::warn!("failed to read autostart state before settings update: {error}");
         false
     });
     let changed_autostart = previous_autostart != settings.launch_at_login;
@@ -60,14 +60,14 @@ pub fn update_settings(
             autostart.disable()
         };
         if let Err(error) = result {
-            eprintln!("failed to update autostart state: {error}");
+            log::warn!("failed to update autostart state: {error}");
             cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
             return Err(crate::error::AppError::Platform(error.to_string()));
         }
     }
 
     let committed_autostart = autostart.is_enabled().unwrap_or_else(|error| {
-        eprintln!("failed to read autostart state after settings update: {error}");
+        log::warn!("failed to read autostart state after settings update: {error}");
         settings.launch_at_login
     });
     if committed_autostart != settings.launch_at_login {
@@ -93,7 +93,7 @@ pub fn update_settings(
             autostart.disable()
         };
         if let Err(error) = rollback {
-            eprintln!("failed to restore autostart after settings write failure: {error}");
+            log::warn!("failed to restore autostart after settings write failure: {error}");
         }
         cleanup_prepared_hotkey(&app, &settings.hotkey, registered_new_hotkey);
     } else if saved.is_err() {
@@ -107,7 +107,7 @@ pub fn update_settings(
         // removed. If OS cleanup fails, both shortcuts may work until restart,
         // but the saved and primary shortcut remains the new one.
         if let Err(error) = app.global_shortcut().unregister(previous.hotkey.as_str()) {
-            eprintln!("failed to unregister previous global shortcut: {error}");
+            log::warn!("failed to unregister previous global shortcut: {error}");
         }
     }
     saved
@@ -138,9 +138,30 @@ fn prepare_hotkey(app: &AppHandle, next: &str) -> AppResult<bool> {
 fn cleanup_prepared_hotkey(app: &AppHandle, hotkey: &str, registered: bool) {
     if registered {
         if let Err(error) = app.global_shortcut().unregister(hotkey) {
-            eprintln!("failed to clean up prepared global shortcut: {error}");
+            log::warn!("failed to clean up prepared global shortcut: {error}");
         }
     }
+}
+
+/// Opens the application log directory in the native file manager.
+/// The log directory location is OS-resolved (macOS: ~/Library/Logs/<id>,
+/// Windows: %LOCALAPPDATA%\<id>\logs). The actual file-open is handled in
+/// Rust so the webview does not need a broad open-path capability.
+#[tauri::command]
+pub fn open_log_dir(app: AppHandle) -> AppResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+    // Ensure the directory exists before trying to open it (plugin may not
+    // have written any entries yet on a fresh install).
+    std::fs::create_dir_all(&log_dir)
+        .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+    log::info!("opening log directory: {}", log_dir.display());
+    app.opener()
+        .open_path(log_dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| crate::error::AppError::Platform(e.to_string()))
 }
 
 #[tauri::command]

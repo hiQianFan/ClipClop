@@ -74,7 +74,28 @@ const errorKeys: Record<string, StaticMessageKey> = {
   UPDATE_UNSUPPORTED: "update.unsupported", UPDATE_CHANGED: "update.changed",
 };
 
+function errorCode(reason: unknown) {
+  return typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
+}
+
 export function localizedError(reason: unknown) {
-  const code = typeof reason === "object" && reason && "code" in reason ? String(reason.code) : "";
-  return t(errorKeys[code] ?? "error.unknown");
+  return t(errorKeys[errorCode(reason)] ?? "error.unknown");
+}
+
+// The updater surfaces plain Error/string failures from the Tauri plugin (network,
+// extraction, install), not backend command results with sensitive prose. When there is
+// no recognized code, show the real message so install failures are diagnosable instead
+// of collapsing every cause into a single "unknown error".
+export function localizedUpdateError(reason: unknown) {
+  const code = errorCode(reason);
+  if (code && errorKeys[code]) return t(errorKeys[code]);
+  const message = reason instanceof Error
+    ? reason.message
+    : typeof reason === "string"
+      ? reason
+      : typeof reason === "object" && reason && "message" in reason
+        ? String((reason as { message: unknown }).message)
+        : "";
+  const trimmed = message.trim();
+  return trimmed ? trimmed.slice(0, 300) : t("error.unknown");
 }

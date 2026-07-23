@@ -129,11 +129,11 @@ pub(crate) fn install_quicklook_key_handler() {
     .into_iter()
     .find_map(Class::get);
     let Some(class) = class else {
-        eprintln!("Quick Look delegate class is unavailable");
+        log::warn!("Quick Look delegate class is unavailable");
         return;
     };
     let Some(method) = class.instance_method(sel!(previewPanel:handleEvent:)) else {
-        eprintln!("Quick Look delegate event handler is unavailable");
+        log::warn!("Quick Look delegate event handler is unavailable");
         return;
     };
     unsafe {

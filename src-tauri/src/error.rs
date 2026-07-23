@@ -38,11 +38,12 @@ impl Serialize for AppError {
             Self::Hotkey(code) => code,
             Self::HotkeyUnavailable(_) => "HOTKEY_UNAVAILABLE",
         };
+        // Log the diagnostic locally for troubleshooting; only the code crosses IPC.
         match self {
             Self::HotkeyUnavailable(diagnostic) => {
-                eprintln!("IPC error {code}: global-shortcut plugin: {diagnostic}");
+                log::error!("IPC error {code}: global-shortcut plugin: {diagnostic}");
             }
-            _ => eprintln!("IPC error {code}"),
+            _ => log::error!("IPC error {code}"),
         }
         ErrorDto { code }.serialize(serializer)
     }

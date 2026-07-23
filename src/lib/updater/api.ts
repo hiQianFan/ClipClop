@@ -3,7 +3,17 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { error as logError } from "@tauri-apps/plugin-log";
 import { getSettings, recordUpdateCheck } from "$lib/settings/api";
+
+// Persist the raw failure cause to the diagnostic log before it is localized for
+// display. This closes the updater blind spot: without it, install failures collapse
+// into a generic message and leave no on-device trace to diagnose later.
+function logUpdaterFailure(stage: string, reason: unknown) {
+  if (!isTauri()) return;
+  const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+  void logError(`updater ${stage} failed: ${detail}`).catch(() => {});
+}
 
 export const RELEASE_URL = "https://github.com/hiQianFan/ClipClop/releases/latest";
 export const DEVELOPMENT_VERSION = "__clipclop_development__";
@@ -79,7 +89,13 @@ async function performCheck(): Promise<UpdateCheckResult> {
   // Record the attempt before networking so an offline launch does not retry on every startup.
   // Manual checks remain available regardless of this timestamp.
   await recordUpdateCheck();
-  const found = await check({ timeout: 30_000 });
+  let found;
+  try {
+    found = await check({ timeout: 30_000 });
+  } catch (reason) {
+    logUpdaterFailure("check", reason);
+    throw reason;
+  }
 
   if (!found) {
     writeCachedUpdate(null);
@@ -119,6 +135,9 @@ export async function downloadAndInstall(
 
   try {
     await found.downloadAndInstall(progress, { timeout: 120_000 });
+  } catch (reason) {
+    logUpdaterFailure("download-and-install", reason);
+    throw reason;
   } finally {
     try { await found.close(); } catch { /* Do not mask install failure or block relaunch. */ }
   }

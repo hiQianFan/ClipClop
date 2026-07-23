@@ -13,7 +13,7 @@ pub mod window;
 use commands::{
     clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
     get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, list_clips, open_clip,
-    open_clip_file, paste_clip, quit_app, record_update_check, toggle_clip_preview,
+    open_clip_file, open_log_dir, paste_clip, quit_app, record_update_check, toggle_clip_preview,
     update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
@@ -21,6 +21,26 @@ use state::AppState;
 use storage::Database;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_log::{Target, TargetKind};
+
+// Diagnostic logs are written to the OS-standard per-app log directory
+// (macOS: ~/Library/Logs/<identifier>, Windows: %LOCALAPPDATA%\<identifier>\logs).
+// Rotate at 5 MB, keeping only the current file so disk growth stays bounded.
+// Privacy: only operational events and error text are logged here; clipboard and
+// preview payloads are never passed to the logger.
+const LOG_ROTATION_BYTES: u128 = 5 * 1024 * 1024;
+
+fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri_plugin_log::Builder::new()
+        .max_file_size(LOG_ROTATION_BYTES)
+        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
+        .level(log::LevelFilter::Info)
+        .targets([
+            Target::new(TargetKind::LogDir { file_name: None }),
+            Target::new(TargetKind::Stderr),
+        ])
+        .build()
+}
 
 #[cfg(target_os = "macos")]
 tauri_nspanel::tauri_panel! {
@@ -36,6 +56,7 @@ tauri_nspanel::tauri_panel! {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .plugin(build_log_plugin())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
@@ -55,6 +76,13 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            log::info!(
+                "ClipClop session start: version={} os={} arch={}",
+                app.package_info().version,
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            );
+
             #[cfg(target_os = "macos")]
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -65,7 +93,7 @@ pub fn run() {
             let mut startup_settings: Settings =
                 database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
             if let Err(message) = validate_hotkey(&startup_settings.hotkey) {
-                eprintln!(
+                log::warn!(
                     "stored global shortcut is invalid; restoring the platform default: {message:?}"
                 );
                 startup_settings.hotkey = DEFAULT_HOTKEY.into();
@@ -77,11 +105,11 @@ pub fn run() {
             clipboard::start_watcher(app.handle().clone())?;
 
             if let Err(error) = register_panel_hotkey(app.handle(), &startup_hotkey) {
-                eprintln!("failed to register stored global shortcut: {error}");
+                log::error!("failed to register stored global shortcut: {error}");
                 if startup_hotkey != DEFAULT_HOTKEY {
                     if let Err(default_error) = register_panel_hotkey(app.handle(), DEFAULT_HOTKEY)
                     {
-                        eprintln!(
+                        log::error!(
                             "failed to register the default global shortcut: {default_error}"
                         );
                     } else {
@@ -140,6 +168,7 @@ pub fn run() {
             get_settings,
             update_settings,
             record_update_check,
+            open_log_dir,
             quit_app
         ])
         .run(tauri::generate_context!())

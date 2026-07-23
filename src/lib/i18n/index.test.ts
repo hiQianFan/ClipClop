@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { en, zhCN } from "./catalogs";
-import { effectiveLocale, formatDateTime, formatNumber, languagePreference, localizedError, resolveLocale, setLanguagePreference, t } from "./index.svelte";
+import { effectiveLocale, formatDateTime, formatNumber, languagePreference, localizedError, localizedUpdateError, resolveLocale, setLanguagePreference, t } from "./index.svelte";
 
 describe("localization", () => {
   it("resolves only Chinese primary system locales to Simplified Chinese", () => {
@@ -23,6 +23,18 @@ describe("localization", () => {
     expect(effectiveLocale()).toBe("zh-CN");
     setLanguagePreference("en");
     expect(t("settings.general")).toBe("General");
+  });
+
+  it("surfaces raw updater failures while still mapping known codes", () => {
+    setLanguagePreference("en");
+    // Known codes stay localized and never leak backend prose.
+    expect(localizedUpdateError({ code: "UPDATE_CHANGED", message: "raw" })).toBe("The available version changed. Check again.");
+    // Uncoded plugin failures surface the real message so installs are diagnosable.
+    expect(localizedUpdateError(new Error("Permission denied (os error 13)"))).toBe("Permission denied (os error 13)");
+    expect(localizedUpdateError("signature verification failed")).toBe("signature verification failed");
+    // Empty or shapeless failures fall back to the generic message.
+    expect(localizedUpdateError(new Error("   "))).toBe("An unexpected error occurred.");
+    expect(localizedUpdateError(null)).toBe("An unexpected error occurred.");
   });
 
   it("keeps compact locale-aware date and number presentation", () => {
