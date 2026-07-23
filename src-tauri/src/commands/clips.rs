@@ -37,7 +37,7 @@ fn truncate_preview(text: &mut String) {
 pub fn delete_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
     state.clips.delete(&id)?;
     if let Err(error) = delete_cached_previews(&app, &id) {
-        eprintln!("failed to delete cached preview for {id}: {error}");
+        log::warn!("failed to delete cached preview for {id}: {error}");
     }
     Ok(())
 }
@@ -46,7 +46,7 @@ pub fn delete_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> Ap
 pub fn clear_history(app: AppHandle, state: State<'_, AppState>) -> AppResult<u64> {
     let cleared = state.clips.clear()?;
     if let Err(error) = clear_cached_previews(&app) {
-        eprintln!("failed to clear cached previews: {error}");
+        log::warn!("failed to clear cached previews: {error}");
     }
     Ok(cleared)
 }
@@ -73,13 +73,13 @@ pub fn paste_clip(
     SystemClipboard::write(state.clips.flavors(&id)?, plain_text.unwrap_or(false))?;
     if let Some(window) = app.get_webview_window("main") {
         if let Err(error) = window.hide() {
-            eprintln!("failed to hide panel before paste: {error}");
+            log::warn!("failed to hide panel before paste: {error}");
             return Ok(PasteOutcome::CopiedFocusFailed);
         }
     }
     let outcome = state.paste.paste_to_target(permit);
     if outcome != PasteOutcome::Pasted {
-        eprintln!("automatic paste degraded to clipboard-only: {outcome:?}");
+        log::warn!("automatic paste degraded to clipboard-only: {outcome:?}");
     }
     Ok(outcome)
 }

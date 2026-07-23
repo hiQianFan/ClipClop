@@ -123,7 +123,7 @@ struct CaptureHandler {
 impl ClipboardHandler for CaptureHandler {
     fn on_clipboard_change(&mut self) {
         if let Err(error) = self.capture() {
-            eprintln!("clipboard capture failed: {error}");
+            log::warn!("clipboard capture failed: {error}");
         }
     }
 }
@@ -160,7 +160,7 @@ pub fn start_watcher(app: AppHandle) -> AppResult<()> {
             let clipboard = match ClipboardContext::new() {
                 Ok(clipboard) => clipboard,
                 Err(error) => {
-                    eprintln!("clipboard context unavailable: {error}");
+                    log::error!("clipboard context unavailable: {error}");
                     thread::sleep(Duration::from_secs(1));
                     continue;
                 }
@@ -168,7 +168,7 @@ pub fn start_watcher(app: AppHandle) -> AppResult<()> {
             let mut watcher = match ClipboardWatcherContext::new() {
                 Ok(watcher) => watcher,
                 Err(error) => {
-                    eprintln!("clipboard watcher unavailable: {error}");
+                    log::error!("clipboard watcher unavailable: {error}");
                     thread::sleep(Duration::from_secs(1));
                     continue;
                 }
@@ -178,7 +178,7 @@ pub fn start_watcher(app: AppHandle) -> AppResult<()> {
                 clipboard,
             });
             watcher.start_watch();
-            eprintln!("clipboard watcher stopped; restarting");
+            log::warn!("clipboard watcher stopped; restarting");
             thread::sleep(Duration::from_secs(1));
         })
         .map_err(|error| AppError::Platform(error.to_string()))?;

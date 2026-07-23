@@ -2,10 +2,11 @@
   import { onDestroy, onMount, tick, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/clips/api";
-  import { applyTheme, getSettings, updateSettings, type Settings } from "./api";
+  import { applyTheme, getSettings, openLogDir, updateSettings, type Settings } from "./api";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { cachedUpdate, checkForUpdate, currentVersion, DEVELOPMENT_VERSION, downloadAndInstall, openLatestRelease, type AvailableUpdate } from "$lib/updater/api";
-  import { effectiveLocale, formatNumber, languagePreference, localizedError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
+  import { effectiveLocale, formatNumber, languagePreference, localizedError, localizedUpdateError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
+  import { CircleAlert, CircleCheck, Download, RefreshCw } from "@lucide/svelte";
 
   type Tab = "general" | "shortcuts" | "updates" | "about";
   type ShortcutRow = { name: StaticMessageKey; description: StaticMessageKey; keys: string[][] };
@@ -21,6 +22,7 @@
   let updateState = $state<"idle" | "checking" | "current" | "downloading" | "installing" | "error">("idle");
   let updateMessage = $state("");
   let updateProgress = $state<number | null>(null);
+  const updateBusy = $derived(updateState === "downloading" || updateState === "installing");
   let confirmClear = $state(false);
   let recording = $state(false);
   let shortcutError = $state("");
@@ -237,7 +239,7 @@
       } else if (result.kind === "current") {
         appVersion = result.currentVersion; update = null; updateState = "current"; updateMessage = t("settings.current");
       } else { updateState = "error"; updateMessage = t("settings.devUpdate"); }
-    } catch (reason) { updateState = "error"; updateMessage = t("settings.checkFailed", { error: localizedError(reason) }); }
+    } catch (reason) { updateState = "error"; updateMessage = t("settings.checkFailed", { error: localizedUpdateError(reason) }); }
   }
 
   async function installUpdate() {
@@ -249,13 +251,18 @@
         updateMessage = progress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(progress) });
       });
       updateState = "installing"; updateMessage = t("settings.installing");
-    } catch (reason) { updateState = "error"; updateMessage = t("settings.installFailed", { error: localizedError(reason) }); }
+    } catch (reason) { updateState = "error"; updateMessage = t("settings.installFailed", { error: localizedUpdateError(reason) }); }
   }
 
   async function removeAll() {
     try {
       await clearHistory(); confirmClear = false; status = t("settings.cleared"); oncleared();
     } catch (reason) { confirmClear = false; status = t("settings.clearFailed", { error: localizedError(reason) }); await tick(); clearTrigger?.focus(); }
+  }
+
+  async function openLogs() {
+    try { await openLogDir(); }
+    catch (reason) { status = t("settings.openLogsFailed", { error: localizedError(reason) }); }
   }
 
   function displayKeys(keys: string[]) { return shortcutKeycaps(keys.join("+"), platform); }
@@ -334,12 +341,41 @@
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.updates")}</h1>
           <div class="update-head"><span><strong>{t("settings.updateHeading")}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span><label><span>{t("settings.autoCheck")}</span><input type="checkbox" bind:checked={settings.check_updates} /></label></div>
           {#if update}
-            <div class="update-card"><strong>{t("settings.updateAvailable", { version: update.version })}</strong>{#if update.notes}<p>{update.notes}</p>{/if}{#if updateState === "downloading" && updateProgress !== null}<progress max="100" value={updateProgress}></progress>{/if}<div><button onclick={() => void openLatestRelease()}>{t("settings.releasePage")}</button><button class="primary" disabled={updateState === "downloading" || updateState === "installing"} onclick={installUpdate}>{t("settings.install")}</button></div></div>
-          {:else}<div class="update-check"><span class:error={updateState === "error"} aria-live="polite">{updateMessage}</span><button disabled={updateState === "checking"} onclick={checkUpdates}>{updateState === "checking" ? t("settings.checking") : t("settings.check")}</button></div>{/if}
-          {#if update && updateMessage}<small class:error={updateState === "error"} aria-live="polite">{updateMessage}</small>{/if}
+            <div class="update-card">
+              <div class="update-card-head">
+                <span class="update-badge" aria-hidden="true"><Download size={17} /></span>
+                <span class="update-card-title"><strong>{t("settings.updateAvailable", { version: update.version })}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span>
+              </div>
+              {#if update.notes}<p class="update-notes">{update.notes}</p>{/if}
+              {#if updateBusy}
+                <div class="update-progress">
+                  <div class="progress-track"><div class="progress-fill" class:indeterminate={updateProgress === null} style={updateProgress === null ? "" : `width:${updateProgress}%`}></div></div>
+                  <span class="progress-label">{updateState === "installing" ? t("settings.installing") : updateProgress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) })}</span>
+                </div>
+              {:else if updateState === "error"}
+                <p class="update-status error" role="alert"><CircleAlert size={14} /><span>{updateMessage}</span></p>
+              {/if}
+              <div class="update-actions">
+                <button onclick={() => void openLatestRelease()}>{t("settings.releasePage")}</button>
+                <button class="primary" disabled={updateBusy} onclick={installUpdate}>{updateState === "error" ? t("settings.retry") : t("settings.install")}</button>
+              </div>
+            </div>
+          {:else}
+            <div class="update-check">
+              <span class="update-status" class:error={updateState === "error"} aria-live="polite">
+                {#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}
+                <span>{updateMessage}</span>
+              </span>
+              <button class="update-check-btn" disabled={updateState === "checking"} aria-busy={updateState === "checking"} onclick={checkUpdates}>
+                <RefreshCw size={14} class={updateState === "checking" ? "spin" : ""} />{updateState === "checking" ? t("settings.checking") : t("settings.check")}
+              </button>
+            </div>
+          {/if}
         {:else}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1" class="visually-hidden">{t("settings.about")}</h1>
-          <div class="about"><img src="/app-icon.png" alt={t("settings.iconAlt")} /><h2>ClipClop</h2><p>{t("settings.tagline")}</p><small>{t("settings.version", { version: displayVersion(appVersion) })}</small><button aria-label={t("settings.github")} onclick={() => void openUrl("https://github.com/hiQianFan/ClipClop")}>GitHub</button></div>
+          <div class="about"><img src="/app-icon.png" alt={t("settings.iconAlt")} /><h2>ClipClop</h2><p>{t("settings.tagline")}</p><small>{t("settings.version", { version: displayVersion(appVersion) })}</small><button aria-label={t("settings.github")} onclick={() => void openUrl("https://github.com/hiQianFan/ClipClop")}>GitHub</button>
+            <button class="log-door" title={t("settings.diagnosticsHelp")} onclick={() => void openLogs()}>{t("settings.diagnostics")}</button>
+          </div>
         {/if}
       {:else}<div class="loading" role="status">{status || t("settings.loading")}</div>{/if}
     </div>
@@ -351,5 +387,5 @@
 </div>
 
 <style>
-  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:13px;font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:18px;line-height:1.3}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:12px;line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:6px;color:var(--text-2);background:var(--bg-raised);font-size:12px;line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{display:flex;flex-direction:column;gap:3px}strong{font-size:13px}small{color:var(--text-3);font-size:12px;line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:6px;color:var(--text-1);background:var(--bg-raised);font-size:12px}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:12px;color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-1);background:var(--bg-raised);font:12px/1.3 ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:11px;line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:12px}.update-head label{display:flex;align-items:center;gap:8px}.update-card{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding:14px;border-radius:8px;background:var(--bg-raised)}.update-card p{max-height:120px;overflow:auto;white-space:pre-wrap;color:var(--text-2);font-size:12px}.update-card>div,.update-check{display:flex;justify-content:flex-end;gap:8px}.update-check{justify-content:space-between;margin-top:16px}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:12px}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}footer button{min-width:72px}footer .primary{min-width:92px}.primary{color:var(--action-on);background:var(--action)}.danger,.error{color:var(--danger)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:13px;font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:18px;line-height:1.3}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:12px;line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:6px;color:var(--text-2);background:var(--bg-raised);font-size:12px;line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{display:flex;flex-direction:column;gap:3px}strong{font-size:13px}small{color:var(--text-3);font-size:12px;line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:6px;color:var(--text-1);background:var(--bg-raised);font-size:12px}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:12px;color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-1);background:var(--bg-raised);font:12px/1.3 ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:11px;line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:12px}.update-head label{display:flex;align-items:center;gap:8px}.update-card{display:flex;flex-direction:column;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--hairline);border-radius:10px;background:var(--bg-raised)}.update-card-head{display:flex;align-items:center;gap:12px}.update-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;color:var(--action-on);background:var(--action)}.update-card-title{display:flex;flex-direction:column;gap:2px}.update-card-title strong{font-size:14px}.update-notes{max-height:116px;margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;border-radius:7px;color:var(--text-2);background:var(--bg-shell);font-size:12px;line-height:1.55}.update-progress{display:flex;flex-direction:column;gap:7px}.progress-track{height:6px;overflow:hidden;border-radius:999px;background:var(--bg-selected)}.progress-fill{height:100%;border-radius:999px;background:var(--action);transition:width .25s ease}.progress-fill.indeterminate{width:35%;animation:progress-slide 1.1s ease-in-out infinite}.progress-label{color:var(--text-2);font-size:12px;font-variant-numeric:tabular-nums}.update-status{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4}.update-status :global(svg){flex:none}.update-card .update-status{margin:0}.update-actions,.update-check{display:flex;align-items:center;gap:8px}.update-actions{justify-content:flex-end}.update-check{justify-content:space-between;margin-top:16px}.update-check-btn{display:inline-flex;align-items:center;gap:6px}.update-check-btn :global(svg.spin){animation:spin 1s linear infinite}@keyframes progress-slide{0%{transform:translateX(-120%)}100%{transform:translateX(340%)}}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.progress-fill.indeterminate,.update-check-btn :global(svg.spin){animation:none}}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:12px}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:11px;font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}footer button{min-width:72px}footer .primary{min-width:92px}.primary{color:var(--action-on);background:var(--action)}.primary:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}.danger,.error{color:var(--danger)}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.primary:disabled:hover{background:var(--action)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>

@@ -16,6 +16,7 @@ export type Settings = {
 export const getSettings = () => invoke<Settings>("get_settings");
 export const updateSettings = (settings: Settings) => invoke<Settings>("update_settings", { settings });
 export const recordUpdateCheck = () => invoke<string>("record_update_check");
+export const openLogDir = () => invoke<void>("open_log_dir");
 export const quitApp = () => invoke<void>("quit_app");
 
 export function applyTheme(theme: Theme) {

@@ -1,6 +1,6 @@
 [package]
 name = "clipclop"
-version = "0.1.1"
+version = "0.1.2"
 description = "A lightweight, offline-first, cross-platform clipboard history tool."
 edition = "2021"
 license = "MIT"
@@ -39,6 +39,8 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-log = "2"
+log = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 appkit-nsworkspace-bindings = "0.1.2"
