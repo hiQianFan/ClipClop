@@ -9,6 +9,58 @@ use objc::{sel, sel_impl};
 
 const SHADOW_INSET: f64 = 20.0;
 
+// Windows forbids a background process (our global-shortcut callback) from stealing the
+// foreground window, so a bare `set_focus()` shows the panel without giving it keyboard
+// focus — arrow keys and Enter go nowhere until the user clicks. The reliable workaround
+// is to briefly attach our input queue to the current foreground thread, which lifts the
+// foreground lock for the duration of the SetForegroundWindow call, then detach.
+#[cfg(target_os = "windows")]
+fn force_foreground(window: &WebviewWindow) {
+    use windows_sys::Win32::{
+        System::Threading::GetCurrentThreadId,
+        UI::{
+            Input::KeyboardAndMouse::{AttachThreadInput, SetFocus},
+            WindowsAndMessaging::{
+                BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic,
+                SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+            },
+        },
+    };
+
+    let Ok(handle) = window.hwnd() else {
+        return;
+    };
+    // Tauri's HWND wraps `*mut c_void`, which is exactly windows-sys' HWND type alias.
+    let hwnd = handle.0;
+
+    unsafe {
+        let foreground = GetForegroundWindow();
+        let our_thread = GetCurrentThreadId();
+        let foreground_thread = if foreground.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(foreground, std::ptr::null_mut())
+        };
+
+        let attached = foreground_thread != 0
+            && foreground_thread != our_thread
+            && AttachThreadInput(our_thread, foreground_thread, 1) != 0;
+
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        } else {
+            ShowWindow(hwnd, SW_SHOW);
+        }
+        SetForegroundWindow(hwnd);
+        BringWindowToTop(hwnd);
+        SetFocus(hwnd);
+
+        if attached {
+            AttachThreadInput(our_thread, foreground_thread, 0);
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct PreviewState {
     active: AtomicBool,
@@ -80,6 +132,9 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
             }
         }
         let _ = window.show();
+        #[cfg(target_os = "windows")]
+        force_foreground(&window);
+        #[cfg(not(target_os = "windows"))]
         let _ = window.set_focus();
     }
 }
