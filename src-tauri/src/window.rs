@@ -17,9 +17,9 @@ const SHADOW_INSET: f64 = 20.0;
 #[cfg(target_os = "windows")]
 fn force_foreground(window: &WebviewWindow) {
     use windows_sys::Win32::{
-        System::Threading::GetCurrentThreadId,
+        System::Threading::{AttachThreadInput, GetCurrentThreadId},
         UI::{
-            Input::KeyboardAndMouse::{AttachThreadInput, SetFocus},
+            Input::KeyboardAndMouse::SetFocus,
             WindowsAndMessaging::{
                 BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic,
                 SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
