@@ -64,8 +64,31 @@ function writeCachedUpdate(update: AvailableUpdate | null) {
   else localStorage.removeItem(CACHE_KEY);
 }
 
-export function cachedUpdate() {
-  return readCachedUpdate();
+// Compare dotted numeric versions (0.1.2). Returns >0 if a>b, <0 if a<b, 0 if equal.
+// Any non-numeric/prerelease suffix is ignored; unparseable input yields NaN segments
+// that the caller treats as "cannot confirm newer".
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => v.split(".").map((n) => parseInt(n, 10));
+  const pa = parse(a);
+  const pb = parse(b);
+  for (let i = 0; i < 3; i += 1) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (Number.isNaN(x) || Number.isNaN(y)) return 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+// Return the cached pending update only when it is strictly newer than the currently
+// running version. A stale entry (e.g. left over after a manual DMG install, or pointing
+// at an equal/older version) is discarded so the UI never prompts a downgrade.
+export function cachedUpdate(current?: string): AvailableUpdate | null {
+  const cached = readCachedUpdate();
+  if (!cached) return null;
+  if (current && compareVersions(cached.version, current) > 0) return cached;
+  writeCachedUpdate(null);
+  return null;
 }
 
 export async function currentVersion() {
@@ -102,6 +125,15 @@ async function performCheck(): Promise<UpdateCheckResult> {
     return { kind: "current", currentVersion: version };
   }
 
+  // Defense in depth: the plugin only surfaces newer versions, but never cache or offer a
+  // version that is not strictly ahead of what is running — a stale/misconfigured endpoint
+  // must not produce a downgrade prompt.
+  if (compareVersions(found.version, version) <= 0) {
+    await found.close();
+    writeCachedUpdate(null);
+    return { kind: "current", currentVersion: version };
+  }
+
   const update: AvailableUpdate = {
     version: found.version,
     currentVersion: found.currentVersion,
@@ -121,6 +153,9 @@ export async function downloadAndInstall(
   const found = await check({ timeout: 30_000 });
   if (!found || found.version !== expectedVersion) {
     await found?.close();
+    // The pending update no longer matches reality (already installed, or superseded).
+    // Drop the stale cache so the phantom card clears immediately, not just next launch.
+    writeCachedUpdate(null);
     throw updaterError("UPDATE_CHANGED");
   }
 
