@@ -23,6 +23,60 @@ function updaterError(code: UpdaterErrorCode) {
   return { code };
 }
 
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1500;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+// Transient network failures (dropped connection, mid-stream decode error, timeout,
+// DNS hiccup) are the common failure mode against GitHub's CDN, especially on flaky
+// links. These are worth retrying. Our own control-flow errors (UPDATE_CHANGED,
+// UPDATE_UNSUPPORTED) and signature failures are terminal — retrying cannot help.
+export function isTransientNetworkError(reason: unknown): boolean {
+  if (reason && typeof reason === "object" && "code" in reason) return false;
+  const message = (reason instanceof Error ? reason.message : String(reason)).toLowerCase();
+  if (message.includes("signature") || message.includes("verif")) return false;
+  return [
+    "error sending request",
+    "error decoding response body",
+    "timed out",
+    "timeout",
+    "connection",
+    "connreset",
+    "reset by peer",
+    "network",
+    "dns",
+    "eof",
+    "os error",
+    "tls",
+    "handshake",
+  ].some((signature) => message.includes(signature));
+}
+
+// Retry an operation on transient network errors with linear backoff. onAttempt fires
+// before each try (including the first) so callers can reset per-attempt UI state such
+// as download progress, since a retried download restarts from zero (the updater has no
+// resume/range support — a partial download is always discarded).
+async function withRetry<T>(
+  operation: (attempt: number) => Promise<T>,
+  onAttempt?: (attempt: number) => void,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
+    onAttempt?.(attempt);
+    try {
+      return await operation(attempt);
+    } catch (reason) {
+      lastError = reason;
+      if (attempt >= RETRY_ATTEMPTS || !isTransientNetworkError(reason)) throw reason;
+      await delay(RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+  throw lastError;
+}
+
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const AUTO_CHECK_DELAY_MS = 15_000;
 const AUTO_CHECK_LOCK_MS = 60_000;
@@ -114,7 +168,7 @@ async function performCheck(): Promise<UpdateCheckResult> {
   await recordUpdateCheck();
   let found;
   try {
-    found = await check({ timeout: 30_000 });
+    found = await withRetry(() => check({ timeout: 30_000 }));
   } catch (reason) {
     logUpdaterFailure("check", reason);
     throw reason;
@@ -150,31 +204,43 @@ export async function downloadAndInstall(
   onProgress: (percent: number | null) => void,
 ) {
   if (!isTauri() || import.meta.env.DEV) throw updaterError("UPDATE_UNSUPPORTED");
-  const found = await check({ timeout: 30_000 });
-  if (!found || found.version !== expectedVersion) {
-    await found?.close();
-    // The pending update no longer matches reality (already installed, or superseded).
-    // Drop the stale cache so the phantom card clears immediately, not just next launch.
-    writeCachedUpdate(null);
-    throw updaterError("UPDATE_CHANGED");
-  }
-
-  let downloaded = 0;
-  let total: number | undefined;
-  const progress = (event: DownloadEvent) => {
-    if (event.event === "Started") total = event.data.contentLength;
-    if (event.event === "Progress") downloaded += event.data.chunkLength;
-    if (event.event === "Finished") onProgress(100);
-    else onProgress(total ? Math.min(99, Math.round((downloaded / total) * 100)) : null);
-  };
 
   try {
-    await found.downloadAndInstall(progress, { timeout: 120_000 });
+    await withRetry(
+      async () => {
+        // Re-acquire a fresh handle each attempt. This both recovers from a broken
+        // connection and re-targets the latest release: if a newer version shipped
+        // mid-download, the stale partial is abandoned and the version guard below
+        // aborts cleanly (UPDATE_CHANGED, non-retryable) so the next check picks it up.
+        const found = await check({ timeout: 30_000 });
+        if (!found || found.version !== expectedVersion) {
+          await found?.close();
+          writeCachedUpdate(null);
+          throw updaterError("UPDATE_CHANGED");
+        }
+
+        // Progress counters reset per attempt — a retried download starts from zero.
+        let downloaded = 0;
+        let total: number | undefined;
+        const progress = (event: DownloadEvent) => {
+          if (event.event === "Started") total = event.data.contentLength;
+          if (event.event === "Progress") downloaded += event.data.chunkLength;
+          if (event.event === "Finished") onProgress(100);
+          else onProgress(total ? Math.min(99, Math.round((downloaded / total) * 100)) : null);
+        };
+
+        try {
+          await found.downloadAndInstall(progress, { timeout: 120_000 });
+        } finally {
+          try { await found.close(); } catch { /* Do not mask failure or block relaunch. */ }
+        }
+      },
+      // Reset the progress bar to indeterminate at the start of every attempt.
+      () => onProgress(null),
+    );
   } catch (reason) {
     logUpdaterFailure("download-and-install", reason);
     throw reason;
-  } finally {
-    try { await found.close(); } catch { /* Do not mask install failure or block relaunch. */ }
   }
   writeCachedUpdate(null);
   await relaunch();

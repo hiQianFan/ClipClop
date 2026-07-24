@@ -4,7 +4,8 @@
   import { clearHistory } from "$lib/clips/api";
   import { applyTheme, getSettings, openLogDir, updateSettings, type Settings } from "./api";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
-  import { cachedUpdate, checkForUpdate, currentVersion, DEVELOPMENT_VERSION, downloadAndInstall, openLatestRelease, type AvailableUpdate } from "$lib/updater/api";
+  import { DEVELOPMENT_VERSION, openLatestRelease } from "$lib/updater/api";
+  import { updateStore } from "$lib/updater/store.svelte";
   import { effectiveLocale, formatNumber, languagePreference, localizedError, localizedUpdateError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
   import { CircleAlert, CircleCheck, Download, RefreshCw } from "@lucide/svelte";
 
@@ -17,12 +18,34 @@
   let tab = $state<Tab>("general");
   let status = $state("");
   let saving = $state(false);
-  let appVersion = $state("…");
-  let update = $state<AvailableUpdate | null>(null);
-  let updateState = $state<"idle" | "checking" | "current" | "downloading" | "installing" | "error">("idle");
-  let updateMessage = $state("");
-  let updateProgress = $state<number | null>(null);
-  const updateBusy = $derived(updateState === "downloading" || updateState === "installing");
+  // Update task state lives in the module-level store so an in-flight check or
+  // download survives this view being closed and reopened. Read-only here.
+  const appVersion = $derived(updateStore.appVersion);
+  const update = $derived(updateStore.update);
+  const updateState = $derived(updateStore.phase);
+  const updateProgress = $derived(updateStore.progress);
+  const updateBusy = $derived(updateStore.busy);
+  // Derived so the message re-localizes on language change instead of freezing
+  // at the locale that was active when the task ran.
+  const updateMessage = $derived.by(() => {
+    effectiveLocale();
+    switch (updateState) {
+      case "checking": return t("settings.checkingLong");
+      case "current": return t("settings.current");
+      case "downloading":
+        return updateProgress === null
+          ? t("settings.downloading")
+          : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) });
+      case "installing": return t("settings.installing");
+      case "error":
+        return updateStore.errorSource === "unsupported"
+          ? t("settings.devUpdate")
+          : updateStore.errorSource === "install"
+            ? t("settings.installFailed", { error: localizedUpdateError(updateStore.errorReason) })
+            : t("settings.checkFailed", { error: localizedUpdateError(updateStore.errorReason) });
+      default: return update ? t("settings.found", { version: update.version }) : "";
+    }
+  });
   let confirmClear = $state(false);
   let recording = $state(false);
   let shortcutError = $state("");
@@ -90,21 +113,11 @@
     untrack(() => {
       status = "";
       shortcutError = "";
-      if (updateState === "checking") updateMessage = t("settings.checkingLong");
-      else if (updateState === "current") updateMessage = t("settings.current");
-      else if (updateState === "downloading") {
-        updateMessage = updateProgress === null
-          ? t("settings.downloading")
-          : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) });
-      } else if (updateState === "installing") updateMessage = t("settings.installing");
-      else if (updateState === "idle" && update) updateMessage = t("settings.found", { version: update.version });
-      else updateMessage = "";
     });
   });
 
   async function load() {
-    try { appVersion = await currentVersion(); } catch { appVersion = "__clipclop_unknown__"; }
-    update = cachedUpdate(appVersion);
+    void updateStore.hydrate();
     try {
       const loaded = await getSettings();
       if (destroyed) return;
@@ -226,32 +239,15 @@
     clearTrigger?.focus();
   }
 
-  async function checkUpdates() {
-    updateState = "checking";
-    updateMessage = t("settings.checkingLong");
-    try {
-      const result = await checkForUpdate();
-      if (result.kind === "available") {
-        appVersion = result.update.currentVersion;
-        update = result.update;
-        updateState = "idle";
-        updateMessage = t("settings.found", { version: result.update.version });
-      } else if (result.kind === "current") {
-        appVersion = result.currentVersion; update = null; updateState = "current"; updateMessage = t("settings.current");
-      } else { updateState = "error"; updateMessage = t("settings.devUpdate"); }
-    } catch (reason) { updateState = "error"; updateMessage = t("settings.checkFailed", { error: localizedUpdateError(reason) }); }
+  // The store owns the async lifecycle; these just trigger it. State updates flow
+  // back through the derived reads above, so closing/reopening the view mid-task
+  // never loses progress.
+  function checkUpdates() {
+    void updateStore.check();
   }
 
-  async function installUpdate() {
-    if (!update) return;
-    updateState = "downloading"; updateProgress = null;
-    try {
-      await downloadAndInstall(update.version, (progress) => {
-        updateProgress = progress;
-        updateMessage = progress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(progress) });
-      });
-      updateState = "installing"; updateMessage = t("settings.installing");
-    } catch (reason) { updateState = "error"; updateMessage = t("settings.installFailed", { error: localizedUpdateError(reason) }); }
+  function installUpdate() {
+    void (updateState === "error" ? updateStore.retry() : updateStore.install());
   }
 
   async function removeAll() {
