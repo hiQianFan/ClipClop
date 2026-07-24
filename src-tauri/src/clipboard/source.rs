@@ -325,8 +325,12 @@ pub(crate) fn source_app_icon(app_id: &str) -> Option<Vec<u8>> {
     let script = format!(
         "Add-Type -AssemblyName System.Drawing; $i=[System.Drawing.Icon]::ExtractAssociatedIcon('{escaped_app}'); if ($i) {{ $i.ToBitmap().Save('{escaped_output}', [System.Drawing.Imaging.ImageFormat]::Png); $i.Dispose() }}"
     );
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW: without it, spawning powershell.exe flashes a console window.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let output = std::process::Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()?;
     if !output.status.success() {

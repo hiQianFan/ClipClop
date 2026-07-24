@@ -9,55 +9,74 @@ use objc::{sel, sel_impl};
 
 const SHADOW_INSET: f64 = 20.0;
 
-// Windows forbids a background process (our global-shortcut callback) from stealing the
-// foreground window, so a bare `set_focus()` shows the panel without giving it keyboard
-// focus — arrow keys and Enter go nowhere until the user clicks. The reliable workaround
-// is to briefly attach our input queue to the current foreground thread, which lifts the
-// foreground lock for the duration of the SetForegroundWindow call, then detach.
+// When the panel is summoned from a global shortcut, our process is in the background and
+// Windows refuses to let it take the foreground — so a bare `set_focus()` shows the panel
+// without keyboard focus (arrow keys / Enter do nothing until the user clicks). The proven,
+// deadlock-free workaround (used by tao's own `force_window_active`) is to synthesize an Alt
+// key tap: injecting keyboard input makes Windows treat us as the active input source, which
+// lifts the foreground lock for the immediately following SetForegroundWindow call.
+//
+// A previous attempt used AttachThreadInput to the current foreground thread; that can
+// deadlock our UI thread when the other thread is not pumping messages, which crashed the
+// app whenever the panel was summoned over another window. Do not reintroduce it.
 #[cfg(target_os = "windows")]
 fn force_foreground(window: &WebviewWindow) {
-    use windows_sys::Win32::{
-        System::Threading::{AttachThreadInput, GetCurrentThreadId},
-        UI::{
-            Input::KeyboardAndMouse::SetFocus,
-            WindowsAndMessaging::{
-                BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic,
-                SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
-            },
+    use windows_sys::Win32::UI::{
+        Input::KeyboardAndMouse::{
+            MapVirtualKeyW, SendInput, SetFocus, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+            KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, VK_MENU,
+        },
+        WindowsAndMessaging::{
+            GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
         },
     };
 
     let Ok(handle) = window.hwnd() else {
+        log::warn!("force_foreground: window has no HWND yet; skipping");
         return;
     };
     // Tauri's HWND wraps `*mut c_void`, which is exactly windows-sys' HWND type alias.
     let hwnd = handle.0;
 
     unsafe {
-        let foreground = GetForegroundWindow();
-        let our_thread = GetCurrentThreadId();
-        let foreground_thread = if foreground.is_null() {
-            0
-        } else {
-            GetWindowThreadProcessId(foreground, std::ptr::null_mut())
-        };
-
-        let attached = foreground_thread != 0
-            && foreground_thread != our_thread
-            && AttachThreadInput(our_thread, foreground_thread, 1) != 0;
-
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);
         } else {
             ShowWindow(hwnd, SW_SHOW);
         }
-        SetForegroundWindow(hwnd);
-        BringWindowToTop(hwnd);
-        SetFocus(hwnd);
 
-        if attached {
-            AttachThreadInput(our_thread, foreground_thread, 0);
+        // Fast path: already allowed to take the foreground (e.g. we are the active app).
+        if hwnd == GetForegroundWindow() || SetForegroundWindow(hwnd) != 0 {
+            SetFocus(hwnd);
+            return;
         }
+
+        // Slow path: synthesize an Alt key press+release to lift the foreground lock, then
+        // retry. Mirrors tao 0.35.3 platform_impl/windows force_window_active.
+        let scan = MapVirtualKeyW(VK_MENU as u32, MAPVK_VK_TO_VSC) as u16;
+        let key = |flags| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VK_MENU,
+                    wScan: scan,
+                    dwFlags: flags,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        let inputs = [
+            key(KEYEVENTF_EXTENDEDKEY),
+            key(KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP),
+        ];
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
+        SetForegroundWindow(hwnd);
+        SetFocus(hwnd);
     }
 }
 
@@ -133,7 +152,11 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
         }
         let _ = window.show();
         #[cfg(target_os = "windows")]
-        force_foreground(&window);
+        {
+            log::info!("show_panel: forcing foreground");
+            force_foreground(&window);
+            log::info!("show_panel: foreground done");
+        }
         #[cfg(not(target_os = "windows"))]
         let _ = window.set_focus();
     }

@@ -76,6 +76,25 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Route panics to the log file. Under windows_subsystem="windows" there is no
+            // console, so the default stderr panic output is lost — without this hook a crash
+            // leaves nothing in the log beyond the session-start line.
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                let location = info
+                    .location()
+                    .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                    .unwrap_or_else(|| "unknown".into());
+                let message = info
+                    .payload()
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "<non-string panic payload>".into());
+                log::error!("panic at {location}: {message}");
+                default_hook(info);
+            }));
+
             log::info!(
                 "ClipClop session start: version={} os={} arch={}",
                 app.package_info().version,
@@ -89,6 +108,7 @@ pub fn run() {
             }
 
             let data_dir = app.path().app_data_dir()?;
+            log::info!("opening database at {}", data_dir.display());
             let database = Database::open(&data_dir.join("clipclop.db"))?;
             let mut startup_settings: Settings =
                 database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
@@ -102,7 +122,9 @@ pub fn run() {
             let startup_hotkey = startup_settings.hotkey.clone();
             app.manage(AppState::new(database));
             app.manage(window::PreviewState::default());
+            log::info!("starting clipboard watcher");
             clipboard::start_watcher(app.handle().clone())?;
+            log::info!("registering global shortcut: {startup_hotkey}");
 
             if let Err(error) = register_panel_hotkey(app.handle(), &startup_hotkey) {
                 log::error!("failed to register stored global shortcut: {error}");
@@ -146,7 +168,9 @@ pub fn run() {
 
             // The bundle is an accessory app: launching it should reveal the
             // panel without turning ClipClop into a regular Dock application.
+            log::info!("initial show_panel");
             window::show_panel(app.handle());
+            log::info!("setup complete");
 
             Ok(())
         })
