@@ -1,6 +1,6 @@
 [package]
 name = "clipclop"
-version = "0.1.3"
+version = "0.1.4"
 description = "A lightweight, offline-first, cross-platform clipboard history tool."
 edition = "2021"
 license = "MIT"
