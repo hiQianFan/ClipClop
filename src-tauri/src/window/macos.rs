@@ -1,5 +1,4 @@
 use objc::{sel, sel_impl};
-use tauri::Manager;
 
 pub(super) fn show_as_panel(app: &tauri::AppHandle) -> bool {
     use objc::{class, msg_send};
