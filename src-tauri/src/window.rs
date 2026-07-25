@@ -10,24 +10,25 @@ use objc::{sel, sel_impl};
 const SHADOW_INSET: f64 = 20.0;
 
 // When the panel is summoned from a global shortcut, our process is in the background and
-// Windows refuses to let it take the foreground — so a bare `set_focus()` shows the panel
-// without keyboard focus (arrow keys / Enter do nothing until the user clicks). The proven,
-// deadlock-free workaround (used by tao's own `force_window_active`) is to synthesize an Alt
-// key tap: injecting keyboard input makes Windows treat us as the active input source, which
-// lifts the foreground lock for the immediately following SetForegroundWindow call.
+// Windows' foreground lock refuses to let a background process take the foreground — so a
+// bare `set_focus()` shows the panel without keyboard focus (arrow keys / Enter do nothing
+// until the user clicks).
 //
-// A previous attempt used AttachThreadInput to the current foreground thread; that can
-// deadlock our UI thread when the other thread is not pumping messages, which crashed the
-// app whenever the panel was summoned over another window. Do not reintroduce it.
+// We take the foreground *without injecting synthetic input*: temporarily set the system
+// foreground-lock timeout to 0, which lets SetForegroundWindow succeed directly, then
+// restore the previous timeout. Two earlier approaches injected input to lift the lock and
+// both crashed the app: AttachThreadInput could deadlock our UI thread, and a synthetic Alt
+// key (tao's own trick) reliably triggered an upstream tao event-loop re-entrancy panic
+// (tao#1180, "cannot move state from Destroyed") — injecting input enters menu mode and
+// pumps re-entrant paint messages. The SPI approach avoids that entirely. Do not reintroduce
+// input injection here.
 #[cfg(target_os = "windows")]
 fn force_foreground(window: &WebviewWindow) {
     use windows_sys::Win32::UI::{
-        Input::KeyboardAndMouse::{
-            MapVirtualKeyW, SendInput, SetFocus, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-            KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, VK_MENU,
-        },
+        Input::KeyboardAndMouse::SetFocus,
         WindowsAndMessaging::{
-            GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+            GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow, SystemParametersInfoW,
+            SPI_GETFOREGROUNDLOCKTIMEOUT, SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE, SW_SHOW,
         },
     };
 
@@ -45,37 +46,36 @@ fn force_foreground(window: &WebviewWindow) {
             ShowWindow(hwnd, SW_SHOW);
         }
 
-        // Fast path: already allowed to take the foreground (e.g. we are the active app).
-        if hwnd == GetForegroundWindow() || SetForegroundWindow(hwnd) != 0 {
-            SetFocus(hwnd);
-            return;
+        // Only lift the foreground lock when we are not already the foreground window.
+        if hwnd != GetForegroundWindow() {
+            // Read the current foreground-lock timeout so we can restore it afterwards.
+            let mut previous_timeout: u32 = 0;
+            let read_ok = SystemParametersInfoW(
+                SPI_GETFOREGROUNDLOCKTIMEOUT,
+                0,
+                (&mut previous_timeout as *mut u32).cast(),
+                0,
+            ) != 0;
+
+            // For SPI_SETFOREGROUNDLOCKTIMEOUT the new value is passed *in* pvparam itself (as
+            // a UINT_PTR), not via a pointer. 0 = allow foreground changes immediately. Flags
+            // 0 = update the running value only (no registry write, no WM_SETTINGCHANGE).
+            SystemParametersInfoW(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, std::ptr::null_mut(), 0);
+
+            SetForegroundWindow(hwnd);
+
+            if read_ok {
+                SystemParametersInfoW(
+                    SPI_SETFOREGROUNDLOCKTIMEOUT,
+                    0,
+                    previous_timeout as usize as *mut core::ffi::c_void,
+                    0,
+                );
+            }
         }
 
-        // Slow path: synthesize an Alt key press+release to lift the foreground lock, then
-        // retry. Mirrors tao 0.35.3 platform_impl/windows force_window_active.
-        let scan = MapVirtualKeyW(VK_MENU as u32, MAPVK_VK_TO_VSC) as u16;
-        let key = |flags| INPUT {
-            r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT {
-                    wVk: VK_MENU,
-                    wScan: scan,
-                    dwFlags: flags,
-                    time: 0,
-                    dwExtraInfo: 0,
-                },
-            },
-        };
-        let inputs = [
-            key(KEYEVENTF_EXTENDEDKEY),
-            key(KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP),
-        ];
-        SendInput(
-            inputs.len() as u32,
-            inputs.as_ptr(),
-            std::mem::size_of::<INPUT>() as i32,
-        );
-        SetForegroundWindow(hwnd);
+        // Route keyboard input to the window. Raw SetFocus only — never tao's set_focus,
+        // whose SetForegroundWindow-failed fallback injects an Alt key (the tao#1180 crash).
         SetFocus(hwnd);
     }
 }
