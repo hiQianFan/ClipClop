@@ -36,6 +36,8 @@
   let listbox = $state<HTMLDivElement>();
   let menuButton = $state<HTMLButtonElement>();
   let appMenuButton = $state<HTMLButtonElement>();
+  let menuWrap = $state<HTMLDivElement>();
+  let appMenuWrap = $state<HTMLDivElement>();
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
   let requestVersion = 0;
@@ -53,6 +55,7 @@
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
   const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
   const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
+  const actionMenuShortcut = isMac ? "⌘K" : "Ctrl K";
 
   $effect(() => {
     effectiveLocale();
@@ -302,6 +305,20 @@
     requestAnimationFrame(() => appMenuButton?.focus());
   }
 
+  function dismissMenusFromOutsidePointer(event: PointerEvent) {
+    if (!(event.target instanceof Node)) return;
+    if (menuOpen && !menuWrap?.contains(event.target)) menuOpen = false;
+    if (appMenuOpen && !appMenuWrap?.contains(event.target)) appMenuOpen = false;
+  }
+
+  function dismissMenuFromFocusOut(event: FocusEvent, menu: "actions" | "app") {
+    const next = event.relatedTarget;
+    const wrap = menu === "actions" ? menuWrap : appMenuWrap;
+    if (next instanceof Node && wrap?.contains(next)) return;
+    if (menu === "actions") menuOpen = false;
+    else appMenuOpen = false;
+  }
+
   async function openSettingsView() {
     appMenuOpen = false;
     view = "settings";
@@ -543,13 +560,13 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
-        <div class="app-menu-wrap">
+        <div bind:this={appMenuWrap} class="app-menu-wrap" onfocusout={(event) => dismissMenuFromFocusOut(event, "app")}>
           <button bind:this={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")} aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
           {#if appMenuOpen}
             <div class="menu app-menu" role="menu" tabindex="-1" aria-label={t("history.appMenu")} onkeydown={onMenuKeydown}>
@@ -684,8 +701,8 @@
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{/if}
-      <div class="menu-wrap">
-        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>⌘K</kbd> {t("history.actions")}</button>
+      <div bind:this={menuWrap} class="menu-wrap" onfocusout={(event) => dismissMenuFromFocusOut(event, "actions")}>
+        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label={t("history.actionMenu")} onkeydown={onMenuKeydown}>
             <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()} disabled={!selectedId}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></button>

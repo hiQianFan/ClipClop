@@ -61,12 +61,12 @@ Delete individual items, clear the history, choose a retention period, or quit C
 
 ## Project status
 
-ClipClop is currently a `0.1.1` preview. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
+ClipClop is currently a `0.1.5` preview. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
 
 <details>
 <summary><strong>For contributors</strong></summary>
 
-Development setup, project conventions, and private security reporting live in the [contributing guide](CONTRIBUTING.md).
+Development setup, project conventions, and private security reporting live in the [contributing guide](CONTRIBUTING.md). Runtime ownership and native panel invariants are documented in the [architecture guide](docs/architecture.md).
 
 </details>
 

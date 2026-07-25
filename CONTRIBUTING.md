@@ -22,6 +22,7 @@ pnpm tauri dev
 ```
 
 The Svelte interface lives in `src/`; the Rust/Tauri application lives in `src-tauri/`.
+Read the [architecture guide](docs/architecture.md) before changing native windows, focus, preview, paste, logging, or runtime ownership.
 
 Before submitting a pull request, run:
 
@@ -39,6 +40,8 @@ Changes involving keyboard behavior, focus, the system clipboard, permissions, o
 ## Change conventions
 
 - Keep Rust business rules in their feature modules and Tauri commands thin. Svelte code should call IPC through feature `api.ts` modules.
+- Route every main-panel show or hide through the `window` module. Do not call native `show()`, `hide()`, or platform focus fallbacks from commands or feature modules.
+- Keep native panel lifecycle separate from preview state, and preserve the lifecycle invariants documented in the architecture guide.
 - Until a migration system is introduced, database schema changes must increment `SCHEMA_VERSION`; development databases with an older version must be reset.
 - Update relevant documentation in the same pull request when user behavior, permissions, data handling, or release behavior changes.
 - Keep changes focused. Suggested commit format: `type(scope): summary`, using types such as `feat`, `fix`, `docs`, `test`, `refactor`, `build`, or `ci`.

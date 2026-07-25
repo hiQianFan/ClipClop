@@ -61,12 +61,12 @@ ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数�
 
 ## 项目状态
 
-ClipClop 当前为 `0.1.1` 预览版。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
+ClipClop 当前为 `0.1.5` 预览版。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
 
 <details>
 <summary><strong>参与开发</strong></summary>
 
-开发环境、项目约定和安全问题私密报告入口统一放在[贡献指南](CONTRIBUTING.zh-CN.md)中。
+开发环境、项目约定和安全问题私密报告入口统一放在[贡献指南](CONTRIBUTING.zh-CN.md)中；运行时职责与原生面板不变量见[架构说明](docs/architecture.zh-CN.md)。
 
 </details>
 

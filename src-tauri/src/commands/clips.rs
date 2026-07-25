@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::{
     clipboard::SystemClipboard,
@@ -6,6 +6,7 @@ use crate::{
     error::AppResult,
     paste::PasteOutcome,
     state::AppState,
+    window::{self, HideReason},
 };
 
 use super::preview::{clear_cached_previews, delete_cached_previews};
@@ -71,11 +72,9 @@ pub fn paste_clip(
         return Ok(PasteOutcome::AlreadyInProgress);
     };
     SystemClipboard::write(state.clips.flavors(&id)?, plain_text.unwrap_or(false))?;
-    if let Some(window) = app.get_webview_window("main") {
-        if let Err(error) = window.hide() {
-            log::warn!("failed to hide panel before paste: {error}");
-            return Ok(PasteOutcome::CopiedFocusFailed);
-        }
+    if let Err(error) = window::hide_panel(&app, HideReason::Paste) {
+        log::warn!("failed to hide panel before paste: {error}");
+        return Ok(PasteOutcome::CopiedFocusFailed);
     }
     let outcome = state.paste.paste_to_target(permit);
     if outcome != PasteOutcome::Pasted {
@@ -86,12 +85,8 @@ pub fn paste_clip(
 
 #[tauri::command]
 pub fn hide_panel(app: AppHandle) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("main") {
-        window
-            .hide()
-            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
-    }
-    Ok(())
+    window::hide_panel(&app, HideReason::Escape)
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))
 }
 
 #[cfg(test)]

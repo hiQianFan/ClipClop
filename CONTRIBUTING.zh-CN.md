@@ -22,6 +22,7 @@ pnpm tauri dev
 ```
 
 Svelte 界面位于 `src/`，Rust/Tauri 应用位于 `src-tauri/`。
+修改原生窗口、焦点、预览、粘贴、日志或运行时职责前，请先阅读[架构说明](docs/architecture.zh-CN.md)。
 
 提交 Pull Request 前运行：
 
@@ -39,6 +40,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ## 变更约定
 
 - Rust 业务规则放在对应模块，Tauri command 保持薄；Svelte 通过 feature `api.ts` 调用 IPC。
+- 主面板的所有显示与隐藏都必须经过 `window` 模块；command 和功能模块不得直接调用原生 `show()`、`hide()` 或平台焦点回退。
+- 原生面板生命周期必须与预览状态分离，并保持架构说明中记录的生命周期不变量。
 - 在迁移系统建立前，数据库结构变化必须递增 `SCHEMA_VERSION`；旧版本的开发数据库需要重置。
 - 用户行为、权限、数据处理或发布流程改变时，同一 Pull Request 必须更新相应文档。
 - 保持变更聚焦。提交信息建议使用 `type(scope): summary`，常用类型为 `feat`、`fix`、`docs`、`test`、`refactor`、`build`、`ci`。

@@ -31,14 +31,23 @@ use tauri_plugin_log::{Target, TargetKind};
 const LOG_ROTATION_BYTES: u128 = 5 * 1024 * 1024;
 
 fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    // A Windows GUI process can outlive the terminal that launched `tauri dev`. Once that
+    // terminal closes, fern treats writes to the broken stderr pipe as a fatal logging error
+    // and panics the application. The file target is always available and is the canonical
+    // diagnostic source on Windows.
+    #[cfg(target_os = "windows")]
+    let targets = vec![Target::new(TargetKind::LogDir { file_name: None })];
+    #[cfg(not(target_os = "windows"))]
+    let targets = vec![
+        Target::new(TargetKind::LogDir { file_name: None }),
+        Target::new(TargetKind::Stderr),
+    ];
+
     tauri_plugin_log::Builder::new()
         .max_file_size(LOG_ROTATION_BYTES)
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)
         .level(log::LevelFilter::Info)
-        .targets([
-            Target::new(TargetKind::LogDir { file_name: None }),
-            Target::new(TargetKind::Stderr),
-        ])
+        .targets(targets)
         .build()
 }
 
@@ -121,6 +130,7 @@ pub fn run() {
             }
             let startup_hotkey = startup_settings.hotkey.clone();
             app.manage(AppState::new(database));
+            app.manage(window::PanelLifecycleState::default());
             app.manage(window::PreviewState::default());
             log::info!("starting clipboard watcher");
             clipboard::start_watcher(app.handle().clone())?;
@@ -156,12 +166,7 @@ pub fn run() {
                 let app = app.handle().clone();
                 window.on_window_event(move |event| {
                     if let WindowEvent::Focused(focused) = event {
-                        let preview = app.state::<window::PreviewState>();
-                        if *focused {
-                            preview.set_active(false);
-                        } else if !preview.is_active() {
-                            let _ = panel.hide();
-                        }
+                        window::handle_focus_event(&app, &panel, *focused);
                     }
                 });
             }
