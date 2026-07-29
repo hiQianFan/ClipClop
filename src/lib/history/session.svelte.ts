@@ -40,20 +40,21 @@ export class HistorySession {
     this.errorReason = null;
     try {
       const nextPage = await this.#api.queryHistory(this.query, targetPage);
-      if (version !== this.#refreshVersion) return;
+      if (version !== this.#refreshVersion) return false;
       this.page = nextPage;
       const nextId = !selectLatest && nextPage.items.some(({ id }) => id === this.selectedId)
         ? this.selectedId
         : nextPage.items[0]?.id ?? null;
       await this.select(nextId);
     } catch (reason) {
-      if (version !== this.#refreshVersion) return;
+      if (version !== this.#refreshVersion) return false;
       this.errorReason = reason;
       this.page = emptyPage(targetPage);
       await this.select(null);
     } finally {
       if (version === this.#refreshVersion) this.loading = false;
     }
+    return version === this.#refreshVersion;
   }
 
   async select(id: string | null) {

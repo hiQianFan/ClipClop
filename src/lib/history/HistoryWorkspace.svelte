@@ -7,12 +7,16 @@
   import { HistorySession } from "$lib/history/session.svelte";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
+  import { escapeAction, type InteractionMode } from "$lib/history/interaction";
   import { quitApp } from "$lib/settings/api";
   import { effectiveLocale, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft } from "@lucide/svelte";
 
   const session = new HistorySession();
+  let mode = $state<InteractionMode>("browse");
+  let previewExternal = false;
+  let confirmationInvoker: HTMLElement | null = null;
   let assetUrl = $state<string | null>(null);
   let sourceIconUrl = $state<string | null>(null);
   let thumbnailUrls = $state<Record<string, string>>({});
@@ -67,19 +71,19 @@
         if (view === "settings") return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (deletePending) {
-          cancelDelete();
-        } else if (menuOpen) {
-          closeMenu();
-        } else if (appMenuOpen) {
-          closeAppMenu();
-        } else {
-          void hidePanel();
+        switch (escapeAction(mode)) {
+          case "cancel-confirmation": cancelDelete(); break;
+          case "close-menu":
+            if (menuOpen) closeMenu();
+            else closeAppMenu();
+            break;
+          case "exit-to-browse": enterBrowse(); break;
+          case "hide-panel": void hidePanel(); break;
         }
       }
     };
     document.addEventListener("keydown", captureEscape, true);
-    void refresh(1);
+    void refreshAndFocus(1);
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
     // Only an explicit panel show is a new browsing session. Quick Look also
     // returns focus to this window, but must preserve the current selection.
@@ -95,7 +99,8 @@
   async function refresh(targetPage = session.page.page, selectLatest = false) {
     error = "";
     const thumbnailVersion = ++thumbnailRequestVersion;
-    await session.refresh(targetPage, selectLatest);
+    const applied = await session.refresh(targetPage, selectLatest);
+    if (!applied) return false;
     if (session.errorReason) {
       error = errorMessage(session.errorReason);
     } else {
@@ -106,6 +111,28 @@
       void loadThumbnails(session.page.items, thumbnailVersion);
     }
     await applySelectedDetail(false);
+    return true;
+  }
+
+  async function refreshAndFocus(targetPage: number) {
+    if (await refresh(targetPage)) enterBrowse();
+  }
+
+  function enterBrowse(focus = true) {
+    mode = "browse";
+    if (focus) requestAnimationFrame(() => listbox?.focus());
+  }
+
+  function enterSearch() {
+    mode = "search";
+    listbox?.focusSearch();
+  }
+
+  function onSearchKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    enterBrowse();
   }
 
   async function loadThumbnails(items: ClipSummary[], version: number) {
@@ -170,6 +197,7 @@
       }
     } catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
+    enterBrowse();
   }
 
   async function pastePlainSelected() {
@@ -185,6 +213,7 @@
       setTimeout(() => copied = "", 1800);
     } catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
+    enterBrowse();
   }
 
   async function removeSelected() {
@@ -196,9 +225,13 @@
       evictClip(deletedId);
       await applySelectedDetail(false);
       await tick();
-      listbox?.focus();
+      enterBrowse();
     }
-    catch (reason) { error = errorMessage(reason); }
+    catch (reason) {
+      error = errorMessage(reason);
+      mode = "browse";
+      requestAnimationFrame(focusConfirmationInvoker);
+    }
     finally {
       requestAnimationFrame(() => rowReorderMotion = false);
     }
@@ -207,15 +240,25 @@
 
   async function requestDelete() {
     if (!session.selectedId) return;
+    confirmationInvoker = document.activeElement instanceof HTMLElement
+      ? document.activeElement.closest("[data-menu-item]") ? menuButton ?? null : document.activeElement
+      : null;
     menuOpen = false;
     deletePending = true;
+    mode = "confirmation";
     await tick();
     confirmActionButton?.focus();
   }
 
   function cancelDelete() {
     deletePending = false;
-    requestAnimationFrame(() => listbox?.focus());
+    mode = "browse";
+    requestAnimationFrame(focusConfirmationInvoker);
+  }
+
+  function focusConfirmationInvoker() {
+    if (confirmationInvoker?.isConnected) confirmationInvoker.focus();
+    else listbox?.focus();
   }
 
   function confirmDelete() {
@@ -226,7 +269,9 @@
   async function viewSelectedClip() {
     if (!session.selectedId) return;
     try {
-      await previewClip(session.selectedId, fileIndex);
+      const outcome = await previewClip(session.selectedId, fileIndex);
+      previewExternal = outcome === "native_opened";
+      if (!previewExternal) enterBrowse();
     }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;
@@ -247,12 +292,14 @@
     }
     appMenuOpen = false;
     menuOpen = true;
+    mode = "menu";
     await tick();
     menuItemElements().find((item) => !item.disabled)?.focus();
   }
 
   function closeMenu() {
     menuOpen = false;
+    mode = "browse";
     requestAnimationFrame(() => menuButton?.focus());
   }
 
@@ -263,25 +310,42 @@
     }
     menuOpen = false;
     appMenuOpen = true;
+    mode = "menu";
     await tick();
     menuItemElements().find((item) => !item.disabled)?.focus();
   }
 
   function closeAppMenu() {
     appMenuOpen = false;
+    mode = "browse";
     requestAnimationFrame(() => appMenuButton?.focus());
   }
 
   function dismissMenusFromOutsidePointer(event: PointerEvent) {
     if (!(event.target instanceof Node)) return;
-    if (menuOpen && !menuWrap?.contains(event.target)) menuOpen = false;
-    if (appMenuOpen && !appMenuWrap?.contains(event.target)) appMenuOpen = false;
+    if (menuOpen && !menuWrap?.contains(event.target)) {
+      menuOpen = false;
+      mode = "browse";
+    }
+    if (appMenuOpen && !appMenuWrap?.contains(event.target)) {
+      appMenuOpen = false;
+      mode = "browse";
+    }
   }
 
   function dismissMenusFromOutsideFocus(event: FocusEvent) {
     if (!(event.target instanceof Node)) return;
-    if (menuOpen && !menuWrap?.contains(event.target)) menuOpen = false;
-    if (appMenuOpen && !appMenuWrap?.contains(event.target)) appMenuOpen = false;
+    if (menuOpen && !menuWrap?.contains(event.target)) {
+      menuOpen = false;
+      mode = "browse";
+    }
+    if (appMenuOpen && !appMenuWrap?.contains(event.target)) {
+      appMenuOpen = false;
+      mode = "browse";
+    }
+    if (!(event.target instanceof Element)) return;
+    if (mode === "search" && !event.target.closest("input")) mode = "browse";
+    if (mode === "file-tablist" && !event.target.closest("[role='tablist']")) mode = "browse";
   }
 
   async function openSettingsView() {
@@ -291,7 +355,7 @@
 
   function closeSettingsView() {
     view = "history";
-    requestAnimationFrame(() => listbox?.focus());
+    enterBrowse();
   }
 
   function menuItemElements() {
@@ -328,14 +392,13 @@
     menuOpen = false;
     appMenuOpen = false;
     view = "history";
+    mode = "browse";
     session.query = "";
     clearContentCaches();
     await tick();
     listbox?.focus();
     await refresh(1, true);
-    if (document.activeElement === document.body || listbox?.hasFocus()) {
-      requestAnimationFrame(() => listbox?.focus());
-    }
+    enterBrowse();
   }
 
   function suppressContextMenu(event: MouseEvent) {
@@ -411,6 +474,11 @@
   }
 
   function onFileNavigatorKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      enterBrowse();
+      return;
+    }
     if (!session.detail || session.detail.content_type !== "file") return;
     const lastIndex = filePaths(session.detail).length - 1;
     const next = event.key === "ArrowLeft" ? fileIndex - 1
@@ -437,19 +505,20 @@
     if (view === "settings") {
       return;
     }
+    if (mode !== "browse") return;
     if ((event.metaKey || event.ctrlKey) && event.key === ",") {
       event.preventDefault();
       void openSettingsView();
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-      event.preventDefault(); listbox?.focusSearch(); return;
+      event.preventDefault(); enterSearch(); return;
     }
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "c") {
       event.preventDefault(); void copyOnly(true); return;
     }
-    if (event.key === "/" && listHasFocus()) {
-      event.preventDefault(); listbox?.focusSearch(); return;
+    if (event.key === "/") {
+      event.preventDefault(); enterSearch(); return;
     }
     if (event.key === "Escape") {
       return;
@@ -459,7 +528,29 @@
     }
     if (event.shiftKey && event.key === "F10" && listHasFocus()) {
       event.preventDefault(); void openMenu();
+      return;
     }
+    const target = event.target instanceof Element ? event.target : null;
+    const interactive = target?.closest("button, input, a, [role='menu'], [role='dialog'], [role='tablist']");
+    if (!event.defaultPrevented && !interactive) {
+      onListKeydown(event);
+    }
+  }
+
+  function onConfirmationKeydown(event: KeyboardEvent) {
+    if (event.key !== "Tab") return;
+    const controls = [cancelActionButton, confirmActionButton].filter(
+      (item): item is HTMLButtonElement => Boolean(item),
+    );
+    const index = controls.indexOf(document.activeElement as HTMLButtonElement);
+    event.preventDefault();
+    controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+  }
+
+  function restoreAfterNativePreview() {
+    if (!previewExternal || view !== "history") return;
+    previewExternal = false;
+    enterBrowse();
   }
 
   async function selectFile(index: number) {
@@ -525,7 +616,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   <header class="titlebar">
@@ -564,11 +655,14 @@
     {reducedMotion}
     {rowReorderMotion}
     onsearch={onSearch}
+    onsearchfocus={() => mode = "search"}
+    onsearchkeydown={onSearchKeydown}
+    onlistfocus={() => mode = "browse"}
     onselect={selectFromList}
     onpaste={() => void pasteSelected()}
-    onfile={(index) => void selectFile(index)}
+    onfile={(index) => { mode = "file-tablist"; void selectFile(index); }}
     onkeydown={onListKeydown}
-    onpage={(page) => void refresh(page)}
+    onpage={(page) => void refreshAndFocus(page)}
   />
 
   <ClipPreview
@@ -584,11 +678,13 @@
     {nextFileShortcut}
     onfile={(index) => void selectFile(index)}
     onfilekeydown={onFileNavigatorKeydown}
+    onfilefocus={() => mode = "file-tablist"}
+    oninert={() => enterBrowse()}
   />
 
   <footer class="actions">
     {#if deletePending}
-      <div class="confirmation" role="alertdialog" aria-label={t("history.confirmDeleteLabel")}>
+      <div class="confirmation" role="alertdialog" tabindex="-1" aria-modal="true" aria-label={t("history.confirmDeleteLabel")} onkeydown={onConfirmationKeydown}>
         <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
         <button bind:this={cancelActionButton} class="ghost" onclick={cancelDelete}>{t("common.cancel")} <kbd>Esc</kbd></button>
         <button bind:this={confirmActionButton} class="destructive" onclick={confirmDelete}>{t("history.delete")}</button>

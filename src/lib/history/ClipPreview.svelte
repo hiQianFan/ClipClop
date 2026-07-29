@@ -17,6 +17,8 @@
     nextFileShortcut,
     onfile,
     onfilekeydown,
+    onfilefocus,
+    oninert,
   }: {
     detail: ClipDetail | null;
     selectedId: string | null;
@@ -30,10 +32,12 @@
     nextFileShortcut: string;
     onfile: (index: number) => void;
     onfilekeydown: (event: KeyboardEvent) => void;
+    onfilefocus: () => void;
+    oninert: () => void;
   } = $props();
 </script>
 
-<section class:pending class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={pending}>
+<section role="group" class:pending class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={pending} onpointerdown={(event) => { if (!(event.target as Element).closest("button, a, input, [role='tab']")) oninert(); }}>
   {#if detail}
     <div class:text-preview={!["color", "file", "image"].includes(detail.content_type)} class="preview-body">
       {#if detail.content_type === "color"}
@@ -53,7 +57,7 @@
         <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
         <div class="file-strip" role="tablist" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
           {#each filePaths(detail) as path, index}
-            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path) })} title={fileName(path)} onclick={() => onfile(index)} onkeydown={onfilekeydown}>
+            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path) })} title={fileName(path)} onclick={() => onfile(index)} onfocus={onfilefocus} onkeydown={onfilekeydown}>
               {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
               {:else}<File size={16} aria-hidden="true" />{/if}
             </button>

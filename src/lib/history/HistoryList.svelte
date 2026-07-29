@@ -19,6 +19,9 @@
     reducedMotion,
     rowReorderMotion,
     onsearch,
+    onsearchfocus,
+    onsearchkeydown,
+    onlistfocus,
     onselect,
     onpaste,
     onfile,
@@ -36,6 +39,9 @@
     reducedMotion: boolean;
     rowReorderMotion: boolean;
     onsearch: () => void;
+    onsearchfocus: () => void;
+    onsearchkeydown: (event: KeyboardEvent) => void;
+    onlistfocus: () => void;
     onselect: (id: string) => void;
     onpaste: () => void;
     onfile: (index: number) => void;
@@ -45,8 +51,14 @@
 
   let listbox: HTMLDivElement;
   let searchInput: HTMLInputElement;
+  let emptyAnchor = $state<HTMLDivElement>();
+  let retryButton = $state<HTMLButtonElement>();
 
-  export function focus() { listbox?.focus(); }
+  export function focus() {
+    if (page.items.length > 0) listbox?.focus();
+    else if (error) retryButton?.focus();
+    else emptyAnchor?.focus();
+  }
   export function hasFocus() { return document.activeElement === listbox; }
   export function focusSearch() { searchInput?.focus(); }
 </script>
@@ -54,16 +66,16 @@
 <section class="left">
   <form class="search" onsubmit={(event) => { event.preventDefault(); onsearch(); }}>
     <span aria-hidden="true"><Search size={15} /></span>
-    <input bind:this={searchInput} bind:value={query} oninput={onsearch} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
+    <input bind:this={searchInput} bind:value={query} oninput={onsearch} onfocus={onsearchfocus} onkeydown={onsearchkeydown} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
     <kbd>/</kbd>
   </form>
-  <div bind:this={listbox} class:full={page.items.length === page.page_size} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onkeydown}>
+  <div bind:this={listbox} class:full={page.items.length === page.page_size} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onpointerdown={() => listbox.focus()} onfocus={onlistfocus} onkeydown={onkeydown}>
     {#if loading && page.items.length === 0}
-      <div class="empty">{t("history.loading")}</div>
+      <div bind:this={emptyAnchor} class="empty" tabindex="-1">{t("history.loading")}</div>
     {:else if error && page.items.length === 0}
-      <button class="empty retry" onclick={() => onpage(1)}>{t("history.retry")}</button>
+      <button bind:this={retryButton} class="empty retry" onclick={() => onpage(1)}>{t("history.retry")}</button>
     {:else if page.items.length === 0}
-      <div class="empty">{query ? t("history.noMatches") : t("history.empty")}</div>
+      <div bind:this={emptyAnchor} class="empty" tabindex="-1">{query ? t("history.noMatches") : t("history.empty")}</div>
     {:else}
       {#each page.items as item, index (item.id)}
         <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
@@ -110,6 +122,7 @@
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
   .list:focus .row.selected { background:var(--bg-selected); }
+  .row.selected { background:color-mix(in srgb, var(--bg-selected) 55%, transparent); }
   .num { width:16px; flex:none; color:var(--text-3); font-size:12px; font-weight:650; line-height:1; font-variant-numeric:tabular-nums lining-nums; text-align:center; }
   .list:focus .row.selected .num { color:var(--text-2); }
   .lead { width:28px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:4px; color:var(--text-2); font:7px var(--mono); }

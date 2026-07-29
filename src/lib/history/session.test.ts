@@ -52,6 +52,20 @@ describe("HistorySession", () => {
     expect(session.detail?.id).toBe("b");
   });
 
+  it("reports stale refreshes so callers do not restore obsolete focus", async () => {
+    const resolvers: Array<(value: HistoryPage) => void> = [];
+    const session = new HistorySession(api({
+      queryHistory: () => new Promise((resolve) => resolvers.push(resolve)),
+    }));
+    const first = session.refresh(1);
+    const second = session.refresh(2);
+    resolvers[1]?.(page(["new"], 2, 2));
+    await expect(second).resolves.toBe(true);
+    resolvers[0]?.(page(["old"], 1, 2));
+    await expect(first).resolves.toBe(false);
+    expect(session.page.page).toBe(2);
+  });
+
   it("selects the next row after deletion", async () => {
     const session = new HistorySession(api());
     await session.refresh();
