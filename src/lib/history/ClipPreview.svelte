@@ -1,0 +1,134 @@
+<script lang="ts">
+  import { File } from "@lucide/svelte";
+  import { formatNumber, t } from "$lib/i18n/index.svelte";
+  import { clipPreview, exactTime, fileName, filePaths, metadataFacts } from "./presentation";
+  import type { ClipDetail, HistoryPage } from "./types";
+
+  let {
+    detail,
+    selectedId,
+    page,
+    pending,
+    assetUrl,
+    sourceIconUrl,
+    fileThumbnailUrls,
+    fileIndex,
+    previousFileShortcut,
+    nextFileShortcut,
+    onfile,
+    onfilekeydown,
+  }: {
+    detail: ClipDetail | null;
+    selectedId: string | null;
+    page: HistoryPage;
+    pending: boolean;
+    assetUrl: string | null;
+    sourceIconUrl: string | null;
+    fileThumbnailUrls: Array<string | null>;
+    fileIndex: number;
+    previousFileShortcut: string;
+    nextFileShortcut: string;
+    onfile: (index: number) => void;
+    onfilekeydown: (event: KeyboardEvent) => void;
+  } = $props();
+</script>
+
+<section class:pending class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={pending}>
+  {#if detail}
+    <div class:text-preview={!["color", "file", "image"].includes(detail.content_type)} class="preview-body">
+      {#if detail.content_type === "color"}
+        <div class="color-preview"><span style:background={detail.preview}></span><code>{detail.preview}</code></div>
+      {:else if detail.content_type === "file"}
+        {#if assetUrl}<img class="asset" src={assetUrl} alt={t("history.fileThumbnail")} />
+        {:else}<div class="file-preview-placeholder">{t("history.noPreview")}</div>{/if}
+      {:else if detail.content_type === "image"}
+        {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt={t("history.imagePreview")} /></div>
+        {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}
+      {:else}
+        <pre>{detail.plain_text ?? detail.preview}</pre>
+      {/if}
+    </div>
+    {#if detail.content_type === "file" && filePaths(detail).length > 1}
+      <nav class="file-nav" aria-label={t("history.fileNavigation")}>
+        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
+        <div class="file-strip" role="tablist" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
+          {#each filePaths(detail) as path, index}
+            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path) })} title={fileName(path)} onclick={() => onfile(index)} onkeydown={onfilekeydown}>
+              {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
+              {:else}<File size={16} aria-hidden="true" />{/if}
+            </button>
+          {/each}
+        </div>
+        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.nextFile", { shortcut: nextFileShortcut })} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => onfile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
+        <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
+      </nav>
+    {/if}
+    <div class="preview-meta">
+      {#if detail.content_type === "file"}
+        <div class="meta-file">
+          <span title={filePaths(detail)[fileIndex] ?? detail.preview}>{fileName(filePaths(detail)[fileIndex] ?? detail.preview)}</span>
+          {#if filePaths(detail)[fileIndex]}<code title={filePaths(detail)[fileIndex]}>{filePaths(detail)[fileIndex]}</code>{/if}
+        </div>
+      {/if}
+      <div class="meta-summary">
+        <div class="meta-source">
+          {#if detail.source_app}
+            {#if sourceIconUrl}<img class="app-icon" src={sourceIconUrl} alt="" />
+            {:else}<span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>{/if}
+            <div class="source-details"><span>{detail.source_app.name}</span><time>{exactTime(detail.created_at)}</time></div>
+          {:else}
+            <div class="source-details"><time>{exactTime(detail.created_at)}</time></div>
+          {/if}
+        </div>
+        <dl class="meta-facts">
+          {#each metadataFacts(detail, fileIndex) as fact}
+            <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+          {/each}
+        </dl>
+      </div>
+    </div>
+  {:else if selectedId}
+    <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!) : ""}</pre></div>
+  {:else}
+    <div class="empty">{t("history.select")}</div>
+  {/if}
+</section>
+
+<style>
+  .preview { grid-column:2; grid-row:2; min-width:0; min-height:0; display:flex; flex-direction:column; }
+  .preview.pending { contain:content; }
+  .preview-body { flex:1; min-height:0; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .preview-body.text-preview { align-items:flex-start; justify-content:flex-start; }
+  pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:13px/1.65 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .preview-meta { height:64px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
+  .preview.file-preview .preview-meta { height:96px; display:grid; grid-template-rows:minmax(0, 1fr) auto; gap:7px; padding-block:10px; }
+  .meta-summary { min-width:0; width:100%; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .meta-source { min-width:0; display:flex; align-items:center; gap:8px; }
+  .source-details { min-width:0; display:flex; flex-direction:column; gap:2px; color:var(--text-2); font:12px/1.2 var(--mono); }
+  .source-details span, .meta-file > span, .meta-file code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .source-details time { color:var(--text-3); font-size:10px; }
+  .meta-file { min-width:0; width:100%; display:flex; flex-direction:column; gap:3px; color:var(--text-2); font:11px/1.3 var(--mono); }
+  .meta-facts { display:flex; gap:16px; margin:0; }
+  .meta-facts div { display:flex; flex-direction:column; align-items:flex-end; gap:2px; white-space:nowrap; }
+  .meta-facts dt { color:var(--text-3); font:10px/1 var(--mono); }
+  .meta-facts dd { margin:0; color:var(--text-2); font:11px/1.2 var(--mono); }
+  .app-icon, .app-fallback { width:22px; height:22px; flex:none; border-radius:4px; }
+  .app-icon { object-fit:contain; }
+  .app-fallback { display:grid; place-items:center; color:var(--bg-shell); background:var(--text-2); font:600 11px var(--mono); }
+  .color-preview { display:flex; align-items:center; gap:14px; }
+  .color-preview span { width:72px; height:72px; border:1px solid var(--hairline); border-radius:8px; }
+  .asset-frame { width:100%; height:100%; min-height:180px; display:flex; align-items:center; justify-content:center; }
+  .asset { display:block; max-width:100%; max-height:100%; border-radius:8px; object-fit:contain; }
+  .image-placeholder, .empty { flex:1; display:grid; place-items:center; color:var(--text-3); }
+  .file-preview-placeholder { color:var(--text-3); font-size:12px; }
+  .file-nav { height:58px; flex:none; display:flex; align-items:center; gap:8px; padding:6px 20px; border-top:1px solid var(--hairline); }
+  .file-strip { min-width:0; flex:1; display:flex; gap:6px; overflow-x:auto; }
+  .file-thumb { width:38px; height:38px; flex:none; display:grid; place-items:center; padding:3px; border-radius:6px; background:transparent; }
+  .file-thumb.selected { background:var(--bg-selected); }
+  .file-thumb img { width:100%; height:100%; border-radius:4px; object-fit:cover; }
+  .file-nav-arrow { min-width:38px; height:28px; padding:0 3px; color:var(--text-2); background:transparent; }
+  .file-nav-count { color:var(--text-3); font:10px var(--mono); }
+  .preview-loading { flex:1; min-height:0; padding:20px; color:var(--text-2); }
+  .preview-loading span { display:block; margin-bottom:8px; color:var(--text-3); font-size:11px; }
+  kbd { font:10px/1.4 var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:4px; padding:1px 5px; white-space:nowrap; }
+</style>

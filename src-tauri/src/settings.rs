@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+mod service;
+
+pub use service::SettingsService;
+
 pub const SETTINGS_KEY: &str = "app";
 
 #[cfg(target_os = "macos")]

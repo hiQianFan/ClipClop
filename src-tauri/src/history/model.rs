@@ -121,7 +121,7 @@ pub struct FlavorInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ListClipsRequest {
+pub struct HistoryQuery {
     #[serde(default)]
     pub query: String,
     #[serde(default = "default_page")]
@@ -130,7 +130,7 @@ pub struct ListClipsRequest {
     pub page_size: u32,
 }
 
-impl Default for ListClipsRequest {
+impl Default for HistoryQuery {
     fn default() -> Self {
         Self {
             query: String::new(),
@@ -149,7 +149,7 @@ const fn default_page_size() -> u32 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ClipPage {
+pub struct HistoryPage {
     pub items: Vec<ClipSummary>,
     pub page: u32,
     pub page_size: u32,

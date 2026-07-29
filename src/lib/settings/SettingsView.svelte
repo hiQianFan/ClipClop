@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { clearHistory } from "$lib/clips/api";
+  import { clearHistory } from "$lib/history/api";
   import { applyTheme, getSettings, openLogDir, updateSettings, type Settings } from "./api";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION, openLatestRelease } from "$lib/updater/api";

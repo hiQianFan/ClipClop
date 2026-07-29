@@ -1,24 +1,19 @@
 use std::{thread, time::Duration};
 
-use base64::{engine::general_purpose::STANDARD, Engine};
 use chrono::Utc;
 use clipboard_rs::{
     common::RustImage, Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler,
     ClipboardWatcher, ClipboardWatcherContext,
 };
-use serde_json::json;
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 
 use crate::{
-    clips::{ClipMetadata, ContentType, Flavor, NewClip},
     error::{AppError, AppResult},
-    settings::{Settings, SETTINGS_KEY},
-    state::AppState,
+    history::{ClipMetadata, ContentType, Flavor, NewClip},
 };
 
-use super::source::{source_app, source_app_icon, start_source_tracker};
+use super::source::{source_app, start_source_tracker};
 
 const MAX_CAPTURE_BYTES: usize = 20 * 1024 * 1024;
 // macOS pasteboard custom types must be valid UTIs; reverse-DNS also works as
@@ -41,43 +36,6 @@ impl SystemClipboard {
             b"clipclop".to_vec(),
         ));
         context.set(contents).map_err(clipboard_error)
-    }
-
-    pub fn preview_asset(flavors: &[Flavor], file_path: Option<&str>) -> AppResult<Option<String>> {
-        let png = if let Some(path) = file_path {
-            let path = local_file_path(path);
-            clipboard_rs::RustImageData::from_path(&path.to_string_lossy())
-                .and_then(|image| image.thumbnail(960, 640))
-                .and_then(|image| image.to_png())
-                .ok()
-                .map(|buffer| buffer.get_bytes().to_vec())
-        } else if let Some(flavor) = flavors.iter().find(|item| item.format == "image/png") {
-            clipboard_rs::RustImageData::from_bytes(&flavor.payload)
-                .and_then(|image| image.thumbnail(960, 640))
-                .and_then(|image| image.to_png())
-                .ok()
-                .map(|buffer| buffer.get_bytes().to_vec())
-        } else {
-            None
-        };
-        Ok(png.map(|bytes| format!("data:image/png;base64,{}", STANDARD.encode(bytes))))
-    }
-
-    pub fn thumbnail_asset(flavors: &[Flavor]) -> AppResult<Option<String>> {
-        let image = if let Some(flavor) = flavors.iter().find(|item| item.format == "image/png") {
-            clipboard_rs::RustImageData::from_bytes(&flavor.payload)
-                .and_then(|image| image.thumbnail(56, 56))
-                .and_then(|image| image.to_png())
-                .ok()
-        } else {
-            None
-        };
-        Ok(image.map(|png| format!("data:image/png;base64,{}", STANDARD.encode(png.get_bytes()))))
-    }
-
-    pub fn source_app_icon(app_id: &str) -> Option<String> {
-        source_app_icon(app_id)
-            .map(|bytes| format!("data:image/png;base64,{}", STANDARD.encode(bytes)))
     }
 }
 
@@ -116,8 +74,8 @@ fn clipboard_contents(
 }
 
 struct CaptureHandler {
-    app: AppHandle,
     clipboard: ClipboardContext,
+    capture: std::sync::Arc<dyn Fn(NewClip) -> AppResult<()> + Send + Sync>,
 }
 
 impl ClipboardHandler for CaptureHandler {
@@ -135,25 +93,19 @@ impl CaptureHandler {
         }
         // Freeze attribution before reading or encoding large clipboard payloads.
         let captured_source = source_app(&self.clipboard);
-        let state = self.app.state::<AppState>();
-        let settings: Settings = state
-            .database
-            .get_setting(SETTINGS_KEY)?
-            .unwrap_or_default();
-        state.clips.prune(settings.retention_days)?;
         let Some(mut clip) = read_clip(&self.clipboard)? else {
             return Ok(());
         };
         clip.source_app = captured_source;
-        if let Some(id) = state.clips.capture(&clip)? {
-            let _ = self.app.emit("clips_changed", json!({ "latest_id": id }));
-        }
-        Ok(())
+        (self.capture)(clip)
     }
 }
 
-pub fn start_watcher(app: AppHandle) -> AppResult<()> {
+pub fn start_watcher(
+    capture: impl Fn(NewClip) -> AppResult<()> + Send + Sync + 'static,
+) -> AppResult<()> {
     start_source_tracker()?;
+    let capture = std::sync::Arc::new(capture);
     thread::Builder::new()
         .name("clipclop-clipboard".into())
         .spawn(move || loop {
@@ -174,8 +126,8 @@ pub fn start_watcher(app: AppHandle) -> AppResult<()> {
                 }
             };
             watcher.add_handler(CaptureHandler {
-                app: app.clone(),
                 clipboard,
+                capture: capture.clone(),
             });
             watcher.start_watch();
             log::warn!("clipboard watcher stopped; restarting");
@@ -362,14 +314,6 @@ fn preview_for(content_type: ContentType, text: Option<&str>, files: Option<&[St
 
 fn clipboard_error(error: impl std::fmt::Display) -> AppError {
     AppError::Clipboard(error.to_string())
-}
-
-fn local_file_path(path: &str) -> std::path::PathBuf {
-    Url::parse(path)
-        .ok()
-        .filter(|url| url.scheme() == "file")
-        .and_then(|url| url.to_file_path().ok())
-        .unwrap_or_else(|| path.into())
 }
 
 #[cfg(test)]

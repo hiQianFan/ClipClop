@@ -2,4 +2,4 @@ mod model;
 mod service;
 
 pub use model::*;
-pub use service::ClipService;
+pub use service::HistoryService;

@@ -29,8 +29,8 @@ use clipboard_rs::Clipboard;
 use clipboard_rs::ClipboardContext;
 
 use crate::{
-    clips::SourceApp,
     error::{AppError, AppResult},
+    history::SourceApp,
 };
 
 const RECENT_SOURCE_MAX_AGE: Duration = Duration::from_secs(2);
@@ -264,85 +264,6 @@ fn platform_source_app(_: &ClipboardContext) -> Option<SourceApp> {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_source_app(_: &ClipboardContext) -> Option<SourceApp> {
-    None
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) fn source_app_icon(app_id: &str) -> Option<Vec<u8>> {
-    let executable = Path::new(app_id);
-    let app_bundle = executable
-        .ancestors()
-        .find(|path| path.extension().is_some_and(|extension| extension == "app"))?;
-    let resources = app_bundle.join("Contents/Resources");
-    let declared_name = Command::new("/usr/libexec/PlistBuddy")
-        .args(["-c", "Print :CFBundleIconFile"])
-        .arg(app_bundle.join("Contents/Info.plist"))
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .map(|name| name.trim().to_owned());
-    let declared_icon = declared_name.map(|name| {
-        resources.join(if name.ends_with(".icns") {
-            name
-        } else {
-            format!("{name}.icns")
-        })
-    });
-    let icon = declared_icon.filter(|path| path.exists()).or_else(|| {
-        std::fs::read_dir(&resources)
-            .ok()?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .find(|path| {
-                path.extension()
-                    .is_some_and(|extension| extension == "icns")
-            })
-    })?;
-    let output_path =
-        std::env::temp_dir().join(format!("clipclop-icon-{}.png", uuid::Uuid::now_v7()));
-    let output = Command::new("/usr/bin/sips")
-        .args(["-s", "format", "png"])
-        .arg(&icon)
-        .arg("--out")
-        .arg(&output_path)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let bytes = std::fs::read(&output_path).ok();
-    let _ = std::fs::remove_file(output_path);
-    bytes
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn source_app_icon(app_id: &str) -> Option<Vec<u8>> {
-    let output_path =
-        std::env::temp_dir().join(format!("clipclop-icon-{}.png", uuid::Uuid::now_v7()));
-    let escaped_app = app_id.replace('\'', "''");
-    let escaped_output = output_path.to_string_lossy().replace('\'', "''");
-    let script = format!(
-        "Add-Type -AssemblyName System.Drawing; $i=[System.Drawing.Icon]::ExtractAssociatedIcon('{escaped_app}'); if ($i) {{ $i.ToBitmap().Save('{escaped_output}', [System.Drawing.Imaging.ImageFormat]::Png); $i.Dispose() }}"
-    );
-    use std::os::windows::process::CommandExt;
-    // CREATE_NO_WINDOW: without it, spawning powershell.exe flashes a console window.
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let output = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let bytes = std::fs::read(&output_path).ok();
-    let _ = std::fs::remove_file(output_path);
-    bytes
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub(crate) fn source_app_icon(_app_id: &str) -> Option<Vec<u8>> {
     None
 }
 

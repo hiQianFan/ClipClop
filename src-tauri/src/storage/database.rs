@@ -6,11 +6,11 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension, Row};
 use uuid::Uuid;
 
-use crate::clips::{
-    ClipDetail, ClipPage, ClipSummary, ContentType, Flavor, FlavorInfo, ListClipsRequest, NewClip,
+use crate::error::{AppError, AppResult};
+use crate::history::{
+    ClipDetail, ClipSummary, ContentType, Flavor, FlavorInfo, HistoryPage, HistoryQuery, NewClip,
     SourceApp,
 };
-use crate::error::{AppError, AppResult};
 
 const SCHEMA: &str = include_str!("../../schema.sql");
 // Development schema revisions are not migrated. Any mismatch requires a reset.
@@ -109,7 +109,7 @@ impl Database {
             .is_some())
     }
 
-    pub fn list_clips(&self, request: &ListClipsRequest) -> AppResult<ClipPage> {
+    pub fn query_history(&self, request: &HistoryQuery) -> AppResult<HistoryPage> {
         if request.page == 0 || request.page > 1_000_000 || !(1..=100).contains(&request.page_size)
         {
             return Err(AppError::Validation(
@@ -155,7 +155,7 @@ impl Database {
         let items = statement
             .query_map(params_from_iter(page_values), summary_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(ClipPage {
+        Ok(HistoryPage {
             items,
             page: request.page,
             page_size: request.page_size,
@@ -331,7 +331,7 @@ fn conversion_error(error: impl std::error::Error + Send + Sync + 'static) -> ru
 mod tests {
     use super::*;
     use crate::{
-        clips::{Flavor, SourceApp},
+        history::{Flavor, SourceApp},
         settings::{LanguagePreference, Settings},
     };
     use chrono::Duration;
@@ -349,7 +349,7 @@ mod tests {
                 format: "text/plain".into(),
                 payload: text.as_bytes().to_vec(),
             }],
-            metadata: crate::clips::ClipMetadata {
+            metadata: crate::history::ClipMetadata {
                 char_count: Some(text.chars().count() as u64),
                 ..Default::default()
             },
@@ -368,7 +368,7 @@ mod tests {
             .unwrap();
 
         let page = database
-            .list_clips(&ListClipsRequest {
+            .query_history(&HistoryQuery {
                 query: "alpha".into(),
                 ..Default::default()
             })
@@ -390,12 +390,12 @@ mod tests {
             .unwrap();
         let newer = database.insert_clip(&sample("newer", now)).unwrap();
 
-        let page = database.list_clips(&ListClipsRequest::default()).unwrap();
+        let page = database.query_history(&HistoryQuery::default()).unwrap();
         assert_eq!(page.items[0].id, newer);
         assert_eq!(database.clear().unwrap(), 2);
         assert_eq!(
             database
-                .list_clips(&ListClipsRequest::default())
+                .query_history(&HistoryQuery::default())
                 .unwrap()
                 .total,
             0

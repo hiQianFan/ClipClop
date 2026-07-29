@@ -1,7 +1,7 @@
-mod clips;
+mod history;
 mod preview;
 mod settings;
 
-pub use clips::*;
+pub use history::*;
 pub use preview::*;
 pub use settings::*;

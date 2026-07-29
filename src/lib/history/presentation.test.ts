@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheSet, clipPreview, fileName, formatBytes, pasteFallbackMessage } from "./view";
+import { cacheSet, clipPreview, fileName, formatBytes, pasteFallbackMessage } from "./presentation";
 import { setLanguagePreference } from "$lib/i18n/index.svelte";
 
 describe("clip view helpers", () => {

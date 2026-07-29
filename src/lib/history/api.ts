@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ClipDetail, ClipPage } from "./types";
+import type { ClipDetail, HistoryPage } from "./types";
 
-export function listClips(query = "", page = 1): Promise<ClipPage> {
-  return invoke("list_clips", {
+export function queryHistory(query = "", page = 1): Promise<HistoryPage> {
+  return invoke("query_history", {
     request: { query, page, page_size: 10 },
   });
 }

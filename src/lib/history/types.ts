@@ -33,7 +33,7 @@ export type ClipDetail = ClipSummary & {
   flavors: FlavorInfo[];
 };
 
-export type ClipPage = {
+export type HistoryPage = {
   items: ClipSummary[];
   page: number;
   page_size: number;

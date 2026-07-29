@@ -1,21 +1,23 @@
 #![allow(unexpected_cfgs)] // objc 0.2 macros probe a legacy `cargo-clippy` cfg.
 
 pub mod clipboard;
-pub mod clips;
 pub mod commands;
 pub mod error;
+pub mod history;
 pub mod paste;
+pub mod preview;
 pub mod settings;
 pub mod state;
 pub mod storage;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod tray;
 pub mod window;
+pub mod workflows;
 
 use commands::{
     clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
-    get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, list_clips, open_clip,
-    open_clip_file, open_log_dir, paste_clip, quit_app, record_update_check, toggle_clip_preview,
+    get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, open_clip, open_clip_file,
+    open_log_dir, paste_clip, query_history, quit_app, record_update_check, toggle_clip_preview,
     update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
@@ -137,7 +139,12 @@ pub fn run() {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             tray::install(app, &startup_settings)?;
             log::info!("starting clipboard watcher");
-            clipboard::start_watcher(app.handle().clone())?;
+            let state = app.state::<AppState>();
+            workflows::capture::start(
+                app.handle().clone(),
+                state.history.clone(),
+                state.settings.clone(),
+            )?;
             log::info!("registering global shortcut: {startup_hotkey}");
 
             if let Err(error) = register_panel_hotkey(app.handle(), &startup_hotkey) {
@@ -151,8 +158,8 @@ pub fn run() {
                     } else {
                         startup_settings.hotkey = DEFAULT_HOTKEY.into();
                         app.state::<AppState>()
-                            .database
-                            .set_setting(SETTINGS_KEY, &startup_settings)?;
+                            .settings
+                            .set_internal(&startup_settings)?;
                     }
                 }
             }
@@ -184,7 +191,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            list_clips,
+            query_history,
             get_clip,
             get_clip_asset,
             get_clip_file_asset,
