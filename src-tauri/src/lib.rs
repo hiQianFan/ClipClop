@@ -8,6 +8,8 @@ pub mod paste;
 pub mod settings;
 pub mod state;
 pub mod storage;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod tray;
 pub mod window;
 
 use commands::{
@@ -70,7 +72,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            window::show_panel(app);
+            window::show_panel_on_main_thread(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -132,6 +134,8 @@ pub fn run() {
             app.manage(AppState::new(database));
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::PreviewState::default());
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            tray::install(app, &startup_settings)?;
             log::info!("starting clipboard watcher");
             clipboard::start_watcher(app.handle().clone())?;
             log::info!("registering global shortcut: {startup_hotkey}");

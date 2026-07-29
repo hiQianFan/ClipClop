@@ -118,6 +118,13 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
     emit_panel_shown(app);
 }
 
+pub(crate) fn show_panel_on_main_thread(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    if let Err(error) = app.run_on_main_thread(move || show_panel(&handle)) {
+        log::error!("show_panel: failed to dispatch to the main thread: {error}");
+    }
+}
+
 fn emit_panel_shown(app: &tauri::AppHandle) {
     if let Err(error) = app.emit("panel_shown", ()) {
         log::warn!("show_panel: failed to emit panel_shown: {error}");
