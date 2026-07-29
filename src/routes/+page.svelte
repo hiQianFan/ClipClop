@@ -289,7 +289,7 @@
     requestAnimationFrame(() => menuButton?.focus());
   }
 
-  async function openAppMenu() {
+  async function toggleAppMenu() {
     if (appMenuOpen) {
       closeAppMenu();
       return;
@@ -311,12 +311,10 @@
     if (appMenuOpen && !appMenuWrap?.contains(event.target)) appMenuOpen = false;
   }
 
-  function dismissMenuFromFocusOut(event: FocusEvent, menu: "actions" | "app") {
-    const next = event.relatedTarget;
-    const wrap = menu === "actions" ? menuWrap : appMenuWrap;
-    if (next instanceof Node && wrap?.contains(next)) return;
-    if (menu === "actions") menuOpen = false;
-    else appMenuOpen = false;
+  function dismissMenusFromOutsideFocus(event: FocusEvent) {
+    if (!(event.target instanceof Node)) return;
+    if (menuOpen && !menuWrap?.contains(event.target)) menuOpen = false;
+    if (appMenuOpen && !appMenuWrap?.contains(event.target)) appMenuOpen = false;
   }
 
   async function openSettingsView() {
@@ -560,14 +558,17 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
-        <div bind:this={appMenuWrap} class="app-menu-wrap" onfocusout={(event) => dismissMenuFromFocusOut(event, "app")}>
-          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")} aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void openAppMenu()}>ClipClop</button>
+        <div bind:this={appMenuWrap} class="app-menu-wrap">
+          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")} aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void toggleAppMenu()}>
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span>ClipClop</span>
+          </button>
           {#if appMenuOpen}
             <div class="menu app-menu" role="menu" tabindex="-1" aria-label={t("history.appMenu")} onkeydown={onMenuKeydown}>
               <button data-menu-item role="menuitem" onclick={() => { appMenuOpen = false; void openSettingsView(); }}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></button>
@@ -589,7 +590,7 @@
       <input bind:this={searchInput} bind:value={query} oninput={onSearch} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
       <kbd>/</kbd>
     </form>
-    <div bind:this={listbox} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
+    <div bind:this={listbox} class:full={page.items.length === page.page_size} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onkeydown={onListKeydown}>
       {#if loading && page.items.length === 0}
         <div class="empty">{t("history.loading")}</div>
       {:else if error && page.items.length === 0}
@@ -701,7 +702,7 @@
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{/if}
-      <div bind:this={menuWrap} class="menu-wrap" onfocusout={(event) => dismissMenuFromFocusOut(event, "actions")}>
+      <div bind:this={menuWrap} class="menu-wrap">
         <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label={t("history.actionMenu")} onkeydown={onMenuKeydown}>
@@ -729,8 +730,9 @@
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }
   .app-menu-wrap { position:relative; }
-  .app-menu-trigger { height:24px; padding:0 4px; border-radius:5px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; letter-spacing:.01em; }
+  .app-menu-trigger { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:5px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; letter-spacing:.01em; }
   .app-menu-trigger:hover { background:var(--bg-hover); }
+  .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
   .back { width:24px; height:24px; padding:0; border-radius:5px; color:var(--text-2); background:transparent; font-size:16px; }
   .back:hover { background:var(--bg-hover); }
   .settings-title { margin-left:7px; color:var(--text-2); font-size:12px; font-weight:600; }
@@ -739,9 +741,11 @@
   .search input { min-width:0; flex:1; border:0; outline:0; padding:0; color:var(--text-1); background:transparent; font-size:13px; }
   .search input::placeholder { color:var(--text-2); }
   kbd { font:10px/1.4 var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:4px; padding:1px 5px; white-space:nowrap; }
-  .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; }
+  .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; overflow-y:auto; }
   .list:focus-visible { outline:none; }
   .clip-item { width:100%; }
+  .list.full .clip-item:not(.expanded) { flex:1 0 44px; }
+  .list.full .clip-item:not(.expanded) .row { height:100%; }
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
   .list:focus .row.selected { background:var(--bg-selected); }
