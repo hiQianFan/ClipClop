@@ -1,53 +1,62 @@
 use tauri::{AppHandle, State};
 
-use crate::{error::AppResult, preview::PreviewResource, state::AppState, window::PreviewState};
+use crate::{
+    error::AppResult,
+    preview::PreviewResource,
+    state::AppState,
+    window::PreviewState,
+    workflows::preview_clip::{self, PreviewOutcome},
+};
 
 #[tauri::command]
-pub fn get_clip_asset(state: State<'_, AppState>, id: String) -> AppResult<PreviewResource> {
-    state.preview.asset(&id)
+pub async fn get_clip_asset(state: State<'_, AppState>, id: String) -> AppResult<PreviewResource> {
+    let preview = state.preview.clone();
+    run_blocking(move || preview.asset(&id)).await
 }
 
 #[tauri::command]
-pub fn get_clip_file_asset(
+pub async fn get_clip_file_asset(
     state: State<'_, AppState>,
     id: String,
     index: usize,
 ) -> AppResult<PreviewResource> {
-    state.preview.file_asset(&id, index)
+    let preview = state.preview.clone();
+    run_blocking(move || preview.file_asset(&id, index)).await
 }
 
 #[tauri::command]
-pub fn get_clip_thumbnail(state: State<'_, AppState>, id: String) -> AppResult<PreviewResource> {
-    state.preview.thumbnail(&id)
-}
-
-#[tauri::command]
-pub fn open_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
-    state.preview.open_clip(&app, &id)
-}
-
-#[tauri::command]
-pub fn open_clip_file(
-    app: AppHandle,
+pub async fn get_clip_thumbnail(
     state: State<'_, AppState>,
     id: String,
-    index: usize,
-) -> AppResult<()> {
-    state.preview.open_clip_file(&app, &id, index)
+) -> AppResult<PreviewResource> {
+    let preview = state.preview.clone();
+    run_blocking(move || preview.thumbnail(&id)).await
 }
 
 #[tauri::command]
-pub fn toggle_clip_preview(
+pub fn preview_clip(
     app: AppHandle,
     state: State<'_, AppState>,
     preview_state: State<'_, PreviewState>,
     id: String,
     index: usize,
-) -> AppResult<bool> {
-    state.preview.toggle(&app, &preview_state, &id, index)
+) -> AppResult<PreviewOutcome> {
+    preview_clip::preview(&app, &preview_state, &state.preview, &id, index)
 }
 
 #[tauri::command]
-pub fn get_source_app_icon(state: State<'_, AppState>, app_id: String) -> PreviewResource {
-    state.preview.source_app_icon(&app_id)
+pub async fn get_source_app_icon(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<PreviewResource> {
+    let preview = state.preview.clone();
+    run_blocking(move || preview.source_app_icon(&id)).await
+}
+
+async fn run_blocking<T: Send + 'static>(
+    operation: impl FnOnce() -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    tauri::async_runtime::spawn_blocking(operation)
+        .await
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?
 }

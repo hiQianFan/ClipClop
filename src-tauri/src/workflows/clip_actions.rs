@@ -10,12 +10,8 @@ pub fn delete_clip(
     preview: &PreviewService,
     id: &str,
 ) -> AppResult<()> {
-    persist_then_cleanup(
-        || history.delete(id),
-        || preview.delete_cached(app, id),
-        "delete",
-        id,
-    )
+    let _guard = preview.lock_lifecycle()?;
+    cleanup_then_persist(|| preview.delete_cached(app, id), || history.delete(id))
 }
 
 pub fn clear_history(
@@ -23,29 +19,20 @@ pub fn clear_history(
     history: &HistoryService,
     preview: &PreviewService,
 ) -> AppResult<u64> {
-    persist_then_cleanup(
-        || history.clear(),
-        || preview.clear_cached(app),
-        "clear",
-        "history",
-    )
+    let _guard = preview.lock_lifecycle()?;
+    cleanup_then_persist(|| preview.clear_cached(app), || history.clear())
 }
 
 pub fn copy_clip(history: &HistoryService, id: &str, plain_text_only: bool) -> AppResult<()> {
     SystemClipboard::write(history.flavors(id)?, plain_text_only)
 }
 
-fn persist_then_cleanup<T>(
-    persist: impl FnOnce() -> AppResult<T>,
+fn cleanup_then_persist<T>(
     cleanup: impl FnOnce() -> AppResult<()>,
-    action: &str,
-    target: &str,
+    persist: impl FnOnce() -> AppResult<T>,
 ) -> AppResult<T> {
-    let value = persist()?;
-    if let Err(error) = cleanup() {
-        log::warn!("failed to {action} cached preview for {target}: {error}");
-    }
-    Ok(value)
+    cleanup()?;
+    persist()
 }
 
 #[cfg(test)]
@@ -55,21 +42,19 @@ mod tests {
     use std::cell::RefCell;
 
     #[test]
-    fn persistence_precedes_best_effort_cache_cleanup() {
+    fn cleanup_failure_preserves_persisted_history() {
         let order = RefCell::new(Vec::new());
-        let result = persist_then_cleanup(
-            || {
-                order.borrow_mut().push("persist");
-                Ok(7)
-            },
+        let result = cleanup_then_persist(
             || {
                 order.borrow_mut().push("cleanup");
                 Err(AppError::Platform("cache unavailable".into()))
             },
-            "delete",
-            "clip",
+            || {
+                order.borrow_mut().push("persist");
+                Ok(7)
+            },
         );
-        assert_eq!(result.unwrap(), 7);
-        assert_eq!(*order.borrow(), ["persist", "cleanup"]);
+        assert!(result.is_err());
+        assert_eq!(*order.borrow(), ["cleanup"]);
     }
 }

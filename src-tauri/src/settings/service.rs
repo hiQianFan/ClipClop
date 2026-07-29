@@ -1,17 +1,24 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use crate::{error::AppResult, storage::Database};
+use crate::{
+    error::{AppError, AppResult},
+    storage::Database,
+};
 
 use super::{Settings, SETTINGS_KEY};
 
 #[derive(Clone)]
 pub struct SettingsService {
     database: Arc<Database>,
+    mutation: Arc<Mutex<()>>,
 }
 
 impl SettingsService {
     pub fn new(database: Arc<Database>) -> Self {
-        Self { database }
+        Self {
+            database,
+            mutation: Arc::new(Mutex::new(())),
+        }
     }
 
     pub fn get_stored(&self) -> AppResult<Settings> {
@@ -19,6 +26,7 @@ impl SettingsService {
     }
 
     pub fn set_internal(&self, settings: &Settings) -> AppResult<()> {
+        let _guard = self.lock_mutation()?;
         self.database.set_setting(SETTINGS_KEY, settings)
     }
 
@@ -32,6 +40,7 @@ impl SettingsService {
     }
 
     pub fn record_update_check(&self) -> AppResult<String> {
+        let _guard = self.lock_mutation()?;
         let checked_at = chrono::Utc::now().to_rfc3339();
         self.database
             .update_setting(SETTINGS_KEY, |settings: &mut Settings| {
@@ -39,11 +48,18 @@ impl SettingsService {
             })?;
         Ok(checked_at)
     }
+
+    pub fn lock_mutation(&self) -> AppResult<MutexGuard<'_, ()>> {
+        self.mutation
+            .lock()
+            .map_err(|_| AppError::Platform("settings mutation lock poisoned".into()))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{sync::mpsc, thread, time::Duration};
 
     #[test]
     fn stored_settings_and_update_check_share_one_persistence_boundary() {
@@ -58,5 +74,23 @@ mod tests {
         settings.last_update_check = Some(checked_at);
 
         assert_eq!(service.get_stored().unwrap(), settings);
+    }
+
+    #[test]
+    fn update_check_waits_for_an_active_settings_mutation() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let guard = service.lock_mutation().unwrap();
+        let worker = service.clone();
+        let (sent, received) = mpsc::channel();
+        thread::spawn(move || {
+            sent.send(worker.record_update_check()).unwrap();
+        });
+
+        assert!(received.recv_timeout(Duration::from_millis(20)).is_err());
+        drop(guard);
+        assert!(received
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .is_ok());
     }
 }

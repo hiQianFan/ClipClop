@@ -18,17 +18,16 @@ pub fn update(
     service: &SettingsService,
     mut settings: Settings,
 ) -> AppResult<Settings> {
+    let _guard = service.lock_mutation()?;
     validate(&settings)?;
 
     let previous = service.get_stored()?;
+    let autostart = app.autolaunch();
+    let previous_autostart = autostart
+        .is_enabled()
+        .map_err(|error| AppError::Platform(format!("failed to read autostart state: {error}")))?;
     let hotkey_changed = previous.hotkey != settings.hotkey;
     let registered_new_hotkey = hotkey_changed && prepare_hotkey(app, &settings.hotkey)?;
-
-    let autostart = app.autolaunch();
-    let previous_autostart = autostart.is_enabled().unwrap_or_else(|error| {
-        log::warn!("failed to read autostart state before settings update: {error}");
-        false
-    });
     let changed_autostart = previous_autostart != settings.launch_at_login;
     if changed_autostart {
         let result = if settings.launch_at_login {
@@ -38,37 +37,62 @@ pub fn update(
         };
         if let Err(error) = result {
             log::warn!("failed to update autostart state: {error}");
-            cleanup_prepared_hotkey(app, &settings.hotkey, registered_new_hotkey);
-            return Err(AppError::Platform(error.to_string()));
+            let original = AppError::Platform(error.to_string());
+            return Err(with_compensation(
+                original,
+                compensate(
+                    app,
+                    &settings.hotkey,
+                    registered_new_hotkey,
+                    Some(previous_autostart),
+                ),
+            ));
         }
     }
 
-    let committed_autostart = autostart.is_enabled().unwrap_or_else(|error| {
-        log::warn!("failed to read autostart state after settings update: {error}");
-        settings.launch_at_login
-    });
+    let committed_autostart = match autostart.is_enabled() {
+        Ok(value) => value,
+        Err(error) => {
+            let original = AppError::Platform(format!("failed to verify autostart state: {error}"));
+            return Err(with_compensation(
+                original,
+                compensate(
+                    app,
+                    &settings.hotkey,
+                    registered_new_hotkey,
+                    changed_autostart.then_some(previous_autostart),
+                ),
+            ));
+        }
+    };
     if committed_autostart != settings.launch_at_login {
-        cleanup_prepared_hotkey(app, &settings.hotkey, registered_new_hotkey);
-        return Err(AppError::Platform(
-            "autostart state did not match requested value".into(),
+        let original = AppError::Platform("autostart state did not match requested value".into());
+        return Err(with_compensation(
+            original,
+            compensate(
+                app,
+                &settings.hotkey,
+                registered_new_hotkey,
+                changed_autostart.then_some(previous_autostart),
+            ),
         ));
     }
     settings.launch_at_login = committed_autostart;
 
-    let saved = service.update_preserving_check_time(settings.clone());
-    if saved.is_err() && changed_autostart {
-        let rollback = if previous_autostart {
-            autostart.enable()
-        } else {
-            autostart.disable()
-        };
-        if let Err(error) = rollback {
-            log::warn!("failed to restore autostart after settings write failure: {error}");
-        }
-        cleanup_prepared_hotkey(app, &settings.hotkey, registered_new_hotkey);
-    } else if saved.is_err() {
-        cleanup_prepared_hotkey(app, &settings.hotkey, registered_new_hotkey);
-    } else if hotkey_changed
+    let saved = service
+        .update_preserving_check_time(settings.clone())
+        .map_err(|error| {
+            with_compensation(
+                error,
+                compensate(
+                    app,
+                    &settings.hotkey,
+                    registered_new_hotkey,
+                    changed_autostart.then_some(previous_autostart),
+                ),
+            )
+        })?;
+    if hotkey_changed
         && app
             .global_shortcut()
             .is_registered(previous.hotkey.as_str())
@@ -78,7 +102,25 @@ pub fn update(
             log::warn!("failed to unregister previous global shortcut: {error}");
         }
     }
-    saved
+    Ok(saved)
+}
+
+pub fn reconcile_autostart(app: &AppHandle, service: &SettingsService) -> AppResult<()> {
+    let _guard = service.lock_mutation()?;
+    let expected = service.get_stored()?.launch_at_login;
+    let autostart = app.autolaunch();
+    let actual = autostart
+        .is_enabled()
+        .map_err(|error| AppError::Platform(format!("failed to read autostart state: {error}")))?;
+    if actual == expected {
+        return Ok(());
+    }
+    if expected {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    }
+    .map_err(|error| AppError::Platform(format!("failed to reconcile autostart: {error}")))
 }
 
 fn validate(settings: &Settings) -> AppResult<()> {
@@ -119,10 +161,36 @@ fn prepare_hotkey(app: &AppHandle, next: &str) -> AppResult<bool> {
     Ok(true)
 }
 
-fn cleanup_prepared_hotkey(app: &AppHandle, hotkey: &str, registered: bool) {
-    if registered {
-        if let Err(error) = app.global_shortcut().unregister(hotkey) {
-            log::warn!("failed to clean up prepared global shortcut: {error}");
+fn compensate(
+    app: &AppHandle,
+    hotkey: &str,
+    registered: bool,
+    restore_autostart: Option<bool>,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    if let Some(enabled) = restore_autostart {
+        let result = if enabled {
+            app.autolaunch().enable()
+        } else {
+            app.autolaunch().disable()
+        };
+        if let Err(error) = result {
+            failures.push(format!("autostart rollback: {error}"));
         }
     }
+    if registered {
+        if let Err(error) = app.global_shortcut().unregister(hotkey) {
+            failures.push(format!("shortcut rollback: {error}"));
+        }
+    }
+    failures
+}
+
+fn with_compensation(original: AppError, failures: Vec<String>) -> AppError {
+    if failures.is_empty() {
+        return original;
+    }
+    let diagnostic = format!("{original}; compensation failed: {}", failures.join("; "));
+    log::error!("{diagnostic}");
+    AppError::Platform(diagnostic)
 }

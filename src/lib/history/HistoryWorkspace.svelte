@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { copyClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, openClip, openClipFile, pasteClip, toggleClipPreview } from "$lib/history/api";
+  import { copyClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, pasteClip, previewClip } from "$lib/history/api";
   import type { ClipSummary } from "$lib/history/types";
   import { cacheSet, canExpand, errorMessage, filePaths, pasteFallbackMessage } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
@@ -148,7 +148,7 @@
     if (next.source_app) {
           const cachedIcon = sourceIconCache.get(next.source_app.id);
           if (cachedIcon !== undefined) sourceIconUrl = cachedIcon;
-          else getSourceAppIcon(next.source_app.id).then((icon) => {
+          else getSourceAppIcon(id).then((icon) => {
             cacheSet(sourceIconCache, next.source_app!.id, icon.data_url);
             if (version === requestVersion) sourceIconUrl = icon.data_url;
           }).catch(() => cacheSet(sourceIconCache, next.source_app!.id, null));
@@ -226,11 +226,7 @@
   async function viewSelectedClip() {
     if (!session.selectedId) return;
     try {
-      const openedSystemPreview = await toggleClipPreview(session.selectedId, fileIndex);
-      if (!openedSystemPreview) {
-        if (session.detail?.content_type === "file") await openClipFile(session.selectedId, fileIndex);
-        else await openClip(session.selectedId);
-      }
+      await previewClip(session.selectedId, fileIndex);
     }
     catch (reason) { error = errorMessage(reason); }
     menuOpen = false;

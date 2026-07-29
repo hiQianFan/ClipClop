@@ -1,6 +1,10 @@
 mod platform;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -15,6 +19,8 @@ use crate::{
 #[derive(Clone)]
 pub struct PreviewService {
     history: HistoryService,
+    icon_cache: Arc<Mutex<HashMap<String, Option<String>>>>,
+    lifecycle: Arc<Mutex<()>>,
 }
 
 #[derive(Serialize)]
@@ -25,7 +31,11 @@ pub struct PreviewResource {
 
 impl PreviewService {
     pub fn new(history: HistoryService) -> Self {
-        Self { history }
+        Self {
+            history,
+            icon_cache: Arc::new(Mutex::new(HashMap::new())),
+            lifecycle: Arc::new(Mutex::new(())),
+        }
     }
 
     pub fn asset(&self, id: &str) -> AppResult<PreviewResource> {
@@ -61,11 +71,26 @@ impl PreviewService {
         })
     }
 
-    pub fn source_app_icon(&self, app_id: &str) -> PreviewResource {
-        PreviewResource {
-            data_url: platform::source_app_icon(app_id),
+    pub fn source_app_icon(&self, id: &str) -> AppResult<PreviewResource> {
+        let detail = self.history.get_full(id)?;
+        let Some(source) = detail.summary.source_app else {
+            return Ok(PreviewResource {
+                data_url: None,
+                byte_size: None,
+            });
+        };
+        let mut cache = self
+            .icon_cache
+            .lock()
+            .map_err(|_| AppError::Platform("preview icon cache lock poisoned".into()))?;
+        let data_url = cache
+            .entry(source.id.clone())
+            .or_insert_with(|| platform::source_app_icon(&source.id))
+            .clone();
+        Ok(PreviewResource {
+            data_url,
             byte_size: None,
-        }
+        })
     }
 
     pub fn open_clip(&self, app: &AppHandle, id: &str) -> AppResult<()> {
@@ -90,12 +115,13 @@ impl PreviewService {
                     .find(|flavor| flavor.format == "image/png")
                     .ok_or(AppError::NotFound)?;
                 let path = preview_path(app, id, "png")?;
-                write_preview(&path, &png.payload)?;
+                self.publish_preview(id, &path, &png.payload)?;
                 open_path(app, path)
             }
             ContentType::Text | ContentType::Color | ContentType::Code => {
                 let path = preview_path(app, id, "txt")?;
-                write_preview(
+                self.publish_preview(
+                    id,
                     &path,
                     detail
                         .plain_text
@@ -141,6 +167,21 @@ impl PreviewService {
         }
     }
 
+    pub fn lock_lifecycle(&self) -> AppResult<MutexGuard<'_, ()>> {
+        self.lifecycle
+            .lock()
+            .map_err(|_| AppError::Platform("preview lifecycle lock poisoned".into()))
+    }
+
+    fn publish_preview(&self, id: &str, path: &Path, bytes: &[u8]) -> AppResult<()> {
+        let _guard = self.lock_lifecycle()?;
+        self.history.get_full(id)?;
+        if path.is_file() {
+            return Ok(());
+        }
+        write_preview(path, bytes)
+    }
+
     fn open_file(&self, app: &AppHandle, detail: &ClipDetail, index: usize) -> AppResult<()> {
         let path = file_path_at(detail, index)
             .map(normalized_path)
@@ -171,12 +212,13 @@ impl PreviewService {
                     .find(|flavor| flavor.format == "image/png")
                     .ok_or(AppError::NotFound)?;
                 let path = preview_path(app, id, "png")?;
-                write_preview(&path, &png.payload)?;
+                self.publish_preview(id, &path, &png.payload)?;
                 Ok(path)
             }
             ContentType::Text | ContentType::Color | ContentType::Code | ContentType::Link => {
                 let path = preview_path(app, id, "txt")?;
-                write_preview(
+                self.publish_preview(
+                    id,
                     &path,
                     detail
                         .plain_text
@@ -221,7 +263,9 @@ fn delete_cached_previews_in(dir: &Path, id: &str) -> AppResult<()> {
 }
 
 fn write_preview(path: &Path, bytes: &[u8]) -> AppResult<()> {
-    std::fs::write(path, bytes).map_err(|error| AppError::Platform(error.to_string()))
+    let temporary = path.with_extension("tmp");
+    std::fs::write(&temporary, bytes).map_err(|error| AppError::Platform(error.to_string()))?;
+    std::fs::rename(&temporary, path).map_err(|error| AppError::Platform(error.to_string()))
 }
 
 fn file_path(detail: &ClipDetail) -> Option<&str> {
@@ -244,6 +288,8 @@ fn normalized_path(path: &str) -> PathBuf {
 mod tests {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
+    use chrono::Utc;
+    use std::sync::Arc;
 
     #[test]
     fn preview_derivation_and_cache_cleanup_preserve_shapes() {
@@ -272,5 +318,33 @@ mod tests {
         assert!(!temp.path().join("selected.png").exists());
         assert!(!temp.path().join("selected.txt").exists());
         assert!(temp.path().join("other.png").exists());
+    }
+
+    #[test]
+    fn source_icon_rejects_unknown_clip_and_accepts_missing_source() {
+        let history = HistoryService::new(Arc::new(crate::storage::Database::in_memory().unwrap()));
+        let preview = PreviewService::new(history.clone());
+        assert!(matches!(
+            preview.source_app_icon("missing"),
+            Err(AppError::NotFound)
+        ));
+
+        let id = history
+            .capture(&crate::history::NewClip {
+                content_type: ContentType::Text,
+                plain_text: Some("text".into()),
+                preview: "text".into(),
+                source_app: None,
+                flavors: vec![crate::history::Flavor {
+                    format: "text/plain".into(),
+                    payload: b"text".to_vec(),
+                }],
+                metadata: Default::default(),
+                content_hash: "icon-test".into(),
+                created_at: Utc::now(),
+            })
+            .unwrap()
+            .unwrap();
+        assert!(preview.source_app_icon(&id).unwrap().data_url.is_none());
     }
 }

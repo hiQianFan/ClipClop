@@ -16,9 +16,8 @@ pub mod workflows;
 
 use commands::{
     clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
-    get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, open_clip, open_clip_file,
-    open_log_dir, paste_clip, query_history, quit_app, record_update_check, toggle_clip_preview,
-    update_settings,
+    get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, open_log_dir, paste_clip,
+    preview_clip, query_history, quit_app, record_update_check, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -136,6 +135,12 @@ pub fn run() {
             app.manage(AppState::new(database));
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::PreviewState::default());
+            if let Err(error) = workflows::settings_update::reconcile_autostart(
+                app.handle(),
+                &app.state::<AppState>().settings,
+            ) {
+                log::error!("failed to reconcile persisted autostart state: {error}");
+            }
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             tray::install(app, &startup_settings)?;
             log::info!("starting clipboard watcher");
@@ -196,9 +201,7 @@ pub fn run() {
             get_clip_asset,
             get_clip_file_asset,
             get_clip_thumbnail,
-            open_clip,
-            open_clip_file,
-            toggle_clip_preview,
+            preview_clip,
             get_source_app_icon,
             hide_panel,
             delete_clip,

@@ -23,20 +23,18 @@ export function getClipThumbnail(id: string): Promise<{ data_url: string | null;
   return invoke("get_clip_thumbnail", { id });
 }
 
-export function openClip(id: string): Promise<void> {
-  return invoke("open_clip", { id });
+export type PreviewOutcome =
+  | "native_opened"
+  | "native_closed"
+  | "fallback_opened"
+  | "not_previewable";
+
+export function previewClip(id: string, index = 0): Promise<PreviewOutcome> {
+  return invoke("preview_clip", { id, index });
 }
 
-export function openClipFile(id: string, index: number): Promise<void> {
-  return invoke("open_clip_file", { id, index });
-}
-
-export function toggleClipPreview(id: string, index = 0): Promise<boolean> {
-  return invoke("toggle_clip_preview", { id, index });
-}
-
-export function getSourceAppIcon(appId: string): Promise<{ data_url: string | null; byte_size: number | null }> {
-  return invoke("get_source_app_icon", { appId });
+export function getSourceAppIcon(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
+  return invoke("get_source_app_icon", { id });
 }
 
 export function hidePanel(): Promise<void> {
