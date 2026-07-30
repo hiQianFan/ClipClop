@@ -85,7 +85,13 @@ impl PreviewService {
             .map_err(|_| AppError::Platform("preview icon cache lock poisoned".into()))?;
         let data_url = cache
             .entry(source.id.clone())
-            .or_insert_with(|| platform::source_app_icon(&source.id))
+            .or_insert_with(|| {
+                let icon = platform::source_app_icon(&source.id);
+                if icon.is_none() {
+                    log::warn!("source icon unavailable for {}", source.id);
+                }
+                icon
+            })
             .clone();
         Ok(PreviewResource {
             data_url,
@@ -155,6 +161,10 @@ impl PreviewService {
         platform::toggle_quicklook(app, state, &path)
     }
 
+    pub fn close_native(&self, app: &AppHandle, state: &PreviewState) -> AppResult<()> {
+        platform::close_quicklook(app, state)
+    }
+
     pub fn delete_cached(&self, app: &AppHandle, id: &str) -> AppResult<()> {
         delete_cached_previews_in(&cached_preview_dir(app)?, id)
     }
@@ -174,12 +184,21 @@ impl PreviewService {
     }
 
     fn publish_preview(&self, id: &str, path: &Path, bytes: &[u8]) -> AppResult<()> {
+        let temporary = write_preview_temp(path, bytes)?;
         let _guard = self.lock_lifecycle()?;
-        self.history.get_full(id)?;
+        if let Err(error) = self.history.get_full(id) {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
         if path.is_file() {
+            let _ = std::fs::remove_file(&temporary);
             return Ok(());
         }
-        write_preview(path, bytes)
+        if let Err(error) = std::fs::rename(&temporary, path) {
+            let _ = std::fs::remove_file(temporary);
+            return Err(AppError::Platform(error.to_string()));
+        }
+        Ok(())
     }
 
     fn open_file(&self, app: &AppHandle, detail: &ClipDetail, index: usize) -> AppResult<()> {
@@ -262,10 +281,10 @@ fn delete_cached_previews_in(dir: &Path, id: &str) -> AppResult<()> {
     Ok(())
 }
 
-fn write_preview(path: &Path, bytes: &[u8]) -> AppResult<()> {
-    let temporary = path.with_extension("tmp");
+fn write_preview_temp(path: &Path, bytes: &[u8]) -> AppResult<PathBuf> {
+    let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::now_v7()));
     std::fs::write(&temporary, bytes).map_err(|error| AppError::Platform(error.to_string()))?;
-    std::fs::rename(&temporary, path).map_err(|error| AppError::Platform(error.to_string()))
+    Ok(temporary)
 }
 
 fn file_path(detail: &ClipDetail) -> Option<&str> {
@@ -346,5 +365,48 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(preview.source_app_icon(&id).unwrap().data_url.is_none());
+    }
+
+    #[test]
+    fn generation_cannot_publish_after_delete_or_clear_wins_the_lifecycle_guard() {
+        for clear in [false, true] {
+            let history =
+                HistoryService::new(Arc::new(crate::storage::Database::in_memory().unwrap()));
+            let preview = PreviewService::new(history.clone());
+            let id = history
+                .capture(&crate::history::NewClip {
+                    content_type: ContentType::Text,
+                    plain_text: Some("text".into()),
+                    preview: "text".into(),
+                    source_app: None,
+                    flavors: vec![],
+                    metadata: Default::default(),
+                    content_hash: format!("race-{clear}"),
+                    created_at: Utc::now(),
+                })
+                .unwrap()
+                .unwrap();
+            let temp = tempfile::tempdir().unwrap();
+            let path = temp.path().join(format!("{id}.txt"));
+
+            let guard = preview.lock_lifecycle().unwrap();
+            let worker = preview.clone();
+            let worker_id = id.clone();
+            let worker_path = path.clone();
+            let generation =
+                std::thread::spawn(move || worker.publish_preview(&worker_id, &worker_path, b"x"));
+            if clear {
+                history.clear().unwrap();
+            } else {
+                history.delete(&id).unwrap();
+            }
+            drop(guard);
+
+            assert!(matches!(
+                generation.join().unwrap(),
+                Err(AppError::NotFound)
+            ));
+            assert!(!path.exists());
+        }
     }
 }

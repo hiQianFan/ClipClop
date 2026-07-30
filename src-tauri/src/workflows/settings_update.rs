@@ -9,7 +9,10 @@ use crate::{
 
 pub fn get(app: &AppHandle, service: &SettingsService) -> AppResult<Settings> {
     let mut settings = service.get_stored()?;
-    settings.launch_at_login = app.autolaunch().is_enabled().unwrap_or(false);
+    settings.launch_at_login = app
+        .autolaunch()
+        .is_enabled()
+        .map_err(|error| AppError::Platform(format!("failed to read autostart state: {error}")))?;
     Ok(settings)
 }
 
@@ -99,7 +102,21 @@ pub fn update(
     {
         // Saved state is committed before the old shortcut is removed.
         if let Err(error) = app.global_shortcut().unregister(previous.hotkey.as_str()) {
-            log::warn!("failed to unregister previous global shortcut: {error}");
+            let mut failures = compensate(
+                app,
+                &settings.hotkey,
+                registered_new_hotkey,
+                changed_autostart.then_some(previous_autostart),
+            );
+            if let Err(restore_error) = service.update_preserving_check_time(previous) {
+                failures.push(format!("settings rollback: {restore_error}"));
+            }
+            return Err(with_compensation(
+                AppError::Platform(format!(
+                    "failed to unregister previous global shortcut: {error}"
+                )),
+                failures,
+            ));
         }
     }
     Ok(saved)

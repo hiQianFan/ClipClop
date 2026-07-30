@@ -1,7 +1,7 @@
 <script lang="ts">
   import { File } from "@lucide/svelte";
-  import { formatNumber, t } from "$lib/i18n/index.svelte";
-  import { clipPreview, exactTime, fileName, filePaths, metadataFacts } from "./presentation";
+  import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
+  import { clipPreview, fileName, filePaths, metadataFacts } from "./presentation";
   import type { ClipDetail, HistoryPage } from "./types";
 
   let {
@@ -57,7 +57,7 @@
         <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
         <div class="file-strip" role="tablist" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
           {#each filePaths(detail) as path, index}
-            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path) })} title={fileName(path)} onclick={() => onfile(index)} onfocus={onfilefocus} onkeydown={onfilekeydown}>
+            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path, t("meta.file")) })} title={fileName(path, t("meta.file"))} onclick={() => onfile(index)} onfocus={onfilefocus} onkeydown={onfilekeydown}>
               {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
               {:else}<File size={16} aria-hidden="true" />{/if}
             </button>
@@ -70,7 +70,7 @@
     <div class="preview-meta">
       {#if detail.content_type === "file"}
         <div class="meta-file">
-          <span title={filePaths(detail)[fileIndex] ?? detail.preview}>{fileName(filePaths(detail)[fileIndex] ?? detail.preview)}</span>
+          <span title={filePaths(detail)[fileIndex] ?? detail.preview}>{fileName(filePaths(detail)[fileIndex] ?? detail.preview, t("meta.file"))}</span>
           {#if filePaths(detail)[fileIndex]}<code title={filePaths(detail)[fileIndex]}>{filePaths(detail)[fileIndex]}</code>{/if}
         </div>
       {/if}
@@ -79,20 +79,20 @@
           {#if detail.source_app}
             {#if sourceIconUrl}<img class="app-icon" src={sourceIconUrl} alt="" />
             {:else}<span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>{/if}
-            <div class="source-details"><span>{detail.source_app.name}</span><time>{exactTime(detail.created_at)}</time></div>
+            <div class="source-details"><span>{detail.source_app.name}</span><time>{formatDateTime(detail.created_at)}</time></div>
           {:else}
-            <div class="source-details"><time>{exactTime(detail.created_at)}</time></div>
+            <div class="source-details"><time>{formatDateTime(detail.created_at)}</time></div>
           {/if}
         </div>
         <dl class="meta-facts">
-          {#each metadataFacts(detail, fileIndex) as fact}
+          {#each metadataFacts(detail, fileIndex, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), characters: t("meta.characters") }, formatNumber) as fact}
             <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
           {/each}
         </dl>
       </div>
     </div>
   {:else if selectedId}
-    <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!) : ""}</pre></div>
+    <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!, t("meta.file")) : ""}</pre></div>
   {:else}
     <div class="empty">{t("history.select")}</div>
   {/if}

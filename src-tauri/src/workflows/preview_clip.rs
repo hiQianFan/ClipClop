@@ -24,8 +24,7 @@ pub fn preview(
     index: usize,
 ) -> AppResult<PreviewOutcome> {
     if state.is_active() {
-        service.toggle(app, state, id, index)?;
-        state.set_active(false);
+        service.close_native(app, state)?;
         return Ok(PreviewOutcome::NativeClosed);
     }
     if service.toggle(app, state, id, index)? {

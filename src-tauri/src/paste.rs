@@ -1,7 +1,7 @@
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     thread,
     time::{Duration, Instant},
@@ -34,16 +34,17 @@ enum PasteTarget {
     Windows { hwnd: isize, pid: u32 },
 }
 
+#[derive(Clone)]
 pub struct PasteController {
-    target: Mutex<Option<PasteTarget>>,
-    in_flight: AtomicBool,
+    target: Arc<Mutex<Option<PasteTarget>>>,
+    in_flight: Arc<AtomicBool>,
 }
 
 impl Default for PasteController {
     fn default() -> Self {
         Self {
-            target: Mutex::new(None),
-            in_flight: AtomicBool::new(false),
+            target: Arc::new(Mutex::new(None)),
+            in_flight: Arc::new(AtomicBool::new(false)),
         }
     }
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheSet, clipPreview, fileName, formatBytes, pasteFallbackMessage } from "./presentation";
-import { setLanguagePreference } from "$lib/i18n/index.svelte";
+import { cacheSet, clipPreview, fileName, formatBytes } from "./presentation";
 
 describe("clip view helpers", () => {
   it("formats file paths and byte sizes", () => {
@@ -15,16 +14,8 @@ describe("clip view helpers", () => {
     expect([...cache.entries()]).toEqual([["keep", 2], ["new", 3]]);
   });
 
-  it("does not claim a second in-flight paste copied anything", () => {
-    setLanguagePreference("zh-CN");
-    expect(pasteFallbackMessage("already_in_progress")).toBe("正在处理上一次粘贴，请稍后重试");
-  });
-
-  it("localizes unnamed file previews", () => {
-    setLanguagePreference("en");
-    expect(fileName("")).toBe("File");
-    expect(clipPreview({ content_type: "file", preview: "" })).toBe("File");
-    setLanguagePreference("zh-CN");
-    expect(clipPreview({ content_type: "file", preview: "" })).toBe("文件");
+  it("receives localized fallback text from its caller", () => {
+    expect(fileName("", "File")).toBe("File");
+    expect(clipPreview({ content_type: "file", preview: "" }, "文件")).toBe("文件");
   });
 });

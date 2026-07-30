@@ -245,6 +245,13 @@ impl Database {
         Ok(changed as u64)
     }
 
+    pub fn ids_older_than(&self, cutoff: DateTime<Utc>) -> AppResult<Vec<String>> {
+        let connection = self.connection()?;
+        let mut statement = connection.prepare("SELECT id FROM clips WHERE created_at < ?1")?;
+        let rows = statement.query_map([cutoff.to_rfc3339()], |row| row.get(0))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     pub fn get_setting<T: serde::de::DeserializeOwned>(&self, key: &str) -> AppResult<Option<T>> {
         let json: Option<String> = self
             .connection()?

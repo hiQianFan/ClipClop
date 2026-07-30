@@ -8,6 +8,7 @@ export type HistorySessionApi = {
 };
 
 const defaultApi: HistorySessionApi = { queryHistory, getClip, deleteClip };
+export type PreviewResource = { data_url: string | null; byte_size: number | null };
 const emptyPage = (page = 1): HistoryPage => ({
   items: [],
   page,
@@ -27,8 +28,13 @@ export class HistorySession {
 
   #api: HistorySessionApi;
   #details = new Map<string, ClipDetail>();
+  #assets = new Map<string, PreviewResource>();
+  #thumbnails = new Map<string, string>();
+  #sourceIcons = new Map<string, string | null>();
   #refreshVersion = 0;
   #detailVersion = 0;
+  #resourceVersion = 0;
+  #thumbnailVersion = 0;
 
   constructor(api: HistorySessionApi = defaultApi) {
     this.#api = api;
@@ -39,8 +45,19 @@ export class HistorySession {
     this.loading = true;
     this.errorReason = null;
     try {
-      const nextPage = await this.#api.queryHistory(this.query, targetPage);
+      let nextPage = await this.#api.queryHistory(this.query, targetPage);
       if (version !== this.#refreshVersion) return false;
+      if (
+        nextPage.items.length === 0
+        && targetPage > 1
+        && nextPage.total_pages < targetPage
+      ) {
+        nextPage = await this.#api.queryHistory(
+          this.query,
+          Math.max(1, nextPage.total_pages),
+        );
+        if (version !== this.#refreshVersion) return false;
+      }
       this.page = nextPage;
       const nextId = !selectLatest && nextPage.items.some(({ id }) => id === this.selectedId)
         ? this.selectedId
@@ -66,7 +83,10 @@ export class HistorySession {
     try {
       const detail = this.#details.get(id) ?? await this.#api.getClip(id);
       this.#details.set(id, detail);
-      if (version === this.#detailVersion) this.detail = detail;
+      if (version === this.#detailVersion) {
+        this.detail = detail;
+        this.errorReason = null;
+      }
     } catch (reason) {
       if (version === this.#detailVersion) this.errorReason = reason;
     } finally {
@@ -90,6 +110,40 @@ export class HistorySession {
   }
 
   clearCaches() {
+    ++this.#resourceVersion;
+    ++this.#thumbnailVersion;
     this.#details.clear();
+    this.#assets.clear();
+    this.#thumbnails.clear();
+    this.#sourceIcons.clear();
   }
+
+  evict(id: string) {
+    this.#details.delete(id);
+    this.#thumbnails.delete(id);
+    for (const key of this.#assets.keys()) {
+      if (key.startsWith(`${id}:`)) this.#assets.delete(key);
+    }
+  }
+
+  beginResourceRequest() { return ++this.#resourceVersion; }
+  currentResourceRequest() { return this.#resourceVersion; }
+  isCurrentResourceRequest(version: number) { return version === this.#resourceVersion; }
+  beginThumbnailRequest() { return ++this.#thumbnailVersion; }
+  isCurrentThumbnailRequest(version: number) { return version === this.#thumbnailVersion; }
+  asset(key: string) { return this.#assets.get(key); }
+  cacheAsset(key: string, value: PreviewResource) { cacheSet(this.#assets, key, value); }
+  thumbnail(id: string) { return this.#thumbnails.get(id); }
+  cacheThumbnail(id: string, value: string) { cacheSet(this.#thumbnails, id, value); }
+  sourceIcon(id: string) { return this.#sourceIcons.get(id); }
+  hasSourceIcon(id: string) { return this.#sourceIcons.has(id); }
+  cacheSourceIcon(id: string, value: string | null) { cacheSet(this.#sourceIcons, id, value); }
+}
+
+function cacheSet<K, V>(cache: Map<K, V>, key: K, value: V) {
+  if (!cache.has(key) && cache.size >= 100) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, value);
 }

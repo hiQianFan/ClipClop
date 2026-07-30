@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 
 use crate::error::AppResult;
 use crate::storage::Database;
@@ -57,8 +57,19 @@ impl HistoryService {
     }
 
     pub fn prune(&self, retention_days: u32) -> AppResult<u64> {
-        self.database
-            .delete_older_than(Utc::now() - Duration::days(i64::from(retention_days)))
+        self.prune_before(Self::retention_cutoff(retention_days))
+    }
+
+    pub fn retention_cutoff(retention_days: u32) -> DateTime<Utc> {
+        Utc::now() - Duration::days(i64::from(retention_days))
+    }
+
+    pub fn expired_ids_before(&self, cutoff: DateTime<Utc>) -> AppResult<Vec<String>> {
+        self.database.ids_older_than(cutoff)
+    }
+
+    pub fn prune_before(&self, cutoff: DateTime<Utc>) -> AppResult<u64> {
+        self.database.delete_older_than(cutoff)
     }
 }
 

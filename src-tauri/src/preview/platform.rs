@@ -152,6 +152,20 @@ pub(super) fn toggle_quicklook(
     Ok(true)
 }
 
+#[cfg(target_os = "macos")]
+pub(super) fn close_quicklook(
+    app: &tauri::AppHandle,
+    state: &crate::window::PreviewState,
+) -> AppResult<()> {
+    use tauri_plugin_quicklook::QuicklookExt;
+
+    app.quicklook()
+        .queue_toggle_visible()
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    state.set_active(false);
+    Ok(())
+}
+
 #[cfg(not(target_os = "macos"))]
 pub(super) fn toggle_quicklook(
     _app: &tauri::AppHandle,
@@ -159,4 +173,13 @@ pub(super) fn toggle_quicklook(
     _path: &Path,
 ) -> AppResult<bool> {
     Ok(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(super) fn close_quicklook(
+    _app: &tauri::AppHandle,
+    state: &crate::window::PreviewState,
+) -> AppResult<()> {
+    state.set_active(false);
+    Ok(())
 }

@@ -86,13 +86,13 @@
               {:else if item.content_type === "image"}<span aria-hidden="true"><Image size={16} /></span>
               {:else if item.content_type === "file"}<File size={16} aria-hidden="true" />{/if}
             </span>
-            <span class="snippet">{clipPreview(item)}</span>
+            <span class="snippet">{clipPreview(item, t("meta.file"))}</span>
             {#if canExpand(item)}<span class="disclosure" aria-hidden="true"><ChevronRight size={16} /></span>{/if}
           </div>
           {#if canExpand(item) && expandedId === item.id}
             <div class="row-details" role="group" in:fade={{ duration: reducedMotion ? 0 : 120 }} out:fade={{ duration: reducedMotion ? 0 : 90 }}>
               {#each groupedFiles(item) as path, index}
-                <button tabindex="-1" class:selected={index === fileIndex} class="row-child" onclick={(event) => { event.stopPropagation(); onfile(index); }}>{fileName(path)}</button>
+                <button tabindex="-1" class:selected={index === fileIndex} class="row-child" onclick={(event) => { event.stopPropagation(); onfile(index); }}>{fileName(path, t("meta.file"))}</button>
               {/each}
             </div>
           {/if}

@@ -148,6 +148,7 @@ pub fn run() {
             workflows::capture::start(
                 app.handle().clone(),
                 state.history.clone(),
+                state.preview.clone(),
                 state.settings.clone(),
             )?;
             log::info!("registering global shortcut: {startup_hotkey}");

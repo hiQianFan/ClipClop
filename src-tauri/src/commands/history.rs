@@ -39,19 +39,19 @@ pub fn copy_clip(
 }
 
 #[tauri::command]
-pub fn paste_clip(
+pub async fn paste_clip(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,
     plain_text: Option<bool>,
 ) -> AppResult<PasteOutcome> {
-    paste_workflow::paste_clip(
-        &app,
-        &state.history,
-        &state.paste,
-        &id,
-        plain_text.unwrap_or(false),
-    )
+    let history = state.history.clone();
+    let paste = state.paste.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        paste_workflow::paste_clip(&app, &history, &paste, &id, plain_text.unwrap_or(false))
+    })
+    .await
+    .map_err(|error| crate::error::AppError::Platform(error.to_string()))?
 }
 
 #[tauri::command]

@@ -2,7 +2,7 @@
 title: 'ClipClop clipboard history major refactor'
 type: 'refactor'
 created: '2026-07-29'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '56775d4'
 context:
   - 'openspec/changes/refactor-clipboard-history-architecture/'
@@ -50,10 +50,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `openspec/changes/refactor-clipboard-history-architecture/` -- 完成全部 Architecture tasks，行为冻结并提交。
-- [ ] `openspec/changes/harden-ipc-boundary/` -- 完成全部 IPC Hardening tasks、before→after 测试并提交。
-- [ ] `openspec/changes/stabilize-keyboard-focus/` -- 完成全部 Keyboard Focus tasks、可访问性与焦点测试并提交。
-- [ ] `src-tauri/`、`src/` -- 运行完整 Rust/TypeScript/Svelte 测试、lint、构建和跨平台可执行检查。
+- [x] `openspec/changes/refactor-clipboard-history-architecture/` -- Architecture 代码、自动化任务和严格校验完成并提交。
+- [x] `openspec/changes/harden-ipc-boundary/` -- IPC Hardening 代码、自动化测试和严格校验完成并提交。
+- [x] `openspec/changes/stabilize-keyboard-focus/` -- Keyboard Focus 代码、可访问性测试和严格校验完成并提交。
+- [x] `src-tauri/`、`src/` -- Rust/TypeScript/Svelte 测试、lint 和生产构建全部通过。
+- [ ] macOS 与 Windows 真机验收、平台失败注入和代表性延迟测量。
 
 **Acceptance Criteria:**
 - Given 现有用户数据库和设置，when 启动重构后的应用，then 历史记录、设置、复制粘贴和面板生命周期保持安全可用。
@@ -70,9 +71,62 @@ context:
 ## Verification
 
 **Commands:**
-- `cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test` -- Rust 全绿。
-- `pnpm check && pnpm test && pnpm build` -- Svelte/TypeScript 全绿。
-- `openspec validate <change> --strict` -- 三个 change 均有效。
+- `cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test` -- 38 个 Rust 测试通过。
+- `pnpm check && pnpm test && pnpm build` -- 0 个诊断、36 个前端测试通过、生产构建成功。
+- `openspec validate <change> --strict` -- 三个 change 均通过严格校验。
+- `git diff 56775d4 -- src-tauri/schema.sql` -- 无数据库 schema 变化。
 
 **Manual checks:**
 - macOS 与 Windows 验证召回、翻页、搜索、菜单、复制/粘贴、删除、Preview/Quick Look、Settings 与重新召回。
+
+## Suggested Review Order
+
+**入口与边界**
+
+- 从组合根查看能力依赖和状态所有权。
+  [`state.rs:8`](../../src-tauri/src/state.rs#L8)
+
+- Command 只传输参数并进入意图级用例。
+  [`history.rs:23`](../../src-tauri/src/commands/history.rs#L23)
+
+- 页面入口只负责挂载 History 工作区。
+  [`+page.svelte:2`](../../src/routes/+page.svelte#L2)
+
+**跨能力一致性**
+
+- 删除先协调派生缓存，再提交 History 删除。
+  [`clip_actions.rs:7`](../../src-tauri/src/workflows/clip_actions.rs#L7)
+
+- Settings 更新串行执行并补偿外部副作用。
+  [`settings_update.rs:19`](../../src-tauri/src/workflows/settings_update.rs#L19)
+
+- Preview 发布在生命周期锁内重验实体并原子替换。
+  [`mod.rs:186`](../../src-tauri/src/preview/mod.rs#L186)
+
+- 原生预览结果由单一 typed workflow 穷尽表达。
+  [`preview_clip.rs:19`](../../src-tauri/src/workflows/preview_clip.rs#L19)
+
+**交互状态与焦点**
+
+- Session 集中持有查询、选择、缓存和异步失效版本。
+  [`session.svelte.ts:20`](../../src/lib/history/session.svelte.ts#L20)
+
+- 明确模式隔离 Browse、Search、菜单、确认和文件标签。
+  [`HistoryWorkspace.svelte:15`](../../src/lib/history/HistoryWorkspace.svelte#L15)
+
+- List 自持键盘浏览，避免全局焦点路由。
+  [`HistoryWorkspace.svelte:406`](../../src/lib/history/HistoryWorkspace.svelte#L406)
+
+- 列表项暴露全局集合位置和选中语义。
+  [`HistoryList.svelte:82`](../../src/lib/history/HistoryList.svelte#L82)
+
+**回归证据**
+
+- Session 测试覆盖 stale、分页、后继选择和缓存失效。
+  [`session.test.ts:32`](../../src/lib/history/session.test.ts#L32)
+
+- 并发测试证明删除或清空获胜后无法发布缓存。
+  [`mod.rs:371`](../../src-tauri/src/preview/mod.rs#L371)
+
+- SSR 组件测试锁定列表 ARIA 集合元数据。
+  [`HistoryList.test.ts:6`](../../src/lib/history/HistoryList.test.ts#L6)

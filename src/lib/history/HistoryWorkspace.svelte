@@ -3,15 +3,16 @@
   import { listen } from "@tauri-apps/api/event";
   import { copyClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, pasteClip, previewClip } from "$lib/history/api";
   import type { ClipSummary } from "$lib/history/types";
-  import { cacheSet, canExpand, errorMessage, filePaths, pasteFallbackMessage } from "$lib/history/presentation";
+  import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
-  import { escapeAction, type InteractionMode } from "$lib/history/interaction";
   import { quitApp } from "$lib/settings/api";
-  import { effectiveLocale, t } from "$lib/i18n/index.svelte";
+  import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft } from "@lucide/svelte";
+
+  type InteractionMode = "browse" | "search" | "menu" | "confirmation" | "file-tablist";
 
   const session = new HistorySession();
   let mode = $state<InteractionMode>("browse");
@@ -38,14 +39,9 @@
   let appMenuWrap = $state<HTMLDivElement>();
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
-  let requestVersion = 0;
-  let thumbnailRequestVersion = 0;
   let pageNavigationPending = false;
   let assetTimer: number | undefined;
   let searchTimer: number | undefined;
-  const assetCache = new Map<string, { data_url: string | null; byte_size: number | null }>();
-  const thumbnailCache = new Map<string, string>();
-  const sourceIconCache = new Map<string, string | null>();
   const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
@@ -64,32 +60,12 @@
     const updateReducedMotion = () => { reducedMotion = motionQuery.matches; };
     updateReducedMotion();
     motionQuery.addEventListener("change", updateReducedMotion);
-    const captureEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" || event.key === "Esc" || event.code === "Escape") {
-        // Settings owns its nested Escape hierarchy (recording, confirmation,
-        // then return). Let its window handler receive the event.
-        if (view === "settings") return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        switch (escapeAction(mode)) {
-          case "cancel-confirmation": cancelDelete(); break;
-          case "close-menu":
-            if (menuOpen) closeMenu();
-            else closeAppMenu();
-            break;
-          case "exit-to-browse": enterBrowse(); break;
-          case "hide-panel": void hidePanel(); break;
-        }
-      }
-    };
-    document.addEventListener("keydown", captureEscape, true);
     void refreshAndFocus(1);
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
     // Only an explicit panel show is a new browsing session. Quick Look also
     // returns focus to this window, but must preserve the current selection.
     const unlistenPanel = listen("panel_shown", () => void resetToLatest());
     return () => {
-      document.removeEventListener("keydown", captureEscape, true);
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
       unlistenPanel.then((fn) => fn());
@@ -98,14 +74,16 @@
 
   async function refresh(targetPage = session.page.page, selectLatest = false) {
     error = "";
-    const thumbnailVersion = ++thumbnailRequestVersion;
+    const previousSelection = session.selectedId;
+    const thumbnailVersion = session.beginThumbnailRequest();
     const applied = await session.refresh(targetPage, selectLatest);
     if (!applied) return false;
+    if (session.selectedId !== previousSelection) resetPreviewState();
     if (session.errorReason) {
-      error = errorMessage(session.errorReason);
+      error = localizedError(session.errorReason);
     } else {
       thumbnailUrls = Object.fromEntries(session.page.items.flatMap((item) => {
-        const thumbnail = thumbnailCache.get(item.id);
+        const thumbnail = session.thumbnail(item.id);
         return thumbnail ? [[item.id, thumbnail]] : [];
       }));
       void loadThumbnails(session.page.items, thumbnailVersion);
@@ -135,19 +113,29 @@
     enterBrowse();
   }
 
+  function pasteMessage(outcome: string) {
+    if (outcome === "copied_permission_required") return t("paste.permission");
+    if (outcome === "copied_target_lost") return t("paste.targetLost");
+    if (outcome === "copied_focus_failed") return t("paste.focusFailed");
+    if (outcome === "copied_injection_failed") return t("paste.injectionFailed");
+    if (outcome === "already_in_progress") return t("paste.inProgress");
+    return t("paste.unsupported");
+  }
+
   async function loadThumbnails(items: ClipSummary[], version: number) {
     // File thumbnails require reading the original path. Do not touch protected
     // folders (Downloads, Desktop, Documents) merely by opening the panel.
-    const mediaItems = items.filter((item) => item.content_type === "image" && !thumbnailCache.has(item.id));
+    const mediaItems = items.filter((item) => item.content_type === "image" && !session.thumbnail(item.id));
     for (const item of mediaItems) {
-      if (version !== thumbnailRequestVersion) return;
+      if (!session.isCurrentThumbnailRequest(version)) return;
       try {
         const thumbnail = await getClipThumbnail(item.id);
-        if (thumbnail.data_url) thumbnailCache.set(item.id, thumbnail.data_url);
+        if (!session.isCurrentThumbnailRequest(version)) return;
+        if (thumbnail.data_url) session.cacheThumbnail(item.id, thumbnail.data_url);
       } catch { /* A neutral file icon is an intentional fallback. */ }
-      if (version === thumbnailRequestVersion) {
+      if (session.isCurrentThumbnailRequest(version)) {
         thumbnailUrls = Object.fromEntries(items.flatMap((current) => {
-          const thumbnail = thumbnailCache.get(current.id);
+          const thumbnail = session.thumbnail(current.id);
           return thumbnail ? [[current.id, thumbnail]] : [];
         }));
       }
@@ -155,30 +143,31 @@
   }
 
   async function select(id: string | null, readSelectedFile = false) {
-    const version = ++requestVersion;
     const selectionChanged = session.selectedId !== id;
     if (selectionChanged) expandedId = null;
-    if (assetTimer !== undefined) window.clearTimeout(assetTimer);
-    assetUrl = null;
-    fileThumbnailUrls = [];
-    fileIndex = 0;
-    sourceIconUrl = null;
+    resetPreviewState();
+    const version = session.currentResourceRequest();
     await session.select(id);
-    if (session.errorReason) error = errorMessage(session.errorReason);
-    if (version === requestVersion) await applySelectedDetail(readSelectedFile, version);
+    if (session.errorReason) error = localizedError(session.errorReason);
+    if (session.isCurrentResourceRequest(version)) {
+      await applySelectedDetail(readSelectedFile, version);
+    }
   }
 
-  async function applySelectedDetail(readSelectedFile: boolean, version = ++requestVersion) {
+  async function applySelectedDetail(
+    readSelectedFile: boolean,
+    version = session.beginResourceRequest(),
+  ) {
     const next = session.detail;
     const id = session.selectedId;
     if (!next || !id) return;
     if (next.source_app) {
-          const cachedIcon = sourceIconCache.get(next.source_app.id);
-          if (cachedIcon !== undefined) sourceIconUrl = cachedIcon;
-          else getSourceAppIcon(id).then((icon) => {
-            cacheSet(sourceIconCache, next.source_app!.id, icon.data_url);
-            if (version === requestVersion) sourceIconUrl = icon.data_url;
-          }).catch(() => cacheSet(sourceIconCache, next.source_app!.id, null));
+      const cachedIcon = session.sourceIcon(next.source_app.id);
+      if (session.hasSourceIcon(next.source_app.id)) sourceIconUrl = cachedIcon ?? null;
+      else getSourceAppIcon(id).then((icon) => {
+        session.cacheSourceIcon(next.source_app!.id, icon.data_url);
+        if (session.isCurrentResourceRequest(version)) sourceIconUrl = icon.data_url;
+      }).catch(() => session.cacheSourceIcon(next.source_app!.id, null));
     }
     if (next.content_type === "image") scheduleAsset(id, null, version);
     // Auto-selecting the first row must not touch its original file. Only a
@@ -192,10 +181,10 @@
     try {
       const outcome = await pasteClip(session.selectedId, plainText);
       if (outcome !== "pasted") {
-        copied = pasteFallbackMessage(outcome);
+        copied = pasteMessage(outcome);
         setTimeout(() => copied = "", 3200);
       }
-    } catch (reason) { error = errorMessage(reason); }
+    } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
   }
@@ -211,7 +200,7 @@
       await copyClip(session.selectedId, plainText);
       copied = plainText ? t("history.copiedPlain") : t("history.copied");
       setTimeout(() => copied = "", 1800);
-    } catch (reason) { error = errorMessage(reason); }
+    } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
   }
@@ -222,13 +211,14 @@
     try {
       rowReorderMotion = true;
       await session.deleteSelected();
+      resetPreviewState();
       evictClip(deletedId);
       await applySelectedDetail(false);
       await tick();
       enterBrowse();
     }
     catch (reason) {
-      error = errorMessage(reason);
+      error = localizedError(reason);
       mode = "browse";
       requestAnimationFrame(focusConfirmationInvoker);
     }
@@ -273,7 +263,7 @@
       previewExternal = outcome === "native_opened";
       if (!previewExternal) enterBrowse();
     }
-    catch (reason) { error = errorMessage(reason); }
+    catch (reason) { error = localizedError(reason); }
     menuOpen = false;
   }
 
@@ -363,6 +353,12 @@
   }
 
   function onMenuKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (menuOpen) closeMenu();
+      else closeAppMenu();
+      return;
+    }
     const items = menuItemElements().filter((item) => !item.disabled);
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
     if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
@@ -381,7 +377,9 @@
     listbox?.focus();
     const item = session.page.items.find((candidate) => candidate.id === id);
     if (session.selectedId === id && item && canExpand(item)) {
-      if (session.detail?.content_type === "file") scheduleAsset(id, fileIndex, requestVersion);
+      if (session.detail?.content_type === "file") {
+        scheduleAsset(id, fileIndex, session.currentResourceRequest());
+      }
       expandedId = expandedId === id ? null : id;
       return;
     }
@@ -406,6 +404,7 @@
   }
 
   function onListKeydown(event: KeyboardEvent) {
+    if (onKeydown(event)) return;
     const index = session.page.items.findIndex((item) => item.id === session.selectedId);
     const selectIndex = (next: number) => void select(session.page.items[Math.max(0, Math.min(next, session.page.items.length - 1))]?.id ?? null, true);
     const selected = session.page.items.find((item) => item.id === session.selectedId);
@@ -443,6 +442,10 @@
     else if (/^[0-9]$/.test(event.key)) {
       const target = event.key === "0" ? 9 : Number(event.key) - 1;
       if (session.page.items[target]) { event.preventDefault(); void select(session.page.items[target].id, true); }
+    }
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      void hidePanel();
     }
   }
 
@@ -499,45 +502,46 @@
       menuOpen = false;
       appMenuOpen = false;
       void hidePanel();
-      return;
+      return true;
     }
     if (deletePending) return;
     if (view === "settings") {
-      return;
+      return false;
     }
     if (mode !== "browse") return;
     if ((event.metaKey || event.ctrlKey) && event.key === ",") {
       event.preventDefault();
       void openSettingsView();
-      return;
+      return true;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-      event.preventDefault(); enterSearch(); return;
+      event.preventDefault(); enterSearch(); return true;
     }
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "c") {
-      event.preventDefault(); void copyOnly(true); return;
+      event.preventDefault(); void copyOnly(true); return true;
     }
     if (event.key === "/") {
-      event.preventDefault(); enterSearch(); return;
+      event.preventDefault(); enterSearch(); return true;
     }
     if (event.key === "Escape") {
-      return;
+      return false;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault(); void openMenu(); return;
+      event.preventDefault(); void openMenu(); return true;
     }
     if (event.shiftKey && event.key === "F10" && listHasFocus()) {
       event.preventDefault(); void openMenu();
-      return;
+      return true;
     }
-    const target = event.target instanceof Element ? event.target : null;
-    const interactive = target?.closest("button, input, a, [role='menu'], [role='dialog'], [role='tablist']");
-    if (!event.defaultPrevented && !interactive) {
-      onListKeydown(event);
-    }
+    return false;
   }
 
   function onConfirmationKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelDelete();
+      return;
+    }
     if (event.key !== "Tab") return;
     const controls = [cancelActionButton, confirmActionButton].filter(
       (item): item is HTMLButtonElement => Boolean(item),
@@ -559,7 +563,7 @@
     if (index < 0 || index >= paths.length || index === fileIndex) return;
     fileIndex = index;
     assetUrl = null;
-    scheduleAsset(session.selectedId, index, requestVersion);
+    scheduleAsset(session.selectedId, index, session.currentResourceRequest());
   }
 
   function assetKey(id: string, index: number | null) {
@@ -568,7 +572,7 @@
 
   function scheduleAsset(id: string, index: number | null, version: number) {
     const key = assetKey(id, index);
-    const cached = assetCache.get(key);
+    const cached = session.asset(key);
     if (cached) {
       assetUrl = cached.data_url;
       if (index !== null) applyFileAsset(index, cached);
@@ -578,13 +582,13 @@
       assetTimer = undefined;
       const request = index === null ? getClipAsset(id) : getClipFileAsset(id, index);
       request.then((asset) => {
-        cacheSet(assetCache, key, asset);
-        if (version === requestVersion && (index === null || index === fileIndex)) {
+        session.cacheAsset(key, asset);
+        if (session.isCurrentResourceRequest(version) && (index === null || index === fileIndex)) {
           assetUrl = asset.data_url;
           if (index !== null) applyFileAsset(index, asset);
         }
       }).catch((reason) => {
-        if (version === requestVersion) error = errorMessage(reason);
+        if (session.isCurrentResourceRequest(version)) error = localizedError(reason);
       });
     }, 80);
   }
@@ -597,17 +601,22 @@
     session.detail.metadata.file_sizes = sizes;
   }
 
+  function resetPreviewState() {
+    session.beginResourceRequest();
+    if (assetTimer !== undefined) window.clearTimeout(assetTimer);
+    assetTimer = undefined;
+    assetUrl = null;
+    fileThumbnailUrls = [];
+    fileIndex = 0;
+    sourceIconUrl = null;
+  }
+
   function evictClip(id: string) {
-    session.clearCaches();
-    thumbnailCache.delete(id);
-    for (const key of assetCache.keys()) if (key.startsWith(`${id}:`)) assetCache.delete(key);
+    session.evict(id);
   }
 
   function clearContentCaches() {
     session.clearCaches();
-    assetCache.clear();
-    thumbnailCache.clear();
-    sourceIconCache.clear();
   }
 
   function settingsClearedHistory() {
@@ -616,7 +625,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
+<svelte:window onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   <header class="titlebar">

@@ -39,9 +39,15 @@ pub fn preview_clip(
     state: State<'_, AppState>,
     preview_state: State<'_, PreviewState>,
     id: String,
-    index: usize,
+    index: Option<usize>,
 ) -> AppResult<PreviewOutcome> {
-    preview_clip::preview(&app, &preview_state, &state.preview, &id, index)
+    preview_clip::preview(
+        &app,
+        &preview_state,
+        &state.preview,
+        &id,
+        index.unwrap_or(0),
+    )
 }
 
 #[tauri::command]
