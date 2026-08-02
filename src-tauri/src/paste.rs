@@ -99,7 +99,6 @@ mod platform {
     #[link(name = "ApplicationServices", kind = "framework")]
     extern "C" {
         fn CGPreflightPostEventAccess() -> bool;
-        fn CGRequestPostEventAccess() -> bool;
         fn CGEventSourceCreate(state_id: i32) -> *mut c_void;
         fn CGEventCreateKeyboardEvent(
             source: *mut c_void,
@@ -123,8 +122,6 @@ mod platform {
     pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
         let PasteTarget::Mac { pid } = target;
         if !unsafe { CGPreflightPostEventAccess() } {
-            // The permission sheet is asynchronous; this attempt still degrades to copied-only.
-            unsafe { CGRequestPostEventAccess() };
             return PasteOutcome::CopiedPermissionRequired;
         }
 

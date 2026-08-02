@@ -39,6 +39,10 @@ Hidden → Showing → Focused → BlurPending → Hidden
 
 `PreviewState` 与生命周期分离，只表示原生预览是否活跃。原生预览可以临时取得焦点，而不触发主面板隐藏。
 
+### 键盘命令优先级
+
+DOM 焦点用于选择输入上下文，不能让窗口级命令失效。Svelte Workspace 只维护一个窄窗口路由器，优先级为：已处理事件停止；面板关闭（`Command/Ctrl+W`）不依赖焦点；Escape 只退出一层；随后由焦点控件处理原生按键；只有 Browse 上下文拥有列表方向键和列表动作。不得把列表导航提升到窗口路由，也不得在各控件中重复实现面板命令。
+
 ### 必须保持的不变量
 
 - 不得在 `window::hide_panel` 之外调用 `WebviewWindow::hide()`。

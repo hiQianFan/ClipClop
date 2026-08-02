@@ -13,7 +13,13 @@ pub fn update_settings(
     state: State<'_, AppState>,
     settings: Settings,
 ) -> AppResult<Settings> {
-    settings_update::update(&app, &state.settings, settings)
+    settings_update::update(
+        &app,
+        &state.settings,
+        &state.history,
+        &state.preview,
+        settings,
+    )
 }
 
 /// Opens the application log directory in the native file manager.
@@ -56,7 +62,9 @@ mod tests {
     #[test]
     fn defaults_are_minimal_and_local() {
         let settings = Settings::default();
-        assert_eq!(settings.retention_days, 30);
+        assert_eq!(settings.retention_days, Some(30));
+        assert_eq!(settings.history_limit, Some(500));
+        assert!(settings.move_used_to_top);
         assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.language, LanguagePreference::System);
         assert!(settings.check_updates);

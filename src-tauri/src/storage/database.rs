@@ -2,7 +2,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension, Row};
 use uuid::Uuid;
 
@@ -14,7 +14,7 @@ use crate::history::{
 
 const SCHEMA: &str = include_str!("../../schema.sql");
 // Development schema revisions are not migrated. Any mismatch requires a reset.
-const SCHEMA_VERSION: u32 = 4;
+const SCHEMA_VERSION: u32 = 5;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -42,6 +42,7 @@ impl Database {
                 connection.execute_batch(SCHEMA)?;
                 connection.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             }
+            4 => migrate_v4_to_v5(&connection)?,
             SCHEMA_VERSION => {}
             unsupported => {
                 return Err(AppError::Storage(format!(
@@ -68,8 +69,8 @@ impl Database {
         let source_id = clip.source_app.as_ref().map(|source| source.id.as_str());
         let source_name = clip.source_app.as_ref().map(|source| source.name.as_str());
         transaction.execute(
-            "INSERT INTO clips (id, content_type, plain_text, preview, source_id, source_name, created_at, content_hash, byte_size, metadata_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO clips (id, content_type, plain_text, preview, source_id, source_name, created_at, last_used_at, content_hash, byte_size, metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10)",
             params![
                 id,
                 clip.content_type.to_string(),
@@ -77,7 +78,7 @@ impl Database {
                 clip.preview,
                 source_id,
                 source_name,
-                clip.created_at.to_rfc3339(),
+                timestamp(clip.created_at),
                 clip.content_hash,
                 byte_size as i64,
                 serde_json::to_string(&clip.metadata)?,
@@ -102,7 +103,7 @@ impl Database {
             .connection()?
             .query_row(
                 "SELECT 1 FROM clips WHERE content_hash = ?1 AND created_at >= ?2 LIMIT 1",
-                params![hash, since.to_rfc3339()],
+                params![hash, timestamp(since)],
                 |_| Ok(()),
             )
             .optional()?
@@ -149,7 +150,7 @@ impl Database {
         let sql = format!(
             "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json
              FROM clips c{where_clause}
-             ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?"
+             ORDER BY c.last_used_at DESC, c.id DESC LIMIT ? OFFSET ?"
         );
         let mut statement = connection.prepare(&sql)?;
         let items = statement
@@ -209,6 +210,59 @@ impl Database {
         Ok(flavors)
     }
 
+    pub fn touch_clip(&self, id: &str) -> AppResult<bool> {
+        Ok(self.connection()?.execute(
+            "UPDATE clips SET last_used_at = ?1 WHERE id = ?2",
+            params![timestamp(Utc::now()), id],
+        )? > 0)
+    }
+
+    pub fn cleanup_candidate_ids(
+        &self,
+        cutoff: Option<DateTime<Utc>>,
+        limit: Option<u32>,
+    ) -> AppResult<Vec<String>> {
+        let connection = self.connection()?;
+        let mut ids = std::collections::BTreeSet::new();
+        if let Some(cutoff) = cutoff {
+            let mut statement =
+                connection.prepare("SELECT id FROM clips WHERE last_used_at < ?1")?;
+            for id in statement.query_map([timestamp(cutoff)], |row| row.get::<_, String>(0))? {
+                ids.insert(id?);
+            }
+        }
+        if let Some(limit) = limit {
+            let mut statement = connection.prepare(
+                "SELECT id FROM clips ORDER BY last_used_at DESC, id DESC LIMIT -1 OFFSET ?1",
+            )?;
+            for id in statement.query_map([limit], |row| row.get::<_, String>(0))? {
+                ids.insert(id?);
+            }
+        }
+        Ok(ids.into_iter().collect())
+    }
+
+    pub fn delete_clip_ids(&self, ids: &[String]) -> AppResult<u64> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let mut connection = self.connection()?;
+        let transaction = connection.transaction()?;
+        let placeholders = std::iter::repeat_n("?", ids.len())
+            .collect::<Vec<_>>()
+            .join(",");
+        transaction.execute(
+            &format!("DELETE FROM clips_fts WHERE clip_id IN ({placeholders})"),
+            params_from_iter(ids),
+        )?;
+        let changed = transaction.execute(
+            &format!("DELETE FROM clips WHERE id IN ({placeholders})"),
+            params_from_iter(ids),
+        )?;
+        transaction.commit()?;
+        Ok(changed as u64)
+    }
+
     pub fn delete_clip(&self, id: &str) -> AppResult<()> {
         let mut connection = self.connection()?;
         let transaction = connection.transaction()?;
@@ -234,12 +288,12 @@ impl Database {
         let mut connection = self.connection()?;
         let transaction = connection.transaction()?;
         transaction.execute(
-            "DELETE FROM clips_fts WHERE clip_id IN (SELECT id FROM clips WHERE created_at < ?1)",
-            [cutoff.to_rfc3339()],
+            "DELETE FROM clips_fts WHERE clip_id IN (SELECT id FROM clips WHERE last_used_at < ?1)",
+            [timestamp(cutoff)],
         )?;
         let changed = transaction.execute(
-            "DELETE FROM clips WHERE created_at < ?1",
-            [cutoff.to_rfc3339()],
+            "DELETE FROM clips WHERE last_used_at < ?1",
+            [timestamp(cutoff)],
         )?;
         transaction.commit()?;
         Ok(changed as u64)
@@ -247,8 +301,8 @@ impl Database {
 
     pub fn ids_older_than(&self, cutoff: DateTime<Utc>) -> AppResult<Vec<String>> {
         let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT id FROM clips WHERE created_at < ?1")?;
-        let rows = statement.query_map([cutoff.to_rfc3339()], |row| row.get(0))?;
+        let mut statement = connection.prepare("SELECT id FROM clips WHERE last_used_at < ?1")?;
+        let rows = statement.query_map([timestamp(cutoff)], |row| row.get(0))?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
@@ -300,12 +354,51 @@ impl Database {
     }
 }
 
+fn migrate_v4_to_v5(connection: &Connection) -> AppResult<()> {
+    let transaction = connection.unchecked_transaction()?;
+    transaction.execute(
+        "ALTER TABLE clips ADD COLUMN last_used_at TEXT NOT NULL DEFAULT ''",
+        [],
+    )?;
+    let rows = {
+        let mut statement = transaction.prepare("SELECT id, created_at FROM clips")?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows
+    };
+    for (id, created_at) in rows {
+        let parsed = DateTime::parse_from_rfc3339(&created_at)
+            .map_err(|error| AppError::Storage(error.to_string()))?
+            .with_timezone(&Utc);
+        let normalized = timestamp(parsed);
+        transaction.execute(
+            "UPDATE clips SET created_at = ?1, last_used_at = ?1 WHERE id = ?2",
+            params![normalized, id],
+        )?;
+    }
+    transaction.execute("DROP INDEX idx_clips_order", [])?;
+    transaction.execute(
+        "CREATE INDEX idx_clips_order ON clips(last_used_at DESC, id DESC)",
+        [],
+    )?;
+    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    transaction.commit()?;
+    Ok(())
+}
+
 fn fts_query(query: &str) -> String {
     query
         .split_whitespace()
         .map(|term| format!("\"{}\"*", term.replace('"', "\"\"")))
         .collect::<Vec<_>>()
         .join(" AND ")
+}
+
+fn timestamp(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::Micros, true)
 }
 
 fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<ClipSummary> {
@@ -410,6 +503,62 @@ mod tests {
     }
 
     #[test]
+    fn touching_an_old_text_moves_it_to_the_front() {
+        let database = Database::in_memory().unwrap();
+        let now = Utc::now();
+        let older = database
+            .insert_clip(&sample("older", now - Duration::minutes(1)))
+            .unwrap();
+        database.insert_clip(&sample("newer", now)).unwrap();
+
+        assert!(database.touch_clip(&older).unwrap());
+        assert_eq!(
+            database
+                .query_history(&HistoryQuery::default())
+                .unwrap()
+                .items[0]
+                .id,
+            older
+        );
+        assert_eq!(
+            database.get_clip(&older).unwrap().summary.created_at,
+            now - Duration::minutes(1)
+        );
+    }
+
+    #[test]
+    fn cleanup_candidates_combine_time_and_count_without_duplicates() {
+        let database = Database::in_memory().unwrap();
+        let now = Utc::now();
+        let oldest = database
+            .insert_clip(&sample("oldest", now - Duration::days(10)))
+            .unwrap();
+        let middle = database
+            .insert_clip(&sample("middle", now - Duration::days(2)))
+            .unwrap();
+        database.insert_clip(&sample("newest", now)).unwrap();
+
+        let ids = database
+            .cleanup_candidate_ids(Some(now - Duration::days(7)), Some(1))
+            .unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&oldest));
+        assert!(ids.contains(&middle));
+        assert_eq!(database.delete_clip_ids(&ids).unwrap(), 2);
+        assert_eq!(
+            database
+                .query_history(&HistoryQuery::default())
+                .unwrap()
+                .total,
+            1
+        );
+        assert!(database
+            .cleanup_candidate_ids(None, None)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
     fn detects_recent_duplicates_and_persists_settings() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
@@ -455,6 +604,36 @@ mod tests {
                 .unwrap(),
             2
         );
+    }
+
+    #[test]
+    fn migrates_v4_last_used_time_without_changing_capture_time() {
+        let connection = Connection::open_in_memory().unwrap();
+        let old_schema = SCHEMA
+            .replace("  last_used_at TEXT NOT NULL,\n", "")
+            .replace(
+                "ON clips(last_used_at DESC, id DESC)",
+                "ON clips(created_at DESC, id DESC)",
+            );
+        connection.execute_batch(&old_schema).unwrap();
+        connection.pragma_update(None, "user_version", 4).unwrap();
+        connection.execute(
+            "INSERT INTO clips (id, content_type, preview, created_at, content_hash, byte_size, metadata_json)
+             VALUES ('old', 'text', 'old', '2026-01-01T00:00:00Z', 'hash', 0, '{}')",
+            [],
+        ).unwrap();
+
+        let database = Database::from_connection(connection).unwrap();
+        let stored: (String, String) = database
+            .connection()
+            .unwrap()
+            .query_row(
+                "SELECT created_at, last_used_at FROM clips WHERE id = 'old'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(stored.0, stored.1);
     }
 
     #[test]

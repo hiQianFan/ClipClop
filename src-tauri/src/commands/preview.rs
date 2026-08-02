@@ -2,6 +2,7 @@ use tauri::{AppHandle, State};
 
 use crate::{
     error::AppResult,
+    onboarding::OnboardingExample,
     preview::PreviewResource,
     state::AppState,
     window::PreviewState,
@@ -57,6 +58,27 @@ pub async fn get_source_app_icon(
 ) -> AppResult<PreviewResource> {
     let preview = state.preview.clone();
     run_blocking(move || preview.source_app_icon(&id)).await
+}
+
+/// Toggle Quick Look over a fixed onboarding example without touching history.
+#[tauri::command]
+pub fn preview_onboarding_example(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preview_state: State<'_, PreviewState>,
+    example: OnboardingExample,
+) -> AppResult<PreviewOutcome> {
+    if preview_state.is_active() {
+        state.preview.close_native(&app, &preview_state)?;
+        return Ok(PreviewOutcome::NativeClosed);
+    }
+    if state
+        .preview
+        .toggle_onboarding_example(&app, &preview_state, example)?
+    {
+        return Ok(PreviewOutcome::NativeOpened);
+    }
+    Ok(PreviewOutcome::NotPreviewable)
 }
 
 async fn run_blocking<T: Send + 'static>(

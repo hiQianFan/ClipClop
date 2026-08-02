@@ -39,6 +39,14 @@ Every show starts a new generation. A pending blur token contains its generation
 
 `PreviewState` is separate and represents only native preview activity. A native preview may temporarily take focus without causing the panel to hide.
 
+### Keyboard command priority
+
+DOM focus selects an input context; it must not disable window commands. The Svelte Workspace
+owns one narrow window router with this priority: an already-handled event stops; panel
+dismissal (`Command/Ctrl+W`) is focus-independent; Escape pops one active layer; focused
+controls then own native keys; Browse owns list arrows and actions only in its context. Do not
+move list navigation into the window router or duplicate panel commands in individual controls.
+
 ### Required invariants
 
 - Never call `WebviewWindow::hide()` outside `window::hide_panel`.

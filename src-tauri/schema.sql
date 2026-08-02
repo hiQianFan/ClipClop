@@ -8,13 +8,14 @@ CREATE TABLE clips (
   source_id TEXT,
   source_name TEXT,
   created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL,
   content_hash TEXT NOT NULL,
   byte_size INTEGER NOT NULL DEFAULT 0,
   metadata_json TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE INDEX idx_clips_order
-  ON clips(created_at DESC, id DESC);
+  ON clips(last_used_at DESC, id DESC);
 CREATE INDEX idx_clips_hash_created
   ON clips(content_hash, created_at DESC);
 

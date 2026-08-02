@@ -13,8 +13,13 @@ use tauri_plugin_opener::OpenerExt;
 use crate::{
     error::{AppError, AppResult},
     history::{ClipDetail, ContentType, HistoryService},
+    onboarding::OnboardingExample,
     window::PreviewState,
 };
+
+const ONBOARDING_LOGO: &[u8] = include_bytes!("../../../static/app-icon.png");
+const ONBOARDING_TEXT: &[u8] = b"ClipClop";
+const ONBOARDING_LINK: &[u8] = b"https://github.com/hiQianFan/ClipClop";
 
 #[derive(Clone)]
 pub struct PreviewService {
@@ -165,6 +170,29 @@ impl PreviewService {
         platform::close_quicklook(app, state)
     }
 
+    /// Write and preview one of the fixed onboarding resources.
+    pub fn toggle_onboarding_example(
+        &self,
+        app: &AppHandle,
+        state: &PreviewState,
+        example: OnboardingExample,
+    ) -> AppResult<bool> {
+        #[cfg(target_os = "macos")]
+        {
+            let (name, extension, bytes) = onboarding_preview(example);
+            let path = preview_path(app, name, extension)?;
+            let dir = path.parent().ok_or(AppError::NotFound)?;
+            std::fs::create_dir_all(dir).map_err(|error| AppError::Platform(error.to_string()))?;
+            std::fs::write(&path, bytes).map_err(|error| AppError::Platform(error.to_string()))?;
+            platform::toggle_quicklook(app, state, &path)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app, example);
+            platform::toggle_quicklook(app, state, &PathBuf::new())
+        }
+    }
+
     pub fn delete_cached(&self, app: &AppHandle, id: &str) -> AppResult<()> {
         delete_cached_previews_in(&cached_preview_dir(app)?, id)
     }
@@ -250,6 +278,14 @@ impl PreviewService {
     }
 }
 
+fn onboarding_preview(example: OnboardingExample) -> (&'static str, &'static str, &'static [u8]) {
+    match example {
+        OnboardingExample::Image => ("onboarding-image", "png", ONBOARDING_LOGO),
+        OnboardingExample::Text => ("onboarding-text", "txt", ONBOARDING_TEXT),
+        OnboardingExample::Link => ("onboarding-link", "txt", ONBOARDING_LINK),
+    }
+}
+
 fn open_path(app: &AppHandle, path: impl AsRef<Path>) -> AppResult<()> {
     app.opener()
         .open_path(path.as_ref().to_string_lossy(), None::<&str>)
@@ -309,6 +345,16 @@ mod tests {
     use base64::{engine::general_purpose::STANDARD, Engine};
     use chrono::Utc;
     use std::sync::Arc;
+
+    #[test]
+    fn onboarding_examples_are_fixed_image_text_and_link_resources() {
+        assert_eq!(onboarding_preview(OnboardingExample::Image).1, "png");
+        assert_eq!(onboarding_preview(OnboardingExample::Text).2, b"ClipClop");
+        assert_eq!(
+            onboarding_preview(OnboardingExample::Link).2,
+            b"https://github.com/hiQianFan/ClipClop"
+        );
+    }
 
     #[test]
     fn preview_derivation_and_cache_cleanup_preserve_shapes() {

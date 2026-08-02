@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    history::HistoryService, paste::PasteController, preview::PreviewService,
-    settings::SettingsService, storage::Database,
+    history::HistoryService, onboarding::OnboardingService, paste::PasteController,
+    preview::PreviewService, settings::SettingsService, storage::Database,
 };
 
 pub struct AppState {
@@ -10,6 +10,7 @@ pub struct AppState {
     pub preview: PreviewService,
     pub paste: PasteController,
     pub settings: SettingsService,
+    pub onboarding: OnboardingService,
 }
 
 impl AppState {
@@ -20,7 +21,8 @@ impl AppState {
             preview: PreviewService::new(history.clone()),
             history,
             paste: PasteController::default(),
-            settings: SettingsService::new(database),
+            settings: SettingsService::new(database.clone()),
+            onboarding: OnboardingService::new(database),
         }
     }
 }

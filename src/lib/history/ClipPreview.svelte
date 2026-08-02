@@ -102,7 +102,8 @@
   .preview { grid-column:2; grid-row:2; min-width:0; min-height:0; display:flex; flex-direction:column; }
   .preview.pending { contain:content; }
   .preview-body { flex:1; min-height:0; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:20px; }
-  .preview-body.text-preview { align-items:flex-start; justify-content:flex-start; }
+  .preview-body.text-preview { align-items:flex-start; justify-content:flex-start; overflow:auto; }
+  .preview-body.text-preview pre { max-height:none; overflow:visible; }
   pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:13px/1.65 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
   .preview-meta { height:64px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
   .preview.file-preview .preview-meta { height:96px; display:grid; grid-template-rows:minmax(0, 1fr) auto; gap:7px; padding-block:10px; }

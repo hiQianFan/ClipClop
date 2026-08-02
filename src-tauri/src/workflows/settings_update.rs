@@ -1,9 +1,11 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::{
     error::{AppError, AppResult},
+    history::HistoryService,
+    preview::PreviewService,
     settings::{validate_hotkey, HotkeyValidationError, Settings, SettingsService},
 };
 
@@ -19,6 +21,8 @@ pub fn get(app: &AppHandle, service: &SettingsService) -> AppResult<Settings> {
 pub fn update(
     app: &AppHandle,
     service: &SettingsService,
+    history: &HistoryService,
+    preview: &PreviewService,
     mut settings: Settings,
 ) -> AppResult<Settings> {
     let _guard = service.lock_mutation()?;
@@ -119,6 +123,24 @@ pub fn update(
             ));
         }
     }
+    let removed = match crate::workflows::clip_actions::apply_retention(
+        app,
+        history,
+        preview,
+        saved.retention_days,
+        saved.history_limit,
+    ) {
+        Ok(removed) => removed,
+        Err(error) => {
+            log::warn!(
+                "settings saved but immediate history cleanup failed; capture will retry: {error}"
+            );
+            0
+        }
+    };
+    if removed > 0 {
+        let _ = app.emit("history_changed", serde_json::json!({ "latest_id": null }));
+    }
     Ok(saved)
 }
 
@@ -141,9 +163,14 @@ pub fn reconcile_autostart(app: &AppHandle, service: &SettingsService) -> AppRes
 }
 
 fn validate(settings: &Settings) -> AppResult<()> {
-    if !matches!(settings.retention_days, 7 | 30 | 90) {
+    if !matches!(settings.retention_days, None | Some(1 | 7 | 30 | 90 | 365)) {
         return Err(AppError::Validation(
-            "retention_days must be 7, 30, or 90".into(),
+            "retention_days must be null, 1, 7, 30, 90, or 365".into(),
+        ));
+    }
+    if !matches!(settings.history_limit, None | Some(100 | 500 | 1000 | 5000)) {
+        return Err(AppError::Validation(
+            "history_limit must be null, 100, 500, 1000, or 5000".into(),
         ));
     }
     validate_hotkey(&settings.hotkey).map_err(|error| {

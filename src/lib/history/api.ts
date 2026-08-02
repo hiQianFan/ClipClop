@@ -41,7 +41,7 @@ export function hidePanel(): Promise<void> {
   return invoke("hide_panel");
 }
 
-export function copyClip(id: string, plainText = false): Promise<void> {
+export function copyClip(id: string, plainText = false): Promise<boolean> {
   return invoke("copy_clip", { id, plainText });
 }
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{DateTime, Duration, Utc};
 
@@ -10,11 +10,15 @@ use super::{ClipDetail, Flavor, HistoryPage, HistoryQuery, NewClip};
 #[derive(Clone)]
 pub struct HistoryService {
     database: Arc<Database>,
+    lifecycle: Arc<Mutex<()>>,
 }
 
 impl HistoryService {
     pub fn new(database: Arc<Database>) -> Self {
-        Self { database }
+        Self {
+            database,
+            lifecycle: Arc::new(Mutex::new(())),
+        }
     }
 
     pub fn capture(&self, clip: &NewClip) -> AppResult<Option<String>> {
@@ -48,6 +52,17 @@ impl HistoryService {
         self.database.get_flavors(id)
     }
 
+    pub fn mark_used(&self, id: &str) -> AppResult<bool> {
+        let _guard = self.lock_lifecycle()?;
+        self.database.touch_clip(id)
+    }
+
+    pub fn lock_lifecycle(&self) -> AppResult<MutexGuard<'_, ()>> {
+        self.lifecycle
+            .lock()
+            .map_err(|_| crate::error::AppError::Storage("history lifecycle lock poisoned".into()))
+    }
+
     pub fn delete(&self, id: &str) -> AppResult<()> {
         self.database.delete_clip(id)
     }
@@ -70,6 +85,19 @@ impl HistoryService {
 
     pub fn prune_before(&self, cutoff: DateTime<Utc>) -> AppResult<u64> {
         self.database.delete_older_than(cutoff)
+    }
+
+    pub fn cleanup_candidates(
+        &self,
+        retention_days: Option<u32>,
+        history_limit: Option<u32>,
+    ) -> AppResult<Vec<String>> {
+        self.database
+            .cleanup_candidate_ids(retention_days.map(Self::retention_cutoff), history_limit)
+    }
+
+    pub fn delete_ids(&self, ids: &[String]) -> AppResult<u64> {
+        self.database.delete_clip_ids(ids)
     }
 }
 

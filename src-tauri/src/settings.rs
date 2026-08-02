@@ -15,7 +15,12 @@ pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+C";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
-    pub retention_days: u32,
+    #[serde(default = "default_retention_days")]
+    pub retention_days: Option<u32>,
+    #[serde(default = "default_history_limit")]
+    pub history_limit: Option<u32>,
+    #[serde(default = "default_move_used_to_top")]
+    pub move_used_to_top: bool,
     pub launch_at_login: bool,
     pub hotkey: String,
     pub theme: Theme,
@@ -27,7 +32,9 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            retention_days: 30,
+            retention_days: default_retention_days(),
+            history_limit: default_history_limit(),
+            move_used_to_top: default_move_used_to_top(),
             launch_at_login: false,
             hotkey: DEFAULT_HOTKEY.into(),
             theme: Theme::System,
@@ -36,6 +43,16 @@ impl Default for Settings {
             last_update_check: None,
         }
     }
+}
+
+fn default_retention_days() -> Option<u32> {
+    Some(30)
+}
+fn default_history_limit() -> Option<u32> {
+    Some(500)
+}
+fn default_move_used_to_top() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -183,6 +200,24 @@ mod tests {
         let mut invalid = value;
         invalid["language"] = serde_json::json!("fr");
         assert!(serde_json::from_value::<Settings>(invalid).is_err());
+    }
+
+    #[test]
+    fn old_settings_receive_new_history_defaults_and_null_round_trips() {
+        let old = r#"{"retention_days":30,"launch_at_login":false,"hotkey":"Control+Command+C","theme":"system","language":"system","check_updates":true,"last_update_check":null}"#;
+        let settings: Settings = serde_json::from_str(old).unwrap();
+        assert_eq!(settings.retention_days, Some(30));
+        assert_eq!(settings.history_limit, Some(500));
+        assert!(settings.move_used_to_top);
+
+        let unlimited = Settings {
+            retention_days: None,
+            history_limit: None,
+            ..settings
+        };
+        let value = serde_json::to_value(unlimited).unwrap();
+        assert!(value["retention_days"].is_null());
+        assert!(value["history_limit"].is_null());
     }
 
     #[test]

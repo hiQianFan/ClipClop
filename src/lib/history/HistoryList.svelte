@@ -2,7 +2,7 @@
   import { flip } from "svelte/animate";
   import { cubicOut } from "svelte/easing";
   import { fade } from "svelte/transition";
-  import { ChevronLeft, ChevronRight, File, Image, Search } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, ChevronRight, File, Image, Search } from "@lucide/svelte";
   import { formatNumber, t } from "$lib/i18n/index.svelte";
   import { canExpand, clipPreview, fileName, groupedFiles } from "./presentation";
   import type { HistoryPage } from "./types";
@@ -103,9 +103,9 @@
 </section>
 
 <footer class="pager">
-  <button disabled={page.page <= 1} onclick={() => onpage(page.page - 1)} aria-label={t("history.previousPage")}><ChevronLeft size={16} aria-hidden="true" /></button>
+  <button disabled={page.page <= 1} onclick={() => onpage(page.page - 1)} aria-label={t("history.previousPage")}><ArrowLeft size={16} aria-hidden="true" /></button>
   <span>{formatNumber(page.total_pages === 0 ? 0 : page.page)}/{formatNumber(page.total_pages)}</span>
-  <button disabled={page.page >= page.total_pages} onclick={() => onpage(page.page + 1)} aria-label={t("history.nextPage")}><ChevronRight size={16} aria-hidden="true" /></button>
+  <button disabled={page.page >= page.total_pages} onclick={() => onpage(page.page + 1)} aria-label={t("history.nextPage")}><ArrowRight size={16} aria-hidden="true" /></button>
 </footer>
 
 <style>

@@ -58,6 +58,21 @@ pub(crate) fn install(app: &tauri::App, settings: &Settings) -> tauri::Result<()
     Ok(())
 }
 
+pub(crate) fn refresh_menu(
+    app: &tauri::AppHandle,
+    language: LanguagePreference,
+) -> tauri::Result<()> {
+    let labels = menu_labels(language, sys_locale::get_locale().as_deref());
+    let open = MenuItem::with_id(app, OPEN_ID, labels.open, true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, QUIT_ID, labels.quit, true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        tray.set_menu(Some(menu))?;
+    }
+    Ok(())
+}
+
 fn menu_labels(preference: LanguagePreference, system_locale: Option<&str>) -> MenuLabels {
     let chinese = match preference {
         LanguagePreference::ChineseSimplified => true,

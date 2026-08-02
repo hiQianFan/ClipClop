@@ -5,12 +5,15 @@
   import type { ClipSummary } from "$lib/history/types";
   import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
+  import { routeWindowKey } from "$lib/history/keyboard";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
   import { quitApp } from "$lib/settings/api";
   import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft } from "@lucide/svelte";
+  import OnboardingView from "$lib/onboarding/OnboardingView.svelte";
+  import { getOnboardingState, type OnboardingState } from "$lib/onboarding/api";
 
   type InteractionMode = "browse" | "search" | "menu" | "confirmation" | "file-tablist";
 
@@ -26,9 +29,13 @@
   let expandedId = $state<string | null>(null);
   let error = $state("");
   let copied = $state("");
+  let copiedTimer: number | undefined;
+  let showAutoPasteHelp = $state(false);
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
-  let view = $state<"history" | "settings">("history");
+  let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
+  let onboarding = $state<OnboardingState | null>(null);
+  let onboardingMode = $state<"first_run" | "quick_start" | "auto_paste">("first_run");
   let deletePending = $state(false);
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
@@ -51,7 +58,6 @@
 
   $effect(() => {
     effectiveLocale();
-    copied = "";
     error = "";
   });
 
@@ -60,17 +66,37 @@
     const updateReducedMotion = () => { reducedMotion = motionQuery.matches; };
     updateReducedMotion();
     motionQuery.addEventListener("change", updateReducedMotion);
-    void refreshAndFocus(1);
+    void initializeView();
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
     // Only an explicit panel show is a new browsing session. Quick Look also
     // returns focus to this window, but must preserve the current selection.
-    const unlistenPanel = listen("panel_shown", () => void resetToLatest());
+    const unlistenPanel = listen("panel_shown", () => {
+      if (view === "onboarding") return;
+      void resetToLatest();
+    });
     return () => {
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
       unlistenPanel.then((fn) => fn());
     };
   });
+
+  async function initializeView() {
+    let initializationError = "";
+    try {
+      onboarding = await getOnboardingState();
+      if (onboarding.completed_revision === null) {
+        onboardingMode = "first_run";
+        view = "onboarding";
+        return;
+      }
+    } catch (reason) {
+      initializationError = localizedError(reason);
+    }
+    view = "history";
+    await refreshAndFocus(1);
+    if (initializationError && !error) error = initializationError;
+  }
 
   async function refresh(targetPage = session.page.page, selectLatest = false) {
     error = "";
@@ -181,8 +207,9 @@
     try {
       const outcome = await pasteClip(session.selectedId, plainText);
       if (outcome !== "pasted") {
+        window.clearTimeout(copiedTimer);
         copied = pasteMessage(outcome);
-        setTimeout(() => copied = "", 3200);
+        showAutoPasteHelp = outcome === "copied_permission_required";
       }
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
@@ -197,9 +224,15 @@
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
     try {
-      await copyClip(session.selectedId, plainText);
+      const moved = await copyClip(session.selectedId, plainText);
+      window.clearTimeout(copiedTimer);
       copied = plainText ? t("history.copiedPlain") : t("history.copied");
-      setTimeout(() => copied = "", 1800);
+      showAutoPasteHelp = false;
+      if (moved) await refresh(1, true);
+      copiedTimer = window.setTimeout(() => {
+        copied = "";
+        showAutoPasteHelp = false;
+      }, 1800);
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
@@ -341,6 +374,19 @@
   async function openSettingsView() {
     appMenuOpen = false;
     view = "settings";
+  }
+
+  function openOnboarding(mode: "quick_start" | "auto_paste") {
+    onboardingMode = mode;
+    onboarding = mode === "quick_start"
+      ? { completed_revision: 1, current_step: "overview", visited_steps: ["overview"], selected_example: "image" }
+      : { completed_revision: 1, current_step: "auto_paste", visited_steps: ["auto_paste"], selected_example: null };
+    view = "onboarding";
+  }
+
+  function finishOnboarding(returnToSettings: boolean) {
+    view = returnToSettings ? "settings" : "history";
+    if (!returnToSettings) void refreshAndFocus(1);
   }
 
   function closeSettingsView() {
@@ -496,14 +542,6 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "w") {
-      event.preventDefault();
-      deletePending = false;
-      menuOpen = false;
-      appMenuOpen = false;
-      void hidePanel();
-      return true;
-    }
     if (deletePending) return;
     if (view === "settings") {
       return false;
@@ -534,6 +572,22 @@
       return true;
     }
     return false;
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    const action = routeWindowKey(event, { view, mode, deletePending, menuOpen, appMenuOpen });
+    if (!action) return;
+    event.preventDefault();
+    if (action === "cancel-delete") cancelDelete();
+    else if (action === "close-menu") closeMenu();
+    else if (action === "close-app-menu") closeAppMenu();
+    else if (action === "return-to-browse") enterBrowse();
+    else {
+      deletePending = false;
+      menuOpen = false;
+      appMenuOpen = false;
+      void hidePanel();
+    }
   }
 
   function onConfirmationKeydown(event: KeyboardEvent) {
@@ -625,9 +679,14 @@
   }
 </script>
 
-<svelte:window onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onWindowKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
+  {#if view === "onboarding" && onboarding}
+    <OnboardingView initial={onboarding} mode={onboardingMode} onfinish={finishOnboarding} />
+  {:else if view === "loading"}
+    <div class="root-loading" role="status">{t("settings.loading")}</div>
+  {:else}
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
@@ -700,7 +759,7 @@
       </div>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
-      {#if copied}<span class="message">{copied}</span>{/if}
+      {#if copied}<span class="message">{copied}</span>{#if showAutoPasteHelp}<button class="ghost" onclick={() => { copied = ""; showAutoPasteHelp = false; openOnboarding("auto_paste"); }}>{t("settings.autoPaste")}</button>{/if}{/if}
       <div bind:this={menuWrap} class="menu-wrap">
         <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
         {#if menuOpen}
@@ -719,12 +778,14 @@
     {/if}
   </footer>
   {:else}
-    <SettingsView onclose={closeSettingsView} oncleared={settingsClearedHistory} />
+    <SettingsView onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={() => void openOnboarding("quick_start")} />
+  {/if}
   {/if}
 </main>
 
 <style>
   .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:14px; box-shadow:var(--panel-shadow); overflow:hidden; }
+  .root-loading{grid-column:1/-1;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);font-size:13px}
   .titlebar { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--hairline); user-select:none; }
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }

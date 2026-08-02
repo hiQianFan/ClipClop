@@ -4,6 +4,7 @@ pub mod clipboard;
 pub mod commands;
 pub mod error;
 pub mod history;
+pub mod onboarding;
 pub mod paste;
 pub mod preview;
 pub mod settings;
@@ -15,9 +16,11 @@ pub mod window;
 pub mod workflows;
 
 use commands::{
-    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
-    get_clip_thumbnail, get_settings, get_source_app_icon, hide_panel, open_log_dir, paste_clip,
-    preview_clip, query_history, quit_app, record_update_check, update_settings,
+    clear_history, copy_clip, delete_clip, get_auto_paste_readiness, get_clip, get_clip_asset,
+    get_clip_file_asset, get_clip_thumbnail, get_onboarding_state, get_settings,
+    get_source_app_icon, hide_panel, open_auto_paste_settings, open_log_dir, paste_clip,
+    preview_clip, preview_onboarding_example, query_history, quit_app, record_update_check,
+    request_auto_paste_access, save_onboarding_state, set_language_preference, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -120,6 +123,7 @@ pub fn run() {
             }
 
             let data_dir = app.path().app_data_dir()?;
+            let database_existed = data_dir.join("clipclop.db").exists();
             log::info!("opening database at {}", data_dir.display());
             let database = Database::open(&data_dir.join("clipclop.db"))?;
             let mut startup_settings: Settings =
@@ -132,7 +136,9 @@ pub fn run() {
                 database.set_setting(SETTINGS_KEY, &startup_settings)?;
             }
             let startup_hotkey = startup_settings.hotkey.clone();
-            app.manage(AppState::new(database));
+            let app_state = AppState::new(database);
+            app_state.onboarding.initialize(database_existed)?;
+            app.manage(app_state);
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::PreviewState::default());
             if let Err(error) = workflows::settings_update::reconcile_autostart(
@@ -203,6 +209,7 @@ pub fn run() {
             get_clip_file_asset,
             get_clip_thumbnail,
             preview_clip,
+            preview_onboarding_example,
             get_source_app_icon,
             hide_panel,
             delete_clip,
@@ -213,7 +220,13 @@ pub fn run() {
             update_settings,
             record_update_check,
             open_log_dir,
-            quit_app
+            quit_app,
+            get_onboarding_state,
+            save_onboarding_state,
+            get_auto_paste_readiness,
+            request_auto_paste_access,
+            open_auto_paste_settings,
+            set_language_preference
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

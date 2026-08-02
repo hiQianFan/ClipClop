@@ -5,7 +5,7 @@ use crate::{
     storage::Database,
 };
 
-use super::{Settings, SETTINGS_KEY};
+use super::{LanguagePreference, Settings, SETTINGS_KEY};
 
 #[derive(Clone)]
 pub struct SettingsService {
@@ -47,6 +47,15 @@ impl SettingsService {
                 settings.last_update_check = Some(checked_at.clone());
             })?;
         Ok(checked_at)
+    }
+
+    pub fn set_language(&self, language: LanguagePreference) -> AppResult<LanguagePreference> {
+        let _guard = self.lock_mutation()?;
+        self.database
+            .update_setting(SETTINGS_KEY, |settings: &mut Settings| {
+                settings.language = language;
+            })?;
+        Ok(language)
     }
 
     pub fn lock_mutation(&self) -> AppResult<MutexGuard<'_, ()>> {
@@ -92,5 +101,24 @@ mod tests {
             .recv_timeout(Duration::from_secs(1))
             .unwrap()
             .is_ok());
+    }
+
+    #[test]
+    fn language_update_preserves_every_other_setting() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let before = Settings {
+            retention_days: Some(90),
+            last_update_check: Some("now".into()),
+            ..Settings::default()
+        };
+        service.set_internal(&before).unwrap();
+        service.set_language(LanguagePreference::English).unwrap();
+        assert_eq!(
+            service.get_stored().unwrap(),
+            Settings {
+                language: LanguagePreference::English,
+                ..before
+            }
+        );
     }
 }
