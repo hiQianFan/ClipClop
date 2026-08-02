@@ -1,0 +1,424 @@
+<!doctype html>
+<!-- ClipClop 首次激活引导 — 静态原型 (无逻辑, 不接入代码) -->
+<!-- 各屏并排展示; tokens 与 HistoryList 行视觉取自现有 app.css / HistoryList.svelte -->
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ClipClop Onboarding Prototype v2</title>
+<style>
+  :root{
+    --bg-shell:#17181a; --bg-raised:#1e2022; --bg-hover:#242628; --bg-selected:#2a2d30;
+    --hairline:#2c2f32; --text-1:#ecedee; --text-2:#aeb3b7; --text-3:#8a9095;
+    --action:#eceef0; --action-hover:#fff; --action-on:#17181a;
+    --step-current:var(--text-1); --step-visited:color-mix(in srgb,var(--text-1) 45%,transparent);
+    --step-unvisited:color-mix(in srgb,var(--text-1) 16%,transparent);
+    --danger:#ff6b72; --danger-fill:#b4232f; --ok:#5fd39a;
+    --panel-shadow:0 2px 5px rgba(0,0,0,.18),0 12px 24px rgba(0,0,0,.30);
+    --mono:"SF Mono","Cascadia Mono",ui-monospace,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:40px 24px 80px;background:#0c0d0e;color:var(--text-1);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  .lede{max-width:840px;margin:0 auto 8px;font-size:20px;font-weight:650;}
+  .sub{max-width:840px;margin:0 auto 32px;color:var(--text-2);font-size:13px;line-height:1.6;}
+  .grid{display:flex;flex-wrap:wrap;gap:40px 32px;justify-content:center;align-items:flex-start;}
+  .stage{width:760px;max-width:100%;}
+  .cap{margin:0 0 10px;font-size:12px;font-weight:650;color:var(--text-2);
+    display:flex;align-items:center;gap:8px;}
+  .cap b{color:var(--text-1);}
+  .cap .tag{padding:2px 8px;border:1px solid var(--hairline);border-radius:999px;
+    font-size:10px;font-weight:600;color:var(--text-3);}
+  .note{margin:8px 2px 0;font-size:11px;line-height:1.6;color:var(--text-3);}
+  .note b{color:var(--text-2);font-weight:600;}
+  /* ---- 面板外壳: 42px 标题栏 / 1fr 主体 / 48px 工具栏 ---- */
+  .panel{height:520px;display:grid;grid-template-rows:42px 1fr 48px;
+    background:var(--bg-shell);border-radius:14px;box-shadow:var(--panel-shadow);
+    overflow:hidden;border:1px solid var(--hairline);}
+  .titlebar{display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--hairline);}
+  .brand{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:12px;font-weight:600;}
+  .brand .mark{width:13px;height:13px;border-radius:3px;
+    background:linear-gradient(135deg,#7dd3fc,#38bdf8);}
+  /* ---- 标题栏语言切换(右上, 全局外壳控件) ---- */
+  .tb-spacer{flex:1;}
+  .lang-wrap{position:relative;}
+  .lang-btn{width:26px;height:24px;display:grid;place-items:center;border-radius:6px;
+    color:var(--text-2);background:transparent;border:0;cursor:default;}
+  .lang-btn:hover,.lang-btn.open{color:var(--text-1);background:var(--bg-hover);}
+  .lang-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;
+    stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .lang-menu{position:absolute;top:30px;right:0;width:150px;padding:5px;z-index:50;
+    border:1px solid var(--hairline);border-radius:8px;background:var(--bg-raised);
+    box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .lang-menu button{width:100%;display:flex;align-items:center;justify-content:space-between;
+    gap:10px;padding:7px 9px;border:0;border-radius:6px;color:var(--text-1);
+    background:transparent;font:inherit;font-size:12px;text-align:left;cursor:default;}
+  .lang-menu button:hover{background:var(--bg-hover);}
+  .lang-menu button .chk{color:var(--text-2);font-size:11px;}
+  .lang-menu button[aria-checked="true"]{color:var(--text-1);}
+  .lang-menu button:not([aria-checked="true"]) .chk{visibility:hidden;}
+  /* ---- 主体 ---- */
+  .body{min-height:0;overflow:hidden;}
+  .center{height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;gap:18px;padding:24px 40px;}
+  .h1{margin:0;font-size:20px;font-weight:680;letter-spacing:-.01em;}
+  .lead-copy{margin:0;max-width:60ch;color:var(--text-2);font-size:13px;line-height:1.65;}
+  /* ---- 键帽 (仿 SettingsView .keycap) ---- */
+  .keys{display:inline-flex;align-items:center;gap:5px;}
+  .keys.big .cap-key{font-size:16px;padding:8px 12px;min-width:38px;}
+  .cap-key{display:inline-flex;align-items:center;justify-content:center;
+    padding:3px 7px;border:1px solid var(--hairline);border-radius:5px;
+    background:var(--bg-raised);color:var(--text-1);font:13px/1.3 var(--mono);}
+  .plus{color:var(--text-3);font-size:12px;}
+  .hint-line{display:flex;align-items:center;gap:10px;color:var(--text-2);font-size:13px;}
+  /* ---- 隐私安抚 ---- */
+  .privacy{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;
+    border:1px solid var(--hairline);border-radius:8px;background:var(--bg-raised);
+    color:var(--text-2);font-size:12px;}
+  .privacy .lock{color:var(--ok);}
+  /* ---- 列表缩影 / 练习列表 (取自 HistoryList) ---- */
+  .mini{width:340px;border:1px solid var(--hairline);border-radius:10px;
+    background:var(--bg-shell);overflow:hidden;}
+  .mini .search{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;
+    color:var(--text-3);border-bottom:1px solid var(--hairline);font-size:12px;}
+  .mini .search .ph{flex:1;text-align:left;}
+  .mini .list{padding:6px;display:flex;flex-direction:column;gap:1px;}
+  .row{min-height:44px;display:flex;align-items:center;gap:8px;padding:7px 8px;
+    border-radius:8px;color:var(--text-1);background:transparent;}
+  .row.selected{background:var(--bg-selected);}
+  .row .num{width:16px;flex:none;color:var(--text-3);font:650 12px var(--mono);text-align:center;}
+  .row.selected .num{color:var(--text-2);}
+  .row .lead{width:28px;height:28px;flex:none;display:flex;align-items:center;
+    justify-content:center;border-radius:4px;color:var(--text-2);background:var(--bg-raised);
+    overflow:hidden;font-size:14px;}
+  .row .lead.logo{background:linear-gradient(135deg,#7dd3fc,#38bdf8);color:#0c2a3a;font-weight:800;font-size:13px;}
+  .row .snippet{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;font:13px/1.5 var(--mono);}
+  /* ---- 练习页 42/58 左右 ---- */
+  .split{height:100%;display:grid;grid-template-columns:42% 58%;}
+  .split .lft{display:flex;flex-direction:column;justify-content:center;gap:14px;
+    padding:28px 24px 28px 40px;border-right:1px solid var(--hairline);}
+  .split .lft h2{margin:0;font-size:15px;font-weight:650;}
+  .split .lft p{margin:0;color:var(--text-2);font-size:12px;line-height:1.6;}
+  .split .rgt{display:flex;flex-direction:column;justify-content:center;gap:12px;padding:24px 40px 24px 24px;}
+  .target{border:1px dashed var(--hairline);border-radius:8px;padding:11px 12px;
+    color:var(--text-3);font-size:12px;background:var(--bg-raised);min-height:42px;
+    display:flex;align-items:center;gap:8px;}
+  .target.done{border-style:solid;border-color:color-mix(in srgb,var(--ok) 40%,var(--hairline));
+    color:var(--text-1);}
+  .target .dot{width:7px;height:7px;border-radius:50%;background:var(--text-3);flex:none;}
+  .target.done .dot{background:var(--ok);}
+  .sandbox-tag{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:6px;}
+  .ok-msg{color:var(--ok);font-size:12px;display:flex;align-items:center;gap:6px;}
+  /* ---- 键位图例 (客观机械说明) ---- */
+  .legend{display:flex;flex-direction:column;gap:9px;margin-top:2px;}
+  .legend .kv{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-2);}
+  .legend .kv .k{flex:none;display:inline-flex;gap:3px;}
+  .legend .kv .k .cap-key{font-size:11px;padding:2px 6px;}
+  /* ---- 右侧沙盒: 列表 + 预览区 + app 替身 ---- */
+  .sandbox{display:flex;flex-direction:column;gap:10px;height:100%;justify-content:center;}
+  .sandbox .mini{width:100%;}
+  .pv{border:1px solid var(--hairline);border-radius:8px;background:var(--bg-raised);
+    padding:9px 11px;min-height:44px;display:flex;flex-direction:column;gap:4px;}
+  .pv .lbl{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;}
+  .pv .val{font:12px/1.5 var(--mono);color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pv.img{align-items:flex-start;}
+  .pv .thumb{width:100%;height:52px;border-radius:5px;
+    background:linear-gradient(135deg,#7dd3fc,#38bdf8);display:grid;place-items:center;
+    color:#0c2a3a;font-weight:800;font-size:15px;}
+  /* app 替身目标 */
+  .mock{border:1px solid var(--hairline);border-radius:8px;background:var(--bg-shell);
+    padding:9px 11px;min-height:46px;}
+  .mock .cue{font-size:10px;color:var(--text-3);margin-bottom:4px;}
+  .mock .field{font:13px/1.5 var(--mono);color:var(--text-3);}
+  .mock.filled .field{color:var(--text-1);}
+  .mock .caret{color:var(--text-2);}
+  /* ---- 权限状态: 收成按钮下一行小字, 不用顶部 emoji/气泡 ---- */
+  .statecap{display:flex;align-items:center;justify-content:center;gap:7px;
+    margin:0;color:var(--text-2);font-size:12px;}
+  .statecap .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .statecap.warn .dot{background:#e0a53f;} .statecap.warn{color:#e6b968;}
+  .statecap.ok .dot{background:var(--ok);} .statecap.ok{color:var(--ok);}
+  .statecap.limit .dot{background:var(--text-3);}
+  /* ---- 工具栏 ---- */
+  .toolbar{display:flex;align-items:center;justify-content:space-between;
+    padding:0 14px;border-top:1px solid var(--hairline);}
+  .nav{display:flex;align-items:center;gap:10px;}
+  .arrow{width:34px;height:30px;display:grid;place-items:center;border:1px solid var(--hairline);
+    border-radius:6px;background:transparent;color:var(--text-2);font-size:15px;cursor:default;}
+  .arrow[disabled]{opacity:.35;}
+  .dots{display:flex;align-items:center;gap:8px;padding:0 4px;}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--step-unvisited);display:block;}
+  .dots i.visited{background:var(--step-visited);}
+  .dots i.on{background:var(--step-current);width:8px;height:8px;box-shadow:0 0 0 2px var(--bg-shell);}
+  .acts{display:flex;align-items:center;gap:10px;}
+  .btn{padding:7px 14px;border:1px solid var(--hairline);border-radius:7px;
+    background:transparent;color:var(--text-2);font:inherit;font-size:12px;cursor:default;}
+  .btn.ghost{border-color:transparent;color:var(--text-3);}
+  .btn.primary{background:var(--action);color:var(--action-on);border-color:var(--action);font-weight:650;}
+  .btn.link{border:0;color:var(--text-2);text-decoration:underline;text-underline-offset:2px;padding:7px 4px;}
+  /* ---- 降级恢复条 ---- */
+  .deg{display:flex;align-items:center;gap:10px;width:100%;padding:0 4px;}
+  .deg .msg{flex:1;color:var(--text-2);font-size:12px;}
+  .deg .msg b{color:var(--text-1);font-weight:600;}
+</style>
+</head>
+<body>
+<p class="lede">ClipClop 首次激活引导 — 各阶段界面原型</p>
+<p class="sub">纯静态展示, 不含逻辑, 独立于现有代码。外壳(42px 标题栏 / 主体 / 48px 工具栏)、
+颜色令牌与列表行视觉均取自现有 app.css 与 HistoryList.svelte。macOS 深色主题。</p>
+
+<div class="grid">
+
+<!-- ============ 第 1 屏 · 工作方式 ============ -->
+<div class="stage">
+  <p class="cap"><b>第 1 屏 · 工作方式</b><span class="tag">居中上下</span>orient + 语言下拉展开态演示</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap">
+        <button class="lang-btn open" aria-label="语言 / Language" aria-haspopup="menu" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button>
+        <div class="lang-menu" role="menu">
+          <button role="menuitemradio" aria-checked="true">跟随系统<span class="chk">✓</span></button>
+          <button role="menuitemradio" aria-checked="false">简体中文<span class="chk">✓</span></button>
+          <button role="menuitemradio" aria-checked="false">English<span class="chk">✓</span></button>
+        </div>
+      </span>
+    </div>
+    <div class="body"><div class="center">
+      <h2 class="h1">复制一次，随时找回</h2>
+      <p class="lead-copy">你复制过的内容都留在这台电脑上。需要时用一个快捷键唤出列表，选中，回车粘回你刚才的应用。</p>
+      <div class="mini" aria-hidden="true">
+        <div class="search"><span>⌕</span><span class="ph">搜索历史</span><span class="cap-key" style="font-size:10px;padding:1px 5px">/</span></div>
+        <div class="list">
+          <div class="row"><span class="num">1</span><span class="lead logo">CC</span><span class="snippet">ClipClop-logo.png</span></div>
+          <div class="row"><span class="num">2</span><span class="lead">🔗</span><span class="snippet">https://github.com/hiQianFan/ClipClop</span></div>
+          <div class="row"><span class="num">3</span><span class="lead">¶</span><span class="snippet">ClipClop — 键盘优先的剪贴板历史</span></div>
+        </div>
+      </div>
+      <div class="hint-line">按
+        <span class="keys big"><span class="cap-key">⌃</span><span class="plus">+</span><span class="cap-key">⌘</span><span class="plus">+</span><span class="cap-key">C</span></span>
+        随时唤起
+      </div>
+      <span class="privacy"><span class="lock">🔒</span>只保存在你的电脑上，不上传任何服务器</span>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow" disabled>‹</button>
+        <span class="dots"><i class="on"></i><i></i><i></i></span>
+        <button class="arrow">›</button></div>
+      <div class="acts"></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> 列表缩影(静态)+大号 <b>⌃⌘C</b> 双焦点, 替换原四图标流程。底部右侧无退出按钮, › 前进即可。
+  <b>标题栏右上=语言</b>(lucide Languages 图标), 点开为三项下拉「跟随系统✓/简体中文/English」, 全局生效、默认跟随系统; 此处展示展开态。
+  复制键 ⌘C 不与召回键 ⌃⌘C 并排, 避免混淆。第 2 屏复用同一批示例数据。</p>
+</div>
+
+<!-- ============ 第 2 屏 · 上手 (Space 预览态) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 2 屏 · 上手</b><span class="tag">左右 · 镜像 Workspace</span>Space 预览(免权限, 真行为)</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="split">
+      <div class="lft">
+        <h2>浏览 · 预览 · 粘贴</h2>
+        <div class="legend">
+          <div class="kv"><span class="k"><span class="cap-key">↑</span><span class="cap-key">↓</span></span>选择</div>
+          <div class="kv"><span class="k"><span class="cap-key">1</span>–<span class="cap-key">9</span></span>快速选择</div>
+          <div class="kv"><span class="k"><span class="cap-key">Space</span></span>预览</div>
+          <div class="kv"><span class="k"><span class="cap-key">⏎</span></span>粘贴到你的应用</div>
+        </div>
+        <p class="sandbox-tag">🛈 下方是示例数据，操作不会写入系统剪贴板。</p>
+      </div>
+      <div class="rgt"><div class="sandbox">
+        <div class="mini" aria-hidden="true"><div class="list">
+          <div class="row"><span class="num">1</span><span class="lead">🔗</span><span class="snippet">https://github.com/hiQianFan/ClipClop</span></div>
+          <div class="row selected"><span class="num">2</span><span class="lead logo">CC</span><span class="snippet">ClipClop-logo.png</span></div>
+          <div class="row"><span class="num">3</span><span class="lead">¶</span><span class="snippet">ClipClop — 键盘优先的剪贴板历史</span></div>
+        </div></div>
+        <div class="pv img"><span class="lbl">预览 · Space</span><div class="thumb">CC</div></div>
+      </div></div>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="on"></i><i></i></span>
+        <button class="arrow">›</button></div>
+      <div class="acts"></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> 左侧=客观键位图例(陈述句, 不是"试一下")。右侧=真 HistoryList 沙盒。
+  <b>Space 预览是真行为</b>(渲染 app 已有数据, 从不需要权限); 选中 CC 图片, 预览区显示缩略图。无「重新练习」、无庆祝。</p>
+</div>
+
+<!-- ============ 第 2 屏 · 上手 (Enter 粘贴到 app 替身态) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 2 屏 · 上手</b><span class="tag">左右 · 镜像 Workspace</span>Enter → 内容进"你的应用"替身</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="split">
+      <div class="lft">
+        <h2>浏览 · 预览 · 粘贴</h2>
+        <div class="legend">
+          <div class="kv"><span class="k"><span class="cap-key">↑</span><span class="cap-key">↓</span></span>选择</div>
+          <div class="kv"><span class="k"><span class="cap-key">1</span>–<span class="cap-key">9</span></span>快速选择</div>
+          <div class="kv"><span class="k"><span class="cap-key">Space</span></span>预览</div>
+          <div class="kv"><span class="k"><span class="cap-key">⏎</span></span>粘贴到你的应用</div>
+        </div>
+        <p class="sandbox-tag">🛈 下方是示例数据，操作不会写入系统剪贴板。</p>
+      </div>
+      <div class="rgt"><div class="sandbox">
+        <div class="mini" aria-hidden="true"><div class="list">
+          <div class="row selected"><span class="num">1</span><span class="lead">🔗</span><span class="snippet">https://github.com/hiQianFan/ClipClop</span></div>
+          <div class="row"><span class="num">2</span><span class="lead logo">CC</span><span class="snippet">ClipClop-logo.png</span></div>
+          <div class="row"><span class="num">3</span><span class="lead">¶</span><span class="snippet">ClipClop — 键盘优先的剪贴板历史</span></div>
+        </div></div>
+        <div class="mock filled"><div class="cue">你之前输入的位置</div>
+          <div class="field">https://github.com/hiQianFan/ClipClop<span class="caret">▍</span></div></div>
+      </div></div>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="on"></i><i></i></span>
+        <button class="arrow">›</button></div>
+      <div class="acts"></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> Enter 把选中内容渲染进<b>"你的应用"替身</b>(带标签的仿输入框), 忠实类比"内容落回你工作的地方"——不是中性框, 避免教错心智模型。
+  唯一被模拟的就是这一下(真实需权限); 交互本身即反馈, 无庆祝横幅。</p>
+</div>
+
+<!-- ============ 第 3 屏 · 自动粘贴 (macOS: 需授权) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 3 屏 · 自动粘贴</b><span class="tag">macOS · permission_required</span>末步:唯一的动作</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="center">
+      <h2 class="h1">让 Enter 直接替你粘贴</h2>
+      <p class="lead-copy">第二屏里浏览和预览都不需要权限。只差最后一下——让 Enter 把内容送进你<b>真正的应用</b>，这需要 macOS「辅助功能」权限，它<b>仅用于发送粘贴快捷键</b>。不授权也没关系，你仍可手动按 ⌘V。</p>
+      <button class="btn primary">启用自动粘贴</button>
+      <p class="statecap warn"><span class="dot"></span>当前尚未授权，自动粘贴未开启</p>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="visited"></i><i class="on"></i></span>
+        <button class="arrow" disabled>›</button></div>
+      <div class="acts"><button class="btn link">稍后设置</button></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> <b>主操作移到主体中间</b>(状态→为什么→按钮 一条直线), 工具栏右侧只剩流程控制「稍后设置」。
+  文案接住第二屏叙事:"其它都免权限, 只差最后一下"。渲染不自动请求; Escape 等同「稍后设置」。</p>
+</div>
+
+<!-- ============ 第 3 屏 · 自动粘贴 (macOS: 请求后待复检) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 3 屏 · 自动粘贴</b><span class="tag">macOS · 请求已发起</span>点「启用」之后</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="center">
+      <h2 class="h1">在系统设置里勾选 ClipClop</h2>
+      <p class="lead-copy">已为你打开「隐私与安全性 → 辅助功能」。找到 ClipClop 并打开开关，然后回到这里——我们会自动重新检查。</p>
+      <button class="btn primary">打开系统设置</button>
+      <p class="statecap warn"><span class="dot"></span>等待系统授权，回到应用后自动复检</p>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="visited"></i><i class="on"></i></span>
+        <button class="arrow" disabled>›</button></div>
+      <div class="acts"><button class="btn link">稍后设置</button></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> 对应 D7 —「请求返回只表示已发起, 不能声称已授予」。回到应用重获焦点时复检, 而非轮询。此前原型缺的关键一跳。</p>
+</div>
+
+<!-- ============ 第 3 屏 · 自动粘贴 (macOS: 已就绪) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 3 屏 · 自动粘贴</b><span class="tag">macOS · available</span>已授权(含开发/签名首启即已授权)</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="center">
+      <h2 class="h1">自动粘贴已开启</h2>
+      <p class="lead-copy">现在选中任意一条按 Enter，内容会直接粘到你上一个应用。随时可在「设置 → 自动粘贴」里查看或关闭。</p>
+      <p class="statecap ok"><span class="dot"></span>已就绪，Enter 将自动粘贴</p>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="visited"></i><i class="on"></i></span>
+        <button class="arrow" disabled>›</button></div>
+      <div class="acts"><button class="btn primary">完成</button></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> 已就绪时收起「启用」按钮, 只留安抚+完成。design.md 指出开发版/签名版 TCC 身份不同, 首启即已授权是真实可能。</p>
+</div>
+
+<!-- ============ 第 3 屏 · 自动粘贴 (Windows 变体) ============ -->
+<div class="stage">
+  <p class="cap"><b>第 3 屏 · 自动粘贴</b><span class="tag">Windows · available_with_elevated_target_limit</span>末步降级为「说明」而非「动作」</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="center">
+      <h2 class="h1">按 Enter 会尝试自动粘贴</h2>
+      <p class="lead-copy">大多数应用里，选中内容按 Enter 会自动粘贴，无需任何授权。少数以管理员身份运行的窗口可能拦截，这时手动按 <span class="cap-key" style="font-size:11px">Ctrl</span>+<span class="cap-key" style="font-size:11px">V</span> 即可。</p>
+      <p class="statecap limit"><span class="dot"></span>无需授权，高权限窗口可能需手动 Ctrl+V</p>
+    </div></div>
+    <div class="toolbar">
+      <div class="nav"><button class="arrow">‹</button>
+        <span class="dots"><i class="visited"></i><i class="visited"></i><i class="on"></i></span>
+        <button class="arrow" disabled>›</button></div>
+      <div class="acts"><button class="btn primary">完成</button></div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> <b>无启用按钮、无提权建议</b>。文案把管理员目标说成「可能」而非确定 UIPI。顺序骨架与 macOS 共用, 只末步换脸。</p>
+</div>
+
+<!-- ============ 附:History 降级恢复条 (非引导, 展示 D9 落点) ============ -->
+<div class="stage">
+  <p class="cap"><b>附 · 粘贴降级恢复条</b><span class="tag">History 底部工具栏</span>不在引导内, 展示 D9 落点</p>
+  <div class="panel">
+    <div class="titlebar"><span class="brand"><span class="mark"></span>ClipClop</span>
+      <span class="tb-spacer"></span>
+      <span class="lang-wrap"><button class="lang-btn" aria-label="语言 / Language" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg></button></span>
+    </div>
+    <div class="body"><div class="split">
+      <div class="lft" style="border:0">
+        <h2>面板正常使用中</h2>
+        <p>降级通知<b>保留到面板下次可见</b>才出现, 且带一个可执行操作, 而不是 3 秒自动消失的纯文字。</p>
+      </div>
+      <div class="rgt">
+        <div class="mini" aria-hidden="true"><div class="list">
+          <div class="row selected"><span class="num">1</span><span class="lead">¶</span><span class="snippet">刚复制的这段文字</span></div>
+          <div class="row"><span class="num">2</span><span class="lead">🔗</span><span class="snippet">https://example.com</span></div>
+        </div></div>
+      </div>
+    </div></div>
+    <div class="toolbar">
+      <div class="deg">
+        <span class="msg">✓ <b>已复制到剪贴板</b> · 自动粘贴未生效——按 ⌘V 手动粘贴，或</span>
+        <button class="btn">启用自动粘贴</button>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>要点:</b> 权限缺失→「启用自动粘贴」; 焦点/注入失败→「检查自动粘贴」。<b>不自动重试</b>(防内容进错窗口)。操作直达设置管理, 不重跑教程。</p>
+</div>
+
+</div>
+</body>
+</html>

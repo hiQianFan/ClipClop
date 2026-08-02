@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipClop 设置 Switch Demo</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --shell: #f2f3f4;
+      --panel: #fafbfb;
+      --raised: #fff;
+      --selected: #e2e5e8;
+      --line: #d9dde0;
+      --text: #1c1e20;
+      --muted: #687076;
+      --action: #1c1e20;
+      --on-action: #fff;
+      --switch-off: #e2e5e8;
+      --switch-border: #c8cdd1;
+      --focus: #5d6367;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #dfe2e5;
+      color: var(--text);
+    }
+
+    .window {
+      width: min(900px, calc(100vw - 40px));
+      min-height: 590px;
+      overflow: hidden;
+      border: 1px solid rgb(0 0 0 / 12%);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 24px 70px rgb(0 0 0 / 20%);
+    }
+
+    .titlebar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot:nth-child(1) { background: #ff5f57; }
+    .dot:nth-child(2) { background: #febc2e; }
+    .dot:nth-child(3) { background: #28c840; }
+
+    .layout { display: grid; grid-template-columns: 210px 1fr; min-height: 538px; }
+    aside { padding: 22px 14px; background: var(--shell); border-right: 1px solid var(--line); }
+    .brand { padding: 0 12px 22px; font-size: 19px; font-weight: 700; }
+    nav span {
+      display: block;
+      width: 100%; padding: 10px 12px; border: 0; border-radius: 8px;
+      background: transparent; color: inherit; text-align: left; font: inherit;
+    }
+    nav span.active { background: var(--selected); font-weight: 600; }
+
+    main { padding: 34px 42px; }
+    h1 { margin: 0 0 6px; font-size: 26px; }
+    .intro { margin: 0 0 30px; color: var(--muted); font-size: 14px; }
+    .group { overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--raised); }
+    .row {
+      min-height: 78px; display: flex; align-items: center; justify-content: space-between;
+      gap: 28px; padding: 16px 18px;
+    }
+    .row + .row { border-top: 1px solid var(--line); }
+    .copy strong { display: block; margin-bottom: 5px; font-size: 15px; }
+    .copy span { color: var(--muted); font-size: 13px; }
+
+    .switch { position: relative; flex: 0 0 auto; width: 44px; height: 44px; }
+    .switch input {
+      position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+      overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+    }
+    .track {
+      position: absolute; left: 4px; top: 12px; width: 36px; height: 20px;
+      border: 1px solid var(--switch-border); border-radius: 999px; background: var(--switch-off);
+      transition: background 140ms ease-out, border-color 140ms ease-out;
+    }
+    .track::after {
+      content: ""; position: absolute; left: 1px; top: 1px; width: 16px; height: 16px;
+      border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 22%);
+      transition: transform 140ms ease-out;
+    }
+    .switch:hover .track { border-color: var(--muted); }
+    .switch input:checked + .track { border-color: var(--action); background: var(--action); }
+    .switch input:checked + .track::after { background: var(--on-action); }
+    .switch input:checked + .track::after { transform: translateX(16px); }
+    .switch input:focus-visible + .track { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+    .note {
+      margin-top: 24px; padding: 14px 16px; border-radius: 10px;
+      background: var(--shell); color: var(--muted); font-size: 13px; line-height: 1.55;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --shell: #17181a; --panel: #1e2022; --raised: #242628; --selected: #2a2d30;
+        --line: #34373a; --text: #ecedee; --muted: #aeb3b7; --action: #eceef0; --on-action: #17181a;
+        --switch-off: #3a3e42; --switch-border: #50555a; --focus: #aeb3b7;
+      }
+      body { background: #0d0e0f; }
+      .window { border-color: rgb(255 255 255 / 10%); }
+    }
+
+    @media (max-width: 680px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { display: none; }
+      main { padding: 28px 22px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .track, .track::after { transition: none; }
+    }
+
+    @media (forced-colors: active) {
+      .track { border: 1px solid ButtonText; background: Canvas; }
+      .track::after { background: ButtonText; }
+      .switch input:checked + .track { background: Highlight; }
+      .switch input:checked + .track::after { background: HighlightText; }
+    }
+  </style>
+</head>
+<body>
+  <section class="window" aria-label="ClipClop 设置演示">
+    <header class="titlebar" aria-hidden="true">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </header>
+    <div class="layout">
+      <aside>
+        <div class="brand">ClipClop</div>
+        <nav aria-label="设置分类">
+          <span class="active" aria-current="page">通用</span>
+          <span>快捷键</span>
+          <span>更新</span>
+          <span>关于</span>
+        </nav>
+      </aside>
+      <main>
+        <h1>通用</h1>
+        <p class="intro">使用 Switch 表达持续生效的布尔设置。</p>
+
+        <div class="group" role="group" aria-label="通用设置">
+          <div class="row">
+            <span class="copy"><strong>开机启动</strong><span id="launch-desc">登录后自动运行 ClipClop</span></span>
+            <label class="switch"><input type="checkbox" role="switch" aria-label="开机启动" aria-describedby="launch-desc"><span class="track"></span></label>
+          </div>
+          <div class="row">
+            <span class="copy"><strong>使用后移到顶部</strong><span id="promote-desc">复制或粘贴历史记录后，将它移到列表顶部</span></span>
+            <label class="switch"><input type="checkbox" role="switch" checked aria-label="使用后移到顶部" aria-describedby="promote-desc"><span class="track"></span></label>
+          </div>
+          <div class="row">
+            <span class="copy"><strong>自动检查更新</strong><span id="update-desc">定期检查是否有新版本</span></span>
+            <label class="switch"><input type="checkbox" role="switch" checked aria-label="自动检查更新" aria-describedby="update-desc"><span class="track"></span></label>
+          </div>
+        </div>
+
+        <div class="note">单色 Surface Mini Switch：仅右侧控件区域响应点击；也可按 Tab 聚焦后使用空格切换。</div>
+      </main>
+    </div>
+  </section>
+</body>
+</html>
