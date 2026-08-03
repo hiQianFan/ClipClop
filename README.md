@@ -61,7 +61,7 @@ Delete individual items, clear the history, limit it by age and item count, or q
 
 ## Project status
 
-ClipClop is currently a `0.2.0` preview. It adds first-run quick start, time-and-count history limits, optional recently-used ordering, and clearer settings navigation. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
+ClipClop is currently a `0.2.1` preview. It adds first-run quick start, time-and-count history limits, optional recently-used ordering, and clearer settings navigation. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
 
 <details>
 <summary><strong>For contributors</strong></summary>

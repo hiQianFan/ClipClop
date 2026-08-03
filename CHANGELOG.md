@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-03
+
+### Fixed
+
+- 发布流程现在会从 GitHub Draft Release 重新下载更新包、签名和 `latest.json`，逐平台核对 manifest 签名并执行真实的 Minisign 验证，阻止旧签名与新安装包错配后发布。
+
 ## [0.2.0] - 2026-08-03
 
 ### Added

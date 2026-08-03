@@ -121,6 +121,9 @@ jobs:
       # This job only reads the draft and downloads latest.json.
       contents: write
     steps:
+      - uses: actions/checkout@v5
+      - name: Install Minisign
+        run: sudo apt-get update && sudo apt-get install --yes minisign
       - name: Verify assets and updater manifest
         shell: bash
         env:
@@ -169,3 +172,44 @@ jobs:
               and ($manifest.platforms[$platform].signature | length > 0)
             ))
           ' "$manifest_dir/latest.json"
+
+          download_asset() {
+            local asset_name="$1"
+            local asset_api_url
+            asset_api_url="$(
+              jq -r --arg name "$asset_name" \
+                '.assets[] | select(.name == $name) | .url' \
+                <<<"$release_json"
+            )"
+            test -n "$asset_api_url"
+            gh api \
+              --header "Accept: application/octet-stream" \
+              "$asset_api_url" > "$manifest_dir/$asset_name"
+          }
+
+          mac_bundle="ClipClop_universal.app.tar.gz"
+          mac_signature="$mac_bundle.sig"
+          windows_bundle="ClipClop_${release_version}_x64-setup.exe"
+          windows_signature="$windows_bundle.sig"
+          download_asset "$mac_bundle"
+          download_asset "$mac_signature"
+          download_asset "$windows_bundle"
+          download_asset "$windows_signature"
+
+          mac_manifest_signature="$(jq -r '.platforms["darwin-aarch64"].signature' "$manifest_dir/latest.json")"
+          windows_manifest_signature="$(jq -r '.platforms["windows-x86_64"].signature' "$manifest_dir/latest.json")"
+          test "$mac_manifest_signature" = "$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
+          test "$windows_manifest_signature" = "$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
+          test "$mac_manifest_signature" = "$(jq -r '.platforms["darwin-x86_64"].signature' "$manifest_dir/latest.json")"
+          test "$windows_manifest_signature" = "$(jq -r '.platforms["windows-x86_64-nsis"].signature' "$manifest_dir/latest.json")"
+
+          updater_pubkey="$(
+            jq -r '.plugins.updater.pubkey' src-tauri/tauri.conf.json \
+              | base64 --decode \
+              | awk '/^RW/ { print; exit }'
+          )"
+          test -n "$updater_pubkey"
+          base64 --decode < "$manifest_dir/$mac_signature" > "$manifest_dir/$mac_signature.decoded"
+          base64 --decode < "$manifest_dir/$windows_signature" > "$manifest_dir/$windows_signature.decoded"
+          minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
+          minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"

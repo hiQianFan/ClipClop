@@ -61,7 +61,7 @@ ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数�
 
 ## 项目状态
 
-ClipClop 当前为 `0.2.0` 预览版，新增首次启动快速入门、按时间与数量清理历史、可选的最近使用排序，以及更清晰的设置导航。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
+ClipClop 当前为 `0.2.1` 预览版，新增首次启动快速入门、按时间与数量清理历史、可选的最近使用排序，以及更清晰的设置导航。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
 
 <details>
 <summary><strong>参与开发</strong></summary>
