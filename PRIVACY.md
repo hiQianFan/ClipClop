@@ -16,6 +16,10 @@ When automatic update checks are enabled, ClipClop contacts GitHub Releases at m
 
 ## Your controls
 
-You can delete individual entries, clear all history, choose a retention period, or quit ClipClop to stop capture. Uninstall behavior varies by operating system and installer; to remove all local data, quit ClipClop and delete the application data directory for `com.clipclop.desktop`.
+You can delete individual entries, clear all history, limit history by age and item count, or quit ClipClop to stop capture. When recently used items are moved to the top, cleanup uses their last-used time. Uninstall behavior varies by operating system and installer; to remove all local data, quit ClipClop and delete the application data directory for `com.clipclop.desktop`.
+
+## System permissions
+
+On macOS, optional automatic paste uses Accessibility permission only to send the paste shortcut after you choose an item. If permission is denied, ClipClop still copies the item and you can paste manually. The first-run quick start uses only built-in examples and does not display your clipboard history.
 
 This notice must be updated before adding telemetry, cloud sync, or any new network feature that processes clipboard data.

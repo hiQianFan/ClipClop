@@ -81,6 +81,12 @@ Diagnostic logs contain operational events and error text, never clipboard paylo
 
 Windows GUI processes write to the per-app log file only. Do not add a Windows stderr target: a `tauri dev` child can outlive its terminal, and fern panics when it writes to the resulting broken pipe. Other platforms may also write to stderr for development.
 
+## Persistence and history lifecycle
+
+Schema changes increment `SCHEMA_VERSION` and migrate every supported released schema explicitly. Schema v5 preserves immutable creation time separately from last-used time; retention by age follows last-used time when recently used items are configured to move to the top. Downgrading a migrated database to `0.1.x` is unsupported.
+
+History limits are enforced at capture and settings-update boundaries. The time and item-count limits are independent, and enabling both applies both. First-run quick start content is a fixed set of built-in examples and local resources; it never reads real clipboard history.
+
 ## Verification gates
 
 All changes must pass the automated checks in `CONTRIBUTING.md`. Changes involving focus, keyboard behavior, paste, preview, or panel lifecycle also require real-device verification:

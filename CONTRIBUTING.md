@@ -42,7 +42,7 @@ Changes involving keyboard behavior, focus, the system clipboard, permissions, o
 - Keep Rust business rules in their feature modules and Tauri commands thin. Svelte code should call IPC through feature `api.ts` modules.
 - Route every main-panel show or hide through the `window` module. Do not call native `show()`, `hide()`, or platform focus fallbacks from commands or feature modules.
 - Keep native panel lifecycle separate from preview state, and preserve the lifecycle invariants documented in the architecture guide.
-- Until a migration system is introduced, database schema changes must increment `SCHEMA_VERSION`; development databases with an older version must be reset.
+- Database schema changes must increment `SCHEMA_VERSION` and provide an explicit migration from every supported released schema. Never require users to delete their database unless the release documents a deliberate destructive migration.
 - Update relevant documentation in the same pull request when user behavior, permissions, data handling, or release behavior changes.
 - Keep changes focused. Suggested commit format: `type(scope): summary`, using types such as `feat`, `fix`, `docs`, `test`, `refactor`, `build`, or `ci`.
 
@@ -63,7 +63,7 @@ Do not disclose an unpatched vulnerability in a public issue or pull request. Us
 
 ## Maintainer release
 
-1. Update the matching version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+1. Update the matching version in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, and generated lockfiles when they record the application version.
 2. After the required `main` checks pass, manually run the **Release** workflow from `main` with that version. A version change or tag alone does not start a release.
 3. The workflow creates a Draft Release and verifies the macOS DMG, Windows installer, updater signatures, and `latest.json`; it never publishes automatically.
 4. Install the packages on both platforms when possible and review the generated notes. Publish the Draft as a normal Release only when verification is complete; publishing creates the canonical `vX.Y.Z` tag and makes the update visible to clients.

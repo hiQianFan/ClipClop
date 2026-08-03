@@ -57,11 +57,11 @@ ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。�
 
 ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数据保存在哪里，以及应用何时访问网络。开源本身不等于绝对安全，但它让隐私边界和安全承诺可以被验证，而不只是被相信。
 
-你可以删除单条记录、清空历史、设置保留期限，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](PRIVACY.zh-CN.md)。
+你可以删除单条记录、清空历史、按时间和条目数量限制历史，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](PRIVACY.zh-CN.md)。
 
 ## 项目状态
 
-ClipClop 当前为 `0.1.5` 预览版。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
+ClipClop 当前为 `0.2.0` 预览版，新增首次启动快速入门、按时间与数量清理历史、可选的最近使用排序，以及更清晰的设置导航。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
 
 <details>
 <summary><strong>参与开发</strong></summary>

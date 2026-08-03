@@ -42,7 +42,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Rust 业务规则放在对应模块，Tauri command 保持薄；Svelte 通过 feature `api.ts` 调用 IPC。
 - 主面板的所有显示与隐藏都必须经过 `window` 模块；command 和功能模块不得直接调用原生 `show()`、`hide()` 或平台焦点回退。
 - 原生面板生命周期必须与预览状态分离，并保持架构说明中记录的生命周期不变量。
-- 在迁移系统建立前，数据库结构变化必须递增 `SCHEMA_VERSION`；旧版本的开发数据库需要重置。
+- 数据库结构变化必须递增 `SCHEMA_VERSION`，并为所有仍受支持的已发布结构提供明确迁移。除非版本说明明确记录了有意的破坏性迁移，不得要求用户删除数据库。
 - 用户行为、权限、数据处理或发布流程改变时，同一 Pull Request 必须更新相应文档。
 - 保持变更聚焦。提交信息建议使用 `type(scope): summary`，常用类型为 `feat`、`fix`、`docs`、`test`、`refactor`、`build`、`ci`。
 
@@ -63,7 +63,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ## 维护者发布流程
 
-1. 同步更新 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号。
+1. 同步更新 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`，以及所有记录应用版本号的生成锁文件。
 2. 等待 `main` 必需检查通过后，从 `main` 手动运行 **Release** workflow 并填写该版本；仅修改版本号或创建标签都不会启动发布。
 3. workflow 创建 Draft Release，并自动验证 macOS DMG、Windows 安装包、更新签名和 `latest.json`；它不会自动公开。
 4. 条件允许时在两个平台实际安装，并检查自动生成的版本说明。仅在验收完成后将 Draft 发布为普通 Release；公开时创建的 `vX.Y.Z` 标签是版本的正式记录，同时让客户端检测到更新。
