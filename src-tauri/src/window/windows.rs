@@ -18,6 +18,14 @@ impl ActivationOutcome {
     }
 }
 
+fn with_keyboard_focus(outcome: ActivationOutcome, focused: bool) -> ActivationOutcome {
+    if focused {
+        outcome
+    } else {
+        ActivationOutcome::Rejected
+    }
+}
+
 struct ForegroundLockGuard {
     previous_timeout: Option<u32>,
 }
@@ -69,10 +77,10 @@ impl Drop for ForegroundLockGuard {
 // activation and can trigger tao#1180 ("cannot move state from Destroyed").
 pub(super) fn focus_foreground(window: &WebviewWindow) -> ActivationOutcome {
     use windows_sys::Win32::UI::{
-        Input::KeyboardAndMouse::SetFocus,
+        Input::KeyboardAndMouse::{GetFocus, SetFocus},
         WindowsAndMessaging::{
-            BringWindowToTop, GetForegroundWindow, IsIconic, SetForegroundWindow, ShowWindow,
-            SW_RESTORE, SW_SHOW,
+            BringWindowToTop, GetForegroundWindow, IsChild, IsIconic, SetForegroundWindow,
+            ShowWindow, SW_RESTORE, SW_SHOW,
         },
     };
 
@@ -90,14 +98,22 @@ pub(super) fn focus_foreground(window: &WebviewWindow) -> ActivationOutcome {
 
         if hwnd == GetForegroundWindow() {
             SetFocus(hwnd);
-            return ActivationOutcome::AlreadyForeground;
+            let focused = GetFocus();
+            return with_keyboard_focus(
+                ActivationOutcome::AlreadyForeground,
+                focused == hwnd || (!focused.is_null() && IsChild(hwnd, focused) != 0),
+            );
         }
 
         BringWindowToTop(hwnd);
         SetForegroundWindow(hwnd);
         if hwnd == GetForegroundWindow() {
             SetFocus(hwnd);
-            return ActivationOutcome::ActivatedNormally;
+            let focused = GetFocus();
+            return with_keyboard_focus(
+                ActivationOutcome::ActivatedNormally,
+                focused == hwnd || (!focused.is_null() && IsChild(hwnd, focused) != 0),
+            );
         }
 
         let _foreground_lock = ForegroundLockGuard::lift();
@@ -105,9 +121,30 @@ pub(super) fn focus_foreground(window: &WebviewWindow) -> ActivationOutcome {
         SetForegroundWindow(hwnd);
         if hwnd == GetForegroundWindow() {
             SetFocus(hwnd);
-            ActivationOutcome::ActivatedWithFallback
+            let focused = GetFocus();
+            with_keyboard_focus(
+                ActivationOutcome::ActivatedWithFallback,
+                focused == hwnd || (!focused.is_null() && IsChild(hwnd, focused) != 0),
+            )
         } else {
             ActivationOutcome::Rejected
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn activation_requires_keyboard_focus() {
+        assert_eq!(
+            with_keyboard_focus(ActivationOutcome::ActivatedNormally, true),
+            ActivationOutcome::ActivatedNormally
+        );
+        assert_eq!(
+            with_keyboard_focus(ActivationOutcome::ActivatedWithFallback, false),
+            ActivationOutcome::Rejected
+        );
     }
 }

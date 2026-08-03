@@ -55,6 +55,9 @@ pub(crate) fn install(app: &tauri::App, settings: &Settings) -> tauri::Result<()
         })
         .build(app)?;
 
+    #[cfg(target_os = "windows")]
+    watch_windows_theme(app.handle().clone());
+
     Ok(())
 }
 
@@ -147,6 +150,64 @@ fn windows_uses_light_taskbar() -> Option<bool> {
     };
 
     (status == ERROR_SUCCESS && value_size == size_of::<u32>() as u32).then_some(value != 0)
+}
+
+#[cfg(target_os = "windows")]
+fn watch_windows_theme(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        use windows_sys::Win32::System::Registry::{
+            RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER,
+            KEY_NOTIFY, REG_NOTIFY_CHANGE_LAST_SET,
+        };
+
+        let key = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let mut handle: HKEY = std::ptr::null_mut();
+        if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, key.as_ptr(), 0, KEY_NOTIFY, &mut handle) }
+            != 0
+        {
+            log::warn!("failed to watch Windows taskbar theme");
+            return;
+        }
+
+        loop {
+            let status = unsafe {
+                RegNotifyChangeKeyValue(
+                    handle,
+                    0,
+                    REG_NOTIFY_CHANGE_LAST_SET,
+                    std::ptr::null_mut(),
+                    0,
+                )
+            };
+            if status != 0 {
+                log::warn!("Windows taskbar theme watcher stopped with status {status}");
+                break;
+            }
+            let app = app.clone();
+            let callback_app = app.clone();
+            if let Err(error) =
+                app.run_on_main_thread(move || match callback_app.tray_by_id(TRAY_ID) {
+                    Some(tray) => {
+                        if let Err(error) =
+                            platform_icon().and_then(|icon| tray.set_icon(Some(icon)))
+                        {
+                            log::warn!(
+                                "failed to refresh tray icon after taskbar theme change: {error}"
+                            );
+                        }
+                    }
+                    None => log::warn!("failed to refresh missing tray icon"),
+                })
+            {
+                log::warn!("failed to schedule tray icon refresh: {error}");
+            }
+        }
+
+        unsafe { RegCloseKey(handle) };
+    });
 }
 
 #[cfg(test)]

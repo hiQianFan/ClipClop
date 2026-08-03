@@ -17,8 +17,11 @@ use crate::{
     window::PreviewState,
 };
 
+#[cfg(any(target_os = "macos", test))]
 const ONBOARDING_LOGO: &[u8] = include_bytes!("../../../static/app-icon.png");
+#[cfg(any(target_os = "macos", test))]
 const ONBOARDING_TEXT: &[u8] = b"ClipClop";
+#[cfg(any(target_os = "macos", test))]
 const ONBOARDING_LINK: &[u8] = b"https://github.com/hiQianFan/ClipClop";
 
 #[derive(Clone)]
@@ -162,7 +165,10 @@ impl PreviewService {
         #[cfg(target_os = "macos")]
         let path = self.clip_preview_path(app, id, index)?;
         #[cfg(not(target_os = "macos"))]
-        let path = PathBuf::new();
+        let path = {
+            let _ = (id, index);
+            PathBuf::new()
+        };
         platform::toggle_quicklook(app, state, &path)
     }
 
@@ -278,6 +284,7 @@ impl PreviewService {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn onboarding_preview(example: OnboardingExample) -> (&'static str, &'static str, &'static [u8]) {
     match example {
         OnboardingExample::Image => ("onboarding-image", "png", ONBOARDING_LOGO),

@@ -1,11 +1,14 @@
 use tauri::{AppHandle, State};
 
 use crate::{
-    error::{AppError, AppResult},
+    error::AppResult,
     onboarding::{self, AutoPasteReadiness, OnboardingState},
     settings::LanguagePreference,
     state::AppState,
 };
+
+#[cfg(target_os = "macos")]
+use crate::error::AppError;
 
 #[tauri::command]
 pub fn get_onboarding_state(state: State<'_, AppState>) -> AppResult<OnboardingState> {

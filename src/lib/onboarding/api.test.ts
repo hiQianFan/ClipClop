@@ -6,6 +6,12 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 describe("onboarding IPC", () => {
   beforeEach(() => invoke.mockReset());
 
+  it("exposes native onboarding preview only on macOS", async () => {
+    const api = await import("./api");
+    expect(api.supportsOnboardingPreview("macos")).toBe(true);
+    expect(api.supportsOnboardingPreview("windows")).toBe(false);
+  });
+
   it("uses stable commands and the onboarding argument name", async () => {
     invoke.mockResolvedValue({});
     const api = await import("./api");
@@ -21,4 +27,3 @@ describe("onboarding IPC", () => {
     expect(invoke).toHaveBeenLastCalledWith("get_auto_paste_readiness");
   });
 });
-

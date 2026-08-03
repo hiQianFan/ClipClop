@@ -11,6 +11,7 @@
     requestAutoPasteAccess,
     saveLanguagePreference,
     saveOnboardingState,
+    supportsOnboardingPreview,
     type AutoPasteReadiness,
     type OnboardingExample,
     type OnboardingState,
@@ -103,7 +104,7 @@
       void selectExample(examples[Number(event.key) - 1]!);
     } else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
-      void togglePreview();
+      if (supportsOnboardingPreview(platform)) void togglePreview();
     } else if (event.key === "Enter") {
       event.preventDefault();
       pastedImage = selected === "image";
@@ -340,7 +341,7 @@
       <dl>
         <div><dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>{t("onboarding.practice.select")}</dd></div>
         <div><dt><kbd>1</kbd>–<kbd>3</kbd></dt><dd>{t("onboarding.practice.quickSelect")}</dd></div>
-        <div><dt><kbd>Space</kbd></dt><dd>{t("onboarding.practice.preview")}</dd></div>
+        {#if supportsOnboardingPreview(platform)}<div><dt><kbd>Space</kbd></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
         <div><dt><kbd>⏎</kbd></dt><dd>{t("onboarding.practice.paste")}</dd></div>
       </dl>
     </div>
