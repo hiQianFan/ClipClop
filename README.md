@@ -8,6 +8,7 @@
   Clipboard history without breaking your flow.
 
   [![Quality](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
+  [![Release](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
   ![macOS supported](https://img.shields.io/badge/macOS-supported-000000?logo=apple&logoColor=white)
   ![Windows supported](https://img.shields.io/badge/Windows-supported-0078D4?logo=windows11&logoColor=white)
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
@@ -43,13 +44,13 @@ The global shortcut is customizable. If direct paste is unavailable, ClipClop le
 
 ## Download
 
-Download the latest preview from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases):
+Download the latest version from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases):
 
 - **macOS:** Universal DMG for Apple Silicon and Intel
 - **Windows:** x64 installer
 
 > [!NOTE]
-> Preview installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity.
+> Installers are not yet signed with Apple Developer ID or Windows Authenticode, so your operating system may show a security confirmation. Update files are separately signed to verify their integrity.
 
 ## Privacy and security you can verify
 
@@ -58,10 +59,6 @@ ClipClop has no account, telemetry, advertising, cloud clipboard, or network enr
 ClipClop is fully open source, so anyone can inspect how clipboard content is handled, where data is stored, and when the app accesses the network. Open source is not an automatic guarantee of security, but it makes ClipClop's privacy boundaries and security claims verifiable rather than something you have to take on trust.
 
 Delete individual items, clear the history, limit it by age and item count, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice](PRIVACY.md).
-
-## Project status
-
-ClipClop is currently a `0.2.1` preview. It adds first-run quick start, time-and-count history limits, optional recently-used ordering, and clearer settings navigation. macOS and Windows builds are continuously checked, while wider real-device testing is still in progress. Feedback and bug reports are welcome in [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues).
 
 <details>
 <summary><strong>For contributors</strong></summary>
@@ -73,3 +70,7 @@ Development setup, project conventions, and private security reporting live in t
 ## License
 
 ClipClop is open source under the [MIT License](LICENSE). If it helps you, a ⭐ makes the project easier for others to discover.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=hiQianFan/ClipClop&type=Date)](https://star-history.com/#hiQianFan/ClipClop&Date)

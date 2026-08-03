@@ -8,6 +8,7 @@
   剪贴历史，一键即达。
 
   [![构建状态](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
+  [![版本](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
   ![支持 macOS](https://img.shields.io/badge/macOS-支持-000000?logo=apple&logoColor=white)
   ![支持 Windows](https://img.shields.io/badge/Windows-支持-0078D4?logo=windows11&logoColor=white)
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
@@ -43,13 +44,13 @@ ClipClop 记住你复制过的文本、链接、颜色、图片和文件。按�
 
 ## 下载
 
-前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 下载最新预览版：
+前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 下载最新版本：
 
 - **macOS：**同时支持 Apple Silicon 与 Intel 的 Universal DMG
 - **Windows：**x64 安装程序
 
 > [!NOTE]
-> 当前预览安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。
+> 当前安装包尚未使用 Apple Developer ID 或 Windows Authenticode 签名，操作系统可能显示安全确认。应用更新文件另有完整性签名。
 
 ## 隐私与安全，公开可验证
 
@@ -58,10 +59,6 @@ ClipClop 没有账号、遥测、广告、云剪贴板或联网内容增强。�
 ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数据保存在哪里，以及应用何时访问网络。开源本身不等于绝对安全，但它让隐私边界和安全承诺可以被验证，而不只是被相信。
 
 你可以删除单条记录、清空历史、按时间和条目数量限制历史，或退出 ClipClop 来停止捕获。准确的数据处理方式见[隐私说明](PRIVACY.zh-CN.md)。
-
-## 项目状态
-
-ClipClop 当前为 `0.2.1` 预览版，新增首次启动快速入门、按时间与数量清理历史、可选的最近使用排序，以及更清晰的设置导航。macOS 与 Windows 构建均接受持续检查，更广泛的实机测试仍在进行中。欢迎通过 [GitHub Issues](https://github.com/hiQianFan/ClipClop/issues) 提交反馈与问题。
 
 <details>
 <summary><strong>参与开发</strong></summary>
@@ -73,3 +70,7 @@ ClipClop 当前为 `0.2.1` 预览版，新增首次启动快速入门、按时�
 ## 开源许可
 
 ClipClop 采用 [MIT License](LICENSE) 开源。如果它对你有帮助，欢迎点亮 ⭐，让更多人发现它。
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=hiQianFan/ClipClop&type=Date)](https://star-history.com/#hiQianFan/ClipClop&Date)
