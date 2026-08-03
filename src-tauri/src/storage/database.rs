@@ -521,8 +521,8 @@ mod tests {
             older
         );
         assert_eq!(
-            database.get_clip(&older).unwrap().summary.created_at,
-            now - Duration::minutes(1)
+            timestamp(database.get_clip(&older).unwrap().summary.created_at),
+            timestamp(now - Duration::minutes(1))
         );
     }
 
@@ -610,7 +610,10 @@ mod tests {
     fn migrates_v4_last_used_time_without_changing_capture_time() {
         let connection = Connection::open_in_memory().unwrap();
         let old_schema = SCHEMA
-            .replace("  last_used_at TEXT NOT NULL,\n", "")
+            .lines()
+            .filter(|line| line.trim() != "last_used_at TEXT NOT NULL,")
+            .collect::<Vec<_>>()
+            .join("\n")
             .replace(
                 "ON clips(last_used_at DESC, id DESC)",
                 "ON clips(created_at DESC, id DESC)",

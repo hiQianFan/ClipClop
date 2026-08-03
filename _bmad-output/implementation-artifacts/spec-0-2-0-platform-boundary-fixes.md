@@ -62,6 +62,7 @@ context:
 ## Spec Change Log
 
 - 2026-08-03 review: Windows focus verification now accepts the top-level HWND or its WebView child; non-macOS Space is consumed without preview; taskbar theme refresh now watches `SystemUsesLightTheme` registry changes instead of relying on the independently configurable app theme. KEEP: macOS Quick Look behavior and the existing Windows foreground-lock fallback.
+- 2026-08-03 CI review: migration fixture now removes schema lines independent of LF/CRLF, and timestamp assertions compare the database's documented microsecond precision. KEEP: production schema migration and timestamp serialization remain unchanged.
 
 ## Verification
 
