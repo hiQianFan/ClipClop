@@ -6,7 +6,7 @@ ClipClop keeps clipboard history on the current device. It has no account, cloud
 
 ## Data stored locally
 
-ClipClop may store supported clipboard contents, source-application metadata, file-path references, and settings. It does not automatically identify or filter sensitive content. File entries reference their original paths; explicitly selecting or previewing one may read the source file to obtain its size or create a thumbnail, but ClipClop does not copy, move, or upload it.
+ClipClop may store supported clipboard contents, source-application metadata, file-path references, and settings. It does not automatically identify or filter sensitive content. File entries reference their original paths. File preview is off by default; while it is off, ClipClop shows stored names, paths, and source metadata without reading the original files. If you enable file preview, an explicit preview may read the selected source file to obtain its size, create a thumbnail, or show it with Quick Look. ClipClop does not copy, move, or upload the original file.
 
 The local database is protected by the current operating-system account and disk encryption such as FileVault or BitLocker. ClipClop does not currently add application-level database encryption.
 
@@ -20,6 +20,6 @@ You can delete individual entries, clear all history, limit history by age and i
 
 ## System permissions
 
-On macOS, optional automatic paste uses Accessibility permission only to send the paste shortcut after you choose an item. If permission is denied, ClipClop still copies the item and you can paste manually. The first-run quick start uses only built-in examples and does not display your clipboard history.
+On macOS, optional automatic paste uses Accessibility permission only to send the paste shortcut after you choose an item. If permission is denied, ClipClop still copies the item and you can paste manually. Optional file preview has a separate Full Disk Access shortcut in Quick Start and Settings; macOS requires you to grant this access manually, then confirm in ClipClop before it reads original files. You can revoke the system permission or disable file preview at any time. If you skip or disable it, file history remains available as stored basic information without original-file access. The first-run quick start uses only built-in examples and does not display your clipboard history.
 
 This notice must be updated before adding telemetry, cloud sync, or any new network feature that processes clipboard data.
