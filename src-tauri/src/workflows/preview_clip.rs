@@ -3,7 +3,7 @@ use tauri::AppHandle;
 
 use crate::{
     error::{AppError, AppResult},
-    preview::PreviewService,
+    preview::ExternalPreviewService,
     window::PreviewState,
 };
 
@@ -19,7 +19,7 @@ pub enum PreviewOutcome {
 pub fn preview(
     app: &AppHandle,
     state: &PreviewState,
-    service: &PreviewService,
+    service: &ExternalPreviewService,
     id: &str,
     index: usize,
 ) -> AppResult<PreviewOutcome> {

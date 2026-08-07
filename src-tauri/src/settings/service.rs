@@ -58,6 +58,15 @@ impl SettingsService {
         Ok(language)
     }
 
+    pub fn set_file_preview_enabled(&self, enabled: bool) -> AppResult<bool> {
+        let _guard = self.lock_mutation()?;
+        self.database
+            .update_setting(SETTINGS_KEY, |settings: &mut Settings| {
+                settings.file_preview_enabled = enabled;
+            })?;
+        Ok(enabled)
+    }
+
     pub fn lock_mutation(&self) -> AppResult<MutexGuard<'_, ()>> {
         self.mutation
             .lock()
@@ -120,5 +129,39 @@ mod tests {
                 ..before
             }
         );
+    }
+
+    #[test]
+    fn file_preview_update_preserves_every_other_setting() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let before = Settings {
+            retention_days: Some(90),
+            ..Settings::default()
+        };
+        service.set_internal(&before).unwrap();
+        service.set_file_preview_enabled(true).unwrap();
+        assert_eq!(
+            service.get_stored().unwrap(),
+            Settings {
+                file_preview_enabled: true,
+                ..before
+            }
+        );
+    }
+
+    #[test]
+    fn file_preview_change_waits_for_an_active_preview_read() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let guard = service.lock_mutation().unwrap();
+        let worker = service.clone();
+        let (sent, received) = mpsc::channel();
+        thread::spawn(move || sent.send(worker.set_file_preview_enabled(true)).unwrap());
+
+        assert!(received.recv_timeout(Duration::from_millis(20)).is_err());
+        drop(guard);
+        assert!(received
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .unwrap());
     }
 }

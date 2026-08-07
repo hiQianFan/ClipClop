@@ -12,9 +12,8 @@ use crate::history::{
     SourceApp,
 };
 
-const SCHEMA: &str = include_str!("../../schema.sql");
-// Development schema revisions are not migrated. Any mismatch requires a reset.
-const SCHEMA_VERSION: u32 = 5;
+#[cfg(test)]
+use super::migrations::{SCHEMA, SCHEMA_VERSION};
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -36,26 +35,13 @@ impl Database {
 
     fn from_connection(connection: Connection) -> AppResult<Self> {
         connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
-        let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        match version {
-            0 => {
-                connection.execute_batch(SCHEMA)?;
-                connection.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-            }
-            4 => migrate_v4_to_v5(&connection)?,
-            SCHEMA_VERSION => {}
-            unsupported => {
-                return Err(AppError::Storage(format!(
-                    "unsupported development database schema {unsupported}; delete the database and restart"
-                )));
-            }
-        }
+        super::migrations::initialize(&connection)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
     }
 
-    fn connection(&self) -> AppResult<MutexGuard<'_, Connection>> {
+    pub(super) fn connection(&self) -> AppResult<MutexGuard<'_, Connection>> {
         self.connection
             .lock()
             .map_err(|_| AppError::Storage("database lock was poisoned".into()))
@@ -283,110 +269,6 @@ impl Database {
         transaction.commit()?;
         Ok(changed as u64)
     }
-
-    pub fn delete_older_than(&self, cutoff: DateTime<Utc>) -> AppResult<u64> {
-        let mut connection = self.connection()?;
-        let transaction = connection.transaction()?;
-        transaction.execute(
-            "DELETE FROM clips_fts WHERE clip_id IN (SELECT id FROM clips WHERE last_used_at < ?1)",
-            [timestamp(cutoff)],
-        )?;
-        let changed = transaction.execute(
-            "DELETE FROM clips WHERE last_used_at < ?1",
-            [timestamp(cutoff)],
-        )?;
-        transaction.commit()?;
-        Ok(changed as u64)
-    }
-
-    pub fn ids_older_than(&self, cutoff: DateTime<Utc>) -> AppResult<Vec<String>> {
-        let connection = self.connection()?;
-        let mut statement = connection.prepare("SELECT id FROM clips WHERE last_used_at < ?1")?;
-        let rows = statement.query_map([timestamp(cutoff)], |row| row.get(0))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-    }
-
-    pub fn get_setting<T: serde::de::DeserializeOwned>(&self, key: &str) -> AppResult<Option<T>> {
-        let json: Option<String> = self
-            .connection()?
-            .query_row(
-                "SELECT value_json FROM settings WHERE key = ?1",
-                [key],
-                |row| row.get(0),
-            )
-            .optional()?;
-        json.map(|value| serde_json::from_str(&value).map_err(AppError::from))
-            .transpose()
-    }
-
-    pub fn set_setting<T: serde::Serialize>(&self, key: &str, value: &T) -> AppResult<()> {
-        self.connection()?.execute(
-            "INSERT INTO settings(key, value_json) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
-            params![key, serde_json::to_string(value)?],
-        )?;
-        Ok(())
-    }
-
-    pub fn update_setting<T>(&self, key: &str, update: impl FnOnce(&mut T)) -> AppResult<T>
-    where
-        T: serde::de::DeserializeOwned + serde::Serialize + Default,
-    {
-        let connection = self.connection()?;
-        let json: Option<String> = connection
-            .query_row(
-                "SELECT value_json FROM settings WHERE key = ?1",
-                [key],
-                |row| row.get(0),
-            )
-            .optional()?;
-        let mut value = json
-            .map(|value| serde_json::from_str(&value).map_err(AppError::from))
-            .transpose()?
-            .unwrap_or_default();
-        update(&mut value);
-        connection.execute(
-            "INSERT INTO settings(key, value_json) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
-            params![key, serde_json::to_string(&value)?],
-        )?;
-        Ok(value)
-    }
-}
-
-fn migrate_v4_to_v5(connection: &Connection) -> AppResult<()> {
-    let transaction = connection.unchecked_transaction()?;
-    transaction.execute(
-        "ALTER TABLE clips ADD COLUMN last_used_at TEXT NOT NULL DEFAULT ''",
-        [],
-    )?;
-    let rows = {
-        let mut statement = transaction.prepare("SELECT id, created_at FROM clips")?;
-        let rows = statement
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        rows
-    };
-    for (id, created_at) in rows {
-        let parsed = DateTime::parse_from_rfc3339(&created_at)
-            .map_err(|error| AppError::Storage(error.to_string()))?
-            .with_timezone(&Utc);
-        let normalized = timestamp(parsed);
-        transaction.execute(
-            "UPDATE clips SET created_at = ?1, last_used_at = ?1 WHERE id = ?2",
-            params![normalized, id],
-        )?;
-    }
-    transaction.execute("DROP INDEX idx_clips_order", [])?;
-    transaction.execute(
-        "CREATE INDEX idx_clips_order ON clips(last_used_at DESC, id DESC)",
-        [],
-    )?;
-    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
-    transaction.commit()?;
-    Ok(())
 }
 
 fn fts_query(query: &str) -> String {
@@ -397,7 +279,7 @@ fn fts_query(query: &str) -> String {
         .join(" AND ")
 }
 
-fn timestamp(value: DateTime<Utc>) -> String {
+pub(super) fn timestamp(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Micros, true)
 }
 

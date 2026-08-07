@@ -17,7 +17,7 @@ pub fn update_settings(
         &app,
         &state.settings,
         &state.history,
-        &state.preview,
+        &state.external_preview,
         settings,
     )
 }
@@ -49,6 +49,28 @@ pub fn record_update_check(state: State<'_, AppState>) -> AppResult<String> {
 }
 
 #[tauri::command]
+pub fn set_file_preview_enabled(state: State<'_, AppState>, enabled: bool) -> AppResult<bool> {
+    state.settings.set_file_preview_enabled(enabled)
+}
+
+#[tauri::command]
+pub fn open_file_preview_settings(app: AppHandle) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+                None::<&str>,
+            )
+            .map_err(|error| crate::error::AppError::Platform(error.to_string()))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn quit_app(app: AppHandle) -> AppResult<()> {
     app.exit(0);
     Ok(())
@@ -65,6 +87,8 @@ mod tests {
         assert_eq!(settings.retention_days, Some(30));
         assert_eq!(settings.history_limit, Some(500));
         assert!(settings.move_used_to_top);
+        assert!(!settings.restore_browse_position);
+        assert!(!settings.file_preview_enabled);
         assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.language, LanguagePreference::System);
         assert!(settings.check_updates);

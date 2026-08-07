@@ -5,14 +5,14 @@ use crate::{
     clipboard,
     error::AppResult,
     history::{HistoryService, NewClip},
-    preview::PreviewService,
+    preview::ExternalPreviewService,
     settings::SettingsService,
 };
 
 pub fn start(
     app: AppHandle,
     history: HistoryService,
-    preview: PreviewService,
+    preview: ExternalPreviewService,
     settings: SettingsService,
 ) -> AppResult<()> {
     clipboard::start_watcher(move |snapshot| {
@@ -23,7 +23,7 @@ pub fn start(
 fn capture(
     app: &AppHandle,
     history: &HistoryService,
-    preview: &PreviewService,
+    preview: &ExternalPreviewService,
     settings: &SettingsService,
     snapshot: &NewClip,
 ) -> AppResult<()> {

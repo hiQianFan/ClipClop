@@ -7,6 +7,8 @@ export type Settings = {
   retention_days: 1 | 7 | 30 | 90 | 365 | null;
   history_limit: 100 | 500 | 1000 | 5000 | null;
   move_used_to_top: boolean;
+  restore_browse_position: boolean;
+  file_preview_enabled: boolean;
   launch_at_login: boolean;
   hotkey: string;
   theme: Theme;
@@ -19,6 +21,9 @@ export const getSettings = () => invoke<Settings>("get_settings");
 export const updateSettings = (settings: Settings) => invoke<Settings>("update_settings", { settings });
 export const recordUpdateCheck = () => invoke<string>("record_update_check");
 export const openLogDir = () => invoke<void>("open_log_dir");
+export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
+export const setFilePreviewEnabled = (enabled: boolean) =>
+  invoke<boolean>("set_file_preview_enabled", { enabled });
 export const quitApp = () => invoke<void>("quit_app");
 
 export function applyTheme(theme: Theme) {

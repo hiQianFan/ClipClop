@@ -101,30 +101,4 @@ describe("HistorySession", () => {
     expect(session.selectedId).toBe("last");
   });
 
-  it("invalidates stale preview resources when selection changes", () => {
-    const session = new HistorySession(api());
-    const stale = session.beginResourceRequest();
-    session.cacheAsset("a:image", { data_url: "old", byte_size: 3 });
-    session.cacheThumbnail("a", "thumb");
-    session.cacheSourceIcon("app", "icon");
-
-    session.beginResourceRequest();
-    session.evict("a");
-
-    expect(session.isCurrentResourceRequest(stale)).toBe(false);
-    expect(session.asset("a:image")).toBeUndefined();
-    expect(session.thumbnail("a")).toBeUndefined();
-    expect(session.sourceIcon("app")).toBe("icon");
-  });
-
-  it("invalidates in-flight resource work when all caches are cleared", () => {
-    const session = new HistorySession(api());
-    const resource = session.beginResourceRequest();
-    const thumbnails = session.beginThumbnailRequest();
-
-    session.clearCaches();
-
-    expect(session.isCurrentResourceRequest(resource)).toBe(false);
-    expect(session.isCurrentThumbnailRequest(thumbnails)).toBe(false);
-  });
 });

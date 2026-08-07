@@ -25,5 +25,7 @@ describe("onboarding IPC", () => {
     expect(invoke).toHaveBeenCalledWith("save_onboarding_state", { onboarding: state });
     await api.getAutoPasteReadiness();
     expect(invoke).toHaveBeenLastCalledWith("get_auto_paste_readiness");
+    await api.previewOnboardingExample("image", false);
+    expect(invoke).toHaveBeenLastCalledWith("preview_onboarding_example", { example: "image", open: false });
   });
 });

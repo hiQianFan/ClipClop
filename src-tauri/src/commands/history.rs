@@ -21,12 +21,12 @@ pub fn get_clip(state: State<'_, AppState>, id: String) -> AppResult<ClipDetail>
 
 #[tauri::command]
 pub fn delete_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
-    clip_actions::delete_clip(&app, &state.history, &state.preview, &id)
+    clip_actions::delete_clip(&app, &state.history, &state.external_preview, &id)
 }
 
 #[tauri::command]
 pub fn clear_history(app: AppHandle, state: State<'_, AppState>) -> AppResult<u64> {
-    clip_actions::clear_history(&app, &state.history, &state.preview)
+    clip_actions::clear_history(&app, &state.history, &state.external_preview)
 }
 
 #[tauri::command]

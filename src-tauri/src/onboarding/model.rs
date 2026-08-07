@@ -9,6 +9,7 @@ pub enum OnboardingStep {
     Overview,
     Practice,
     AutoPaste,
+    FilePreview,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
