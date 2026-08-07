@@ -1,5 +1,8 @@
 import type { ClipDetail, ClipSummary } from "./types";
 
+export const shouldReadOriginalFile = (contentType: ClipDetail["content_type"], enabled: boolean) =>
+  contentType === "file" && enabled;
+
 type NumberFormatter = (value: number, options?: Intl.NumberFormatOptions) => string;
 type MetadataLabels = {
   dimensions: string;
@@ -21,6 +24,7 @@ export function formatBytes(bytes: number, formatNumber: NumberFormatter = (valu
 export function metadataFacts(
   detail: ClipDetail,
   fileIndex: number,
+  fileByteSizes: Array<number | null>,
   labels: MetadataLabels,
   formatNumber: NumberFormatter,
 ) {
@@ -33,7 +37,7 @@ export function metadataFacts(
   } else if (detail.content_type === "file") {
     const files = filePaths(detail);
     facts.push({ label: labels.file, value: `${formatNumber(fileIndex + 1)}/${formatNumber(files.length || 1)}` });
-    const size = detail.metadata.file_sizes?.[fileIndex];
+    const size = fileByteSizes[fileIndex] ?? detail.metadata.file_sizes?.[fileIndex];
     if (typeof size === "number") facts.push({ label: labels.size, value: formatBytes(size, formatNumber) });
   } else {
     const count = detail.metadata.char_count ?? detail.plain_text?.length ?? 0;

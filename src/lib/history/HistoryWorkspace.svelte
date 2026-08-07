@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { copyClip, getClipAsset, getClipFileAsset, getClipThumbnail, getSourceAppIcon, hidePanel, pasteClip, previewClip } from "$lib/history/api";
-  import type { ClipSummary } from "$lib/history/types";
-  import { canExpand, filePaths } from "$lib/history/presentation";
+  import { copyClip, hidePanel, pasteClip, previewClip } from "$lib/history/api";
+  import { canExpand, filePaths, shouldReadOriginalFile } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
+  import { PreviewSession } from "$lib/history/preview-session.svelte";
   import { routeWindowKey } from "$lib/history/keyboard";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
-  import { quitApp } from "$lib/settings/api";
+  import { getSettings, quitApp } from "$lib/settings/api";
+  import { currentPlatform } from "$lib/settings/shortcuts";
   import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { ArrowLeft } from "@lucide/svelte";
@@ -18,14 +19,14 @@
   type InteractionMode = "browse" | "search" | "menu" | "confirmation" | "file-tablist";
 
   const session = new HistorySession();
+  const preview = new PreviewSession();
+  const isMac = currentPlatform() === "macos";
   let mode = $state<InteractionMode>("browse");
   let previewExternal = false;
   let confirmationInvoker: HTMLElement | null = null;
-  let assetUrl = $state<string | null>(null);
-  let sourceIconUrl = $state<string | null>(null);
-  let thumbnailUrls = $state<Record<string, string>>({});
-  let fileThumbnailUrls = $state<Array<string | null>>([]);
   let fileIndex = $state(0);
+  let filePreviewEnabled = $state(false);
+  let restoreBrowsePosition = $state(false);
   let expandedId = $state<string | null>(null);
   let error = $state("");
   let copied = $state("");
@@ -47,9 +48,7 @@
   let cancelActionButton = $state<HTMLButtonElement>();
   let confirmActionButton = $state<HTMLButtonElement>();
   let pageNavigationPending = false;
-  let assetTimer: number | undefined;
   let searchTimer: number | undefined;
-  const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
   const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
@@ -68,12 +67,7 @@
     motionQuery.addEventListener("change", updateReducedMotion);
     void initializeView();
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
-    // Only an explicit panel show is a new browsing session. Quick Look also
-    // returns focus to this window, but must preserve the current selection.
-    const unlistenPanel = listen("panel_shown", () => {
-      if (view === "onboarding") return;
-      void resetToLatest();
-    });
+    const unlistenPanel = listen("panel_shown", () => void onPanelShown());
     return () => {
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
@@ -84,6 +78,7 @@
   async function initializeView() {
     let initializationError = "";
     try {
+      await syncSettings();
       onboarding = await getOnboardingState();
       if (onboarding.completed_revision === null) {
         onboardingMode = "first_run";
@@ -98,21 +93,29 @@
     if (initializationError && !error) error = initializationError;
   }
 
+  async function syncSettings() {
+    try {
+      const settings = await getSettings();
+      restoreBrowsePosition = settings.restore_browse_position;
+      // File preview is macOS-gated; other platforms always read.
+      filePreviewEnabled = isMac ? settings.file_preview_enabled : true;
+      if (!filePreviewEnabled) resetPreviewState();
+    } catch (reason) {
+      error = localizedError(reason);
+    }
+  }
+
   async function refresh(targetPage = session.page.page, selectLatest = false) {
     error = "";
     const previousSelection = session.selectedId;
-    const thumbnailVersion = session.beginThumbnailRequest();
+    preview.resetPage();
     const applied = await session.refresh(targetPage, selectLatest);
     if (!applied) return false;
     if (session.selectedId !== previousSelection) resetPreviewState();
     if (session.errorReason) {
       error = localizedError(session.errorReason);
     } else {
-      thumbnailUrls = Object.fromEntries(session.page.items.flatMap((item) => {
-        const thumbnail = session.thumbnail(item.id);
-        return thumbnail ? [[item.id, thumbnail]] : [];
-      }));
-      void loadThumbnails(session.page.items, thumbnailVersion);
+      void preview.loadPageThumbnails(session.page.items);
     }
     await applySelectedDetail(false);
     return true;
@@ -148,57 +151,27 @@
     return t("paste.unsupported");
   }
 
-  async function loadThumbnails(items: ClipSummary[], version: number) {
-    // File thumbnails require reading the original path. Do not touch protected
-    // folders (Downloads, Desktop, Documents) merely by opening the panel.
-    const mediaItems = items.filter((item) => item.content_type === "image" && !session.thumbnail(item.id));
-    for (const item of mediaItems) {
-      if (!session.isCurrentThumbnailRequest(version)) return;
-      try {
-        const thumbnail = await getClipThumbnail(item.id);
-        if (!session.isCurrentThumbnailRequest(version)) return;
-        if (thumbnail.data_url) session.cacheThumbnail(item.id, thumbnail.data_url);
-      } catch { /* A neutral file icon is an intentional fallback. */ }
-      if (session.isCurrentThumbnailRequest(version)) {
-        thumbnailUrls = Object.fromEntries(items.flatMap((current) => {
-          const thumbnail = session.thumbnail(current.id);
-          return thumbnail ? [[current.id, thumbnail]] : [];
-        }));
-      }
-    }
-  }
-
   async function select(id: string | null, readSelectedFile = false) {
     const selectionChanged = session.selectedId !== id;
     if (selectionChanged) expandedId = null;
     resetPreviewState();
-    const version = session.currentResourceRequest();
     await session.select(id);
     if (session.errorReason) error = localizedError(session.errorReason);
-    if (session.isCurrentResourceRequest(version)) {
-      await applySelectedDetail(readSelectedFile, version);
-    }
+    await applySelectedDetail(readSelectedFile);
   }
 
-  async function applySelectedDetail(
-    readSelectedFile: boolean,
-    version = session.beginResourceRequest(),
-  ) {
+  async function applySelectedDetail(readSelectedFile: boolean) {
     const next = session.detail;
     const id = session.selectedId;
     if (!next || !id) return;
-    if (next.source_app) {
-      const cachedIcon = session.sourceIcon(next.source_app.id);
-      if (session.hasSourceIcon(next.source_app.id)) sourceIconUrl = cachedIcon ?? null;
-      else getSourceAppIcon(id).then((icon) => {
-        session.cacheSourceIcon(next.source_app!.id, icon.data_url);
-        if (session.isCurrentResourceRequest(version)) sourceIconUrl = icon.data_url;
-      }).catch(() => session.cacheSourceIcon(next.source_app!.id, null));
-    }
-    if (next.content_type === "image") scheduleAsset(id, null, version);
     // Auto-selecting the first row must not touch its original file. Only a
     // user click/key selection or preview request opts into that read.
-    if (next.content_type === "file" && readSelectedFile) scheduleAsset(id, 0, version);
+    const readOriginalFile = readSelectedFile && shouldReadOriginalFile(next.content_type, filePreviewEnabled);
+    try {
+      await preview.loadSelection(id, next, readOriginalFile);
+    } catch (reason) {
+      error = localizedError(reason);
+    }
   }
 
   async function pasteSelected(plainText = false) {
@@ -241,10 +214,10 @@
   async function removeSelected() {
     if (!session.selectedId) return;
     const deletedId = session.selectedId;
+    resetPreviewState();
     try {
       rowReorderMotion = true;
       await session.deleteSelected();
-      resetPreviewState();
       evictClip(deletedId);
       await applySelectedDetail(false);
       await tick();
@@ -252,6 +225,7 @@
     }
     catch (reason) {
       error = localizedError(reason);
+      await applySelectedDetail(false);
       mode = "browse";
       requestAnimationFrame(focusConfirmationInvoker);
     }
@@ -291,6 +265,14 @@
 
   async function viewSelectedClip() {
     if (!session.selectedId) return;
+    // Space on a file with the switch off must not read the original. Show a gentle,
+    // non-blocking hint pointing to Settings rather than attempting the read.
+    if (session.detail?.content_type === "file" && !shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) {
+      error = t("history.filePreviewHint");
+      menuOpen = false;
+      enterBrowse();
+      return;
+    }
     try {
       const outcome = await previewClip(session.selectedId, fileIndex);
       previewExternal = outcome === "native_opened";
@@ -384,12 +366,14 @@
     view = "onboarding";
   }
 
-  function finishOnboarding(returnToSettings: boolean) {
+  async function finishOnboarding(returnToSettings: boolean) {
+    await syncSettings();
     view = returnToSettings ? "settings" : "history";
-    if (!returnToSettings) void refreshAndFocus(1);
+    if (!returnToSettings) await refreshAndFocus(1);
   }
 
-  function closeSettingsView() {
+  async function closeSettingsView() {
+    await syncSettings();
     view = "history";
     enterBrowse();
   }
@@ -423,13 +407,24 @@
     listbox?.focus();
     const item = session.page.items.find((candidate) => candidate.id === id);
     if (session.selectedId === id && item && canExpand(item)) {
-      if (session.detail?.content_type === "file") {
-        scheduleAsset(id, fileIndex, session.currentResourceRequest());
+      if (session.detail && shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) {
+        void preview.loadFile(id, fileIndex);
       }
       expandedId = expandedId === id ? null : id;
       return;
     }
     void select(id, true);
+  }
+
+  // A hotkey summon fires panel_shown. Settings and onboarding are deliberate modes,
+  // so a summon must not discard them — the history session underneath stays live via
+  // the history_changed listener and is current when the user exits. Within history,
+  // the default is a fresh browsing session (jump to latest); restore_browse_position
+  // instead resumes the page, selection and search the user left off at.
+  async function onPanelShown() {
+    if (view !== "history") return;
+    if (restoreBrowsePosition) await resumeBrowse();
+    else await resetToLatest();
   }
 
   async function resetToLatest() {
@@ -442,6 +437,18 @@
     await tick();
     listbox?.focus();
     await refresh(1, true);
+    enterBrowse();
+  }
+
+  // Keep page, selection and search; just refresh the current page for freshness and
+  // return keyboard focus to the list. session.refresh preserves the selected id when
+  // it is still present on the page.
+  async function resumeBrowse() {
+    menuOpen = false;
+    appMenuOpen = false;
+    await tick();
+    listbox?.focus();
+    await refresh(session.page.page);
     enterBrowse();
   }
 
@@ -616,61 +623,22 @@
     const paths = filePaths(session.detail);
     if (index < 0 || index >= paths.length || index === fileIndex) return;
     fileIndex = index;
-    assetUrl = null;
-    scheduleAsset(session.selectedId, index, session.currentResourceRequest());
-  }
-
-  function assetKey(id: string, index: number | null) {
-    return `${id}:${index ?? "image"}`;
-  }
-
-  function scheduleAsset(id: string, index: number | null, version: number) {
-    const key = assetKey(id, index);
-    const cached = session.asset(key);
-    if (cached) {
-      assetUrl = cached.data_url;
-      if (index !== null) applyFileAsset(index, cached);
-      return;
-    }
-    assetTimer = window.setTimeout(() => {
-      assetTimer = undefined;
-      const request = index === null ? getClipAsset(id) : getClipFileAsset(id, index);
-      request.then((asset) => {
-        session.cacheAsset(key, asset);
-        if (session.isCurrentResourceRequest(version) && (index === null || index === fileIndex)) {
-          assetUrl = asset.data_url;
-          if (index !== null) applyFileAsset(index, asset);
-        }
-      }).catch((reason) => {
-        if (session.isCurrentResourceRequest(version)) error = localizedError(reason);
-      });
-    }, 80);
-  }
-
-  function applyFileAsset(index: number, asset: { data_url: string | null; byte_size: number | null }) {
-    fileThumbnailUrls[index] = asset.data_url;
-    if (!session.detail || asset.byte_size === null) return;
-    const sizes = [...(session.detail.metadata.file_sizes ?? [])];
-    sizes[index] = asset.byte_size;
-    session.detail.metadata.file_sizes = sizes;
+    if (shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) void preview.loadFile(session.selectedId, index);
   }
 
   function resetPreviewState() {
-    session.beginResourceRequest();
-    if (assetTimer !== undefined) window.clearTimeout(assetTimer);
-    assetTimer = undefined;
-    assetUrl = null;
-    fileThumbnailUrls = [];
+    preview.resetSelection();
     fileIndex = 0;
-    sourceIconUrl = null;
   }
 
   function evictClip(id: string) {
     session.evict(id);
+    preview.evict(id);
   }
 
   function clearContentCaches() {
     session.clearCaches();
+    preview.clear();
   }
 
   function settingsClearedHistory() {
@@ -719,7 +687,7 @@
     {fileIndex}
     loading={session.loading}
     {error}
-    {thumbnailUrls}
+    thumbnailUrls={preview.thumbnailUrls}
     {reducedMotion}
     {rowReorderMotion}
     onsearch={onSearch}
@@ -738,10 +706,12 @@
     selectedId={session.selectedId}
     page={session.page}
     pending={session.detailPending}
-    {assetUrl}
-    {sourceIconUrl}
-    {fileThumbnailUrls}
+    assetUrl={preview.assetUrl}
+    sourceIconUrl={preview.sourceIconUrl}
+    fileThumbnailUrls={preview.fileThumbnailUrls}
+    fileByteSizes={preview.fileByteSizes}
     {fileIndex}
+    {filePreviewEnabled}
     {previousFileShortcut}
     {nextFileShortcut}
     onfile={(index) => void selectFile(index)}
@@ -784,21 +754,21 @@
 </main>
 
 <style>
-  .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:14px; box-shadow:var(--panel-shadow); overflow:hidden; }
-  .root-loading{grid-column:1/-1;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);font-size:13px}
+  .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:var(--radius-xl); box-shadow:var(--panel-shadow); overflow:hidden; }
+  .root-loading{grid-column:1/-1;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);font-size:var(--fs-body)}
   .titlebar { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--hairline); user-select:none; }
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }
   .app-menu-wrap { position:relative; }
-  .app-menu-trigger { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:5px; color:var(--text-2); background:transparent; font-size:12px; font-weight:600; letter-spacing:.01em; }
+  .app-menu-trigger { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
   .app-menu-trigger:hover { background:var(--bg-hover); }
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
-  .back { width:24px; height:24px; padding:0; border-radius:5px; color:var(--text-2); background:transparent; font-size:16px; }
+  .back { width:24px; height:24px; padding:0; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:16px; }
   .back:hover { background:var(--bg-hover); }
-  .settings-title { margin-left:7px; color:var(--text-2); font-size:12px; font-weight:600; }
-  kbd { font:10px/1.4 var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:4px; padding:1px 5px; white-space:nowrap; }
+  .settings-title { margin-left:7px; color:var(--text-2); font-size:var(--fs-ui); font-weight:600; }
+  kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .copy, .ghost, .destructive { display:flex; align-items:center; gap:6px; border-radius:6px; color:var(--text-2); background:transparent; padding:7px 10px; }
+  .copy, .ghost, .destructive { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
   .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
   .copy:hover { background:var(--action-hover); }
   .copy:active { filter:brightness(.92); }
@@ -809,21 +779,21 @@
   .destructive { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
-  .menu { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:8px; background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .menu { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
   .action-menu { width:260px; }
   .app-menu { top:30px; bottom:auto; left:0; right:auto; width:180px; }
-  .menu button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:6px; color:var(--text-1); background:transparent; line-height:1.4; text-align:left; }
+  .menu button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
   .menu button > span { min-width:0; }
   .menu button > kbd { flex:none; align-self:center; }
   .menu button:hover { background:var(--bg-hover); }
   .menu-separator { height:1px; margin:5px 6px; background:var(--hairline); }
   .menu .danger { color:var(--danger); }
   .menu .danger kbd { color:currentColor; border-color:currentColor; }
-  .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:11px; }
+  .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
   .confirmation { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  .confirmation > span { margin-right:auto; color:var(--text-1); font-size:12px; font-weight:600; }
-  .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:10px; font-weight:400; }
+  .confirmation > span { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
+  .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }
   @media (prefers-reduced-motion:no-preference) { .panel { animation:enter 120ms ease-out; } @keyframes enter { from { opacity:0; transform:scale(.98); } } }

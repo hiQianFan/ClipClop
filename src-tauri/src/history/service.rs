@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use crate::error::AppResult;
 use crate::storage::Database;
 
-use super::{ClipDetail, Flavor, HistoryPage, HistoryQuery, NewClip};
+use super::{ClipDetail, ContentType, Flavor, HistoryPage, HistoryQuery, NewClip};
 
 #[derive(Clone)]
 pub struct HistoryService {
@@ -52,6 +52,10 @@ impl HistoryService {
         self.database.get_flavors(id)
     }
 
+    pub fn content_type(&self, id: &str) -> AppResult<ContentType> {
+        Ok(self.get_full(id)?.summary.content_type)
+    }
+
     pub fn mark_used(&self, id: &str) -> AppResult<bool> {
         let _guard = self.lock_lifecycle()?;
         self.database.touch_clip(id)
@@ -71,20 +75,8 @@ impl HistoryService {
         self.database.clear()
     }
 
-    pub fn prune(&self, retention_days: u32) -> AppResult<u64> {
-        self.prune_before(Self::retention_cutoff(retention_days))
-    }
-
     pub fn retention_cutoff(retention_days: u32) -> DateTime<Utc> {
         Utc::now() - Duration::days(i64::from(retention_days))
-    }
-
-    pub fn expired_ids_before(&self, cutoff: DateTime<Utc>) -> AppResult<Vec<String>> {
-        self.database.ids_older_than(cutoff)
-    }
-
-    pub fn prune_before(&self, cutoff: DateTime<Utc>) -> AppResult<u64> {
-        self.database.delete_older_than(cutoff)
     }
 
     pub fn cleanup_candidates(
@@ -150,7 +142,8 @@ mod tests {
         old.content_hash = "old-hash".into();
         old.created_at = Utc::now() - Duration::days(8);
         assert!(history.capture(&old).unwrap().is_some());
-        assert_eq!(history.prune(7).unwrap(), 1);
+        let expired = history.cleanup_candidates(Some(7), None).unwrap();
+        assert_eq!(history.delete_ids(&expired).unwrap(), 1);
         assert_eq!(history.query(&HistoryQuery::default()).unwrap().total, 1);
     }
 }

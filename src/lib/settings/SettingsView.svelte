@@ -3,11 +3,11 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
-  import { applyTheme, getSettings, openLogDir, updateSettings, type Settings } from "./api";
+  import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, updateSettings, type Settings } from "./api";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION, openLatestRelease } from "$lib/updater/api";
   import { updateStore } from "$lib/updater/store.svelte";
-  import { effectiveLocale, formatNumber, languagePreference, localizedError, localizedUpdateError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
+  import { effectiveLocale, formatNumber, localizedError, localizedUpdateError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
   import { CircleAlert, CircleCheck, Download, RefreshCw } from "@lucide/svelte";
 
   type Tab = "general" | "history" | "appearance" | "shortcuts" | "updates" | "about";
@@ -50,9 +50,7 @@
   let confirmClear = $state(false);
   let recording = $state(false);
   let shortcutError = $state("");
-  let savedHotkey = $state("");
-  let savedLaunchAtLogin = $state(false);
-  let savedLanguage = $state<Settings["language"]>(languagePreference());
+  let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
   let navButtons = $state<HTMLButtonElement[]>([]);
   let settingsContent = $state<HTMLElement>();
@@ -106,7 +104,10 @@
   });
   onDestroy(() => {
     destroyed = true;
-    setLanguagePreference(savedLanguage);
+    if (savedSettings) {
+      applyTheme(savedSettings.theme);
+      setLanguagePreference(savedSettings.language);
+    }
   });
 
   $effect(() => {
@@ -123,15 +124,23 @@
       const loaded = await getSettings();
       if (destroyed) return;
       settings = loaded;
-      savedHotkey = loaded.hotkey;
-      savedLaunchAtLogin = loaded.launch_at_login;
-      savedLanguage = loaded.language;
+      savedSettings = { ...loaded };
+      applyTheme(loaded.theme);
+      setLanguagePreference(loaded.language);
     }
     catch (reason) { if (!destroyed) status = t("settings.loadFailed", { error: localizedError(reason) }); }
   }
 
   async function openAutoPasteSystemSettings() {
     try { await openAutoPasteSettings(); }
+    catch (reason) { status = localizedError(reason); }
+  }
+
+  // The button is a pure shortcut to macOS Full Disk Access; it never records or
+  // reflects any state. The in-app switch below is the authoritative gate and is
+  // persisted through the normal save() flow like every other setting.
+  async function openFilePreviewSystemSettings() {
+    try { await openFilePreviewSettings(); }
     catch (reason) { status = localizedError(reason); }
   }
 
@@ -183,20 +192,20 @@
     saving = true;
     status = t("settings.saving");
     try {
-      settings = await updateSettings(settings);
-      savedHotkey = settings.hotkey;
-      savedLaunchAtLogin = settings.launch_at_login;
-      savedLanguage = settings.language;
-      setLanguagePreference(savedLanguage);
-      applyTheme(settings.theme);
+      const saved = await updateSettings({ ...settings });
+      settings = saved;
+      savedSettings = { ...saved };
+      setLanguagePreference(saved.language);
+      applyTheme(saved.theme);
       recording = false;
       shortcutError = "";
       status = t("settings.saved");
     } catch (reason) {
-      settings.hotkey = savedHotkey;
-      settings.launch_at_login = savedLaunchAtLogin;
-      settings.language = savedLanguage;
-      setLanguagePreference(savedLanguage);
+      if (savedSettings) {
+        settings = { ...savedSettings };
+        applyTheme(savedSettings.theme);
+        setLanguagePreference(savedSettings.language);
+      }
       status = t("settings.saveFailed", { error: localizedError(reason) });
       if (tab === "shortcuts") recorder?.focus();
     } finally {
@@ -311,11 +320,13 @@
           <div class="row setting-row"><span><strong id="launch-label">{t("settings.launch")}</strong><small id="launch-help">{t("settings.launchHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="launch-label" aria-describedby="launch-help" bind:checked={settings.launch_at_login} /><span class="switch-track"></span></label></div>
           <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small></span><button onclick={() => void openAutoPasteSystemSettings()}>{t("settings.manage")}</button></div>{/if}
+          {#if platform === "macos"}<div class="row"><span><strong id="file-preview-label">{t("settings.filePreview")}</strong><small id="file-preview-help">{t("settings.filePreviewHelp")}</small></span><div class="row-actions"><button onclick={() => void openFilePreviewSystemSettings()}>{t("settings.manage")}</button><label class="switch"><input type="checkbox" role="switch" aria-labelledby="file-preview-label" aria-describedby="file-preview-help" bind:checked={settings.file_preview_enabled} /><span class="switch-track"></span></label></div></div>{/if}
         {:else if tab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <label><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><select bind:value={settings.retention_days}><option value={1}>{t("settings.days", { count: formatNumber(1) })}</option><option value={7}>{t("settings.days", { count: formatNumber(7) })}</option><option value={30}>{t("settings.days", { count: formatNumber(30) })}</option><option value={90}>{t("settings.days", { count: formatNumber(90) })}</option><option value={365}>{t("settings.year")}</option><option value={null}>{t("settings.forever")}</option></select></label>
           <label><span><strong>{t("settings.historyLimit")}</strong><small>{t("settings.historyLimitHelp")}</small></span><select bind:value={settings.history_limit}><option value={100}>{t("settings.items", { count: formatNumber(100) })}</option><option value={500}>{t("settings.items", { count: formatNumber(500) })}</option><option value={1000}>{t("settings.items", { count: formatNumber(1000) })}</option><option value={5000}>{t("settings.items", { count: formatNumber(5000) })}</option><option value={null}>{t("settings.unlimited")}</option></select></label>
           <div class="row setting-row"><span><strong id="move-used-label">{t("settings.moveUsedToTop")}</strong><small id="move-used-help">{t("settings.moveUsedToTopHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="move-used-label" aria-describedby="move-used-help" bind:checked={settings.move_used_to_top} /><span class="switch-track"></span></label></div>
+          <div class="row setting-row"><span><strong id="restore-pos-label">{t("settings.restoreBrowsePosition")}</strong><small id="restore-pos-help">{t("settings.restoreBrowsePositionHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="restore-pos-label" aria-describedby="restore-pos-help" bind:checked={settings.restore_browse_position} /><span class="switch-track"></span></label></div>
           {#if settings.retention_days === null || settings.history_limit === null}<p class="retention-warning">{t("settings.retentionWarning")}</p>{/if}
           <div class="row"><span><strong>{t("settings.data")}</strong><small>{t("settings.dataHelp")}</small></span><button bind:this={clearTrigger} class="danger" onclick={requestClear}>{t("settings.clearAll")}</button></div>
         {:else if tab === "appearance"}
@@ -398,7 +409,14 @@
 </div>
 
 <style>
-  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:13px;font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:18px;line-height:1.3}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:12px;line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:6px;color:var(--text-2);background:var(--bg-raised);font-size:12px;line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{display:flex;flex-direction:column;gap:3px}strong{font-size:13px}small{color:var(--text-3);font-size:12px;line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:6px;color:var(--text-1);background:var(--bg-raised);font-size:12px}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:12px;color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-1);background:var(--bg-raised);font:12px/1.3 ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:11px;line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:12px}.update-head label{display:flex;align-items:center;gap:8px}.update-head-controls{display:flex;align-items:center;gap:16px}.update-head-controls .update-check-btn{flex:none;padding:7px 12px;border:1px solid var(--hairline);border-radius:6px}.update-card{display:flex;flex-direction:column;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--hairline);border-radius:10px;background:var(--bg-raised)}.update-card-head{display:flex;align-items:center;gap:12px}.update-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:9px;color:var(--action-on);background:var(--action)}.update-card-title{display:flex;flex-direction:column;gap:2px}.update-card-title strong{font-size:14px}.update-notes{max-height:116px;margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;border-radius:7px;color:var(--text-2);background:var(--bg-shell);font-size:12px;line-height:1.55}.update-progress{display:flex;flex-direction:column;gap:7px}.progress-track{height:6px;overflow:hidden;border-radius:999px;background:var(--bg-selected)}.progress-fill{height:100%;border-radius:999px;background:var(--action);transition:width .25s ease}.progress-fill.indeterminate{width:35%;animation:progress-slide 1.1s ease-in-out infinite}.progress-label{color:var(--text-2);font-size:12px;font-variant-numeric:tabular-nums}.update-status{display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4}.update-status :global(svg){flex:none}.update-card .update-status{margin:0}.update-actions,.update-check{display:flex;align-items:center;gap:8px}.update-actions{justify-content:flex-end}.update-check{justify-content:space-between;margin-top:16px}.update-check-btn{display:inline-flex;align-items:center;gap:6px}.update-check-btn :global(svg.spin){animation:spin 1s linear infinite}@keyframes progress-slide{0%{transform:translateX(-120%)}100%{transform:translateX(340%)}}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.progress-fill.indeterminate,.update-check-btn :global(svg.spin){animation:none}}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:12px}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:11px;font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}footer button{min-width:72px}footer .primary{min-width:92px}.primary{color:var(--action-on);background:var(--action)}.primary:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}.danger,.error{color:var(--danger)}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.primary:disabled:hover{background:var(--action)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:var(--fs-body);font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:var(--fs-ui);line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-1);background:var(--bg-raised);font-size:var(--fs-ui)}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:var(--fs-ui);color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:var(--radius-sm);color:var(--text-1);background:var(--bg-raised);font:var(--fs-ui)/var(--lh-snug) ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:var(--fs-meta);line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:var(--fs-ui)}.update-head label{display:flex;align-items:center;gap:8px}.update-head-controls{display:flex;align-items:center;gap:16px}.update-head-controls .update-check-btn{flex:none;border-radius:var(--radius-md)}.update-card{display:flex;flex-direction:column;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised)}.update-card-head{display:flex;align-items:center;gap:12px}.update-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--radius-lg);color:var(--action-on);background:var(--action)}.update-card-title{display:flex;flex-direction:column;gap:2px}.update-card-title strong{font-size:var(--fs-emphasis)}.update-notes{max-height:116px;margin:0;padding:10px 12px;overflow:auto;white-space:pre-wrap;border-radius:var(--radius-lg);color:var(--text-2);background:var(--bg-shell);font-size:var(--fs-ui);line-height:1.55}.update-progress{display:flex;flex-direction:column;gap:7px}.progress-track{height:6px;overflow:hidden;border-radius:var(--radius-pill);background:var(--bg-selected)}.progress-fill{height:100%;border-radius:var(--radius-pill);background:var(--action);transition:width var(--dur-slow) ease}.progress-fill.indeterminate{width:35%;animation:progress-slide 1.1s ease-in-out infinite}.progress-label{color:var(--text-2);font-size:var(--fs-ui);font-variant-numeric:tabular-nums}.update-status{display:flex;align-items:center;gap:6px;font-size:var(--fs-ui);line-height:1.4}.update-status :global(svg){flex:none}.update-card .update-status{margin:0}.update-actions,.update-check{display:flex;align-items:center;gap:8px}.update-actions{justify-content:flex-end}.update-check{justify-content:space-between;margin-top:16px}.update-check-btn{display:inline-flex;align-items:center;gap:6px}.update-check-btn :global(svg.spin){animation:spin 1s linear infinite}@keyframes progress-slide{0%{transform:translateX(-120%)}100%{transform:translateX(340%)}}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.progress-fill.indeterminate,.update-check-btn :global(svg.spin){animation:none}}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:var(--fs-ui)}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:var(--fs-meta);font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}footer button{min-width:72px}footer .primary{min-width:92px}.primary{color:var(--action-on);background:var(--action)}.primary:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}.danger,.error{color:var(--danger)}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.primary:disabled:hover{background:var(--action)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .nav-separator{height:1px;margin:8px 6px;background:var(--hairline)}
-  .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:999px;background:var(--bg-selected);transition:background 140ms ease-out,border-color 140ms ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform 140ms ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:6px;color:var(--text-2);background:var(--bg-raised);font-size:12px;line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
+  /* Setting-row contract: text zone flexes (rule above), action zone is protected
+     and never compresses. Every row's action lives in one of these. */
+  .row>button,.row>.row-actions,.settings-content>label>select,.update-head>.update-head-controls,.shortcut-row>.shortcut-actions,.shortcut-row>.key-list{flex:none}
+  /* Action group: button + switch riding together in one row's action zone. */
+  .row-actions{display:flex;align-items:center;gap:8px}
+  /* Unified action-button sizing across every section (ghost per DESIGN.md). */
+  .row>button,.row-actions>button,.update-check-btn{min-height:32px;padding:0 12px;white-space:nowrap}
+  .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
 </style>

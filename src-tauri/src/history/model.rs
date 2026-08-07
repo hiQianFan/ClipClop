@@ -156,3 +156,53 @@ pub struct HistoryPage {
     pub total: u64,
     pub total_pages: u32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clip_detail_ipc_shape_is_stable() {
+        let detail = ClipDetail {
+            summary: ClipSummary {
+                id: "clip-1".into(),
+                content_type: ContentType::File,
+                preview: "example.txt".into(),
+                source_app: Some(SourceApp {
+                    id: "com.example.app".into(),
+                    name: "Example".into(),
+                }),
+                created_at: "2026-08-06T00:00:00Z".parse().unwrap(),
+                byte_size: 12,
+                metadata: ClipMetadata {
+                    files: vec!["/tmp/example.txt".into()],
+                    file_sizes: vec![Some(12)],
+                    ..Default::default()
+                },
+            },
+            plain_text: None,
+            flavors: vec![FlavorInfo {
+                format: "text/uri-list".into(),
+                byte_size: 12,
+            }],
+        };
+
+        assert_eq!(
+            serde_json::to_value(detail).unwrap(),
+            serde_json::json!({
+                "id": "clip-1",
+                "content_type": "file",
+                "preview": "example.txt",
+                "source_app": { "id": "com.example.app", "name": "Example" },
+                "created_at": "2026-08-06T00:00:00Z",
+                "byte_size": 12,
+                "metadata": {
+                    "files": ["/tmp/example.txt"],
+                    "file_sizes": [12]
+                },
+                "plain_text": null,
+                "flavors": [{ "format": "text/uri-list", "byte_size": 12 }]
+            })
+        );
+    }
+}

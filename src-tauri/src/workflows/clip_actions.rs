@@ -1,13 +1,14 @@
 use tauri::AppHandle;
 
 use crate::{
-    clipboard::SystemClipboard, error::AppResult, history::HistoryService, preview::PreviewService,
+    clipboard::SystemClipboard, error::AppResult, history::HistoryService,
+    preview::ExternalPreviewService,
 };
 
 pub fn apply_retention(
     app: &AppHandle,
     history: &HistoryService,
-    preview: &PreviewService,
+    preview: &ExternalPreviewService,
     retention_days: Option<u32>,
     history_limit: Option<u32>,
 ) -> AppResult<u64> {
@@ -26,7 +27,7 @@ pub fn apply_retention(
 pub fn delete_clip(
     app: &AppHandle,
     history: &HistoryService,
-    preview: &PreviewService,
+    preview: &ExternalPreviewService,
     id: &str,
 ) -> AppResult<()> {
     let _guard = preview.lock_lifecycle()?;
@@ -36,7 +37,7 @@ pub fn delete_clip(
 pub fn clear_history(
     app: &AppHandle,
     history: &HistoryService,
-    preview: &PreviewService,
+    preview: &ExternalPreviewService,
 ) -> AppResult<u64> {
     let _guard = preview.lock_lifecycle()?;
     cleanup_then_persist(|| preview.clear_cached(app), || history.clear())

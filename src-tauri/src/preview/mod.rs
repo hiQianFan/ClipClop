@@ -1,18 +1,16 @@
 mod platform;
 
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::{
     error::{AppError, AppResult},
-    history::{ClipDetail, ContentType, HistoryService},
+    history::{normalized_file_path, ContentType, HistoryService},
     onboarding::OnboardingExample,
     window::PreviewState,
 };
@@ -25,92 +23,23 @@ const ONBOARDING_TEXT: &[u8] = b"ClipClop";
 const ONBOARDING_LINK: &[u8] = b"https://github.com/hiQianFan/ClipClop";
 
 #[derive(Clone)]
-pub struct PreviewService {
+pub struct ExternalPreviewService {
     history: HistoryService,
-    icon_cache: Arc<Mutex<HashMap<String, Option<String>>>>,
     lifecycle: Arc<Mutex<()>>,
 }
 
-#[derive(Serialize)]
-pub struct PreviewResource {
-    pub data_url: Option<String>,
-    pub byte_size: Option<u64>,
-}
-
-impl PreviewService {
+impl ExternalPreviewService {
     pub fn new(history: HistoryService) -> Self {
         Self {
             history,
-            icon_cache: Arc::new(Mutex::new(HashMap::new())),
             lifecycle: Arc::new(Mutex::new(())),
         }
-    }
-
-    pub fn asset(&self, id: &str) -> AppResult<PreviewResource> {
-        let detail = self.history.get_full(id)?;
-        let flavors = self.history.flavors(id)?;
-        Ok(PreviewResource {
-            data_url: platform::preview_asset(
-                &flavors,
-                file_path(&detail).map(normalized_path).as_deref(),
-            ),
-            byte_size: None,
-        })
-    }
-
-    pub fn file_asset(&self, id: &str, index: usize) -> AppResult<PreviewResource> {
-        let detail = self.history.get_full(id)?;
-        let flavors = self.history.flavors(id)?;
-        let path = file_path_at(&detail, index).map(normalized_path);
-        Ok(PreviewResource {
-            data_url: platform::preview_asset(&flavors, path.as_deref()),
-            byte_size: path
-                .and_then(|path| std::fs::metadata(path).ok())
-                .filter(|metadata| metadata.is_file())
-                .map(|metadata| metadata.len()),
-        })
-    }
-
-    pub fn thumbnail(&self, id: &str) -> AppResult<PreviewResource> {
-        self.history.get_full(id)?;
-        Ok(PreviewResource {
-            data_url: platform::thumbnail_asset(&self.history.flavors(id)?),
-            byte_size: None,
-        })
-    }
-
-    pub fn source_app_icon(&self, id: &str) -> AppResult<PreviewResource> {
-        let detail = self.history.get_full(id)?;
-        let Some(source) = detail.summary.source_app else {
-            return Ok(PreviewResource {
-                data_url: None,
-                byte_size: None,
-            });
-        };
-        let mut cache = self
-            .icon_cache
-            .lock()
-            .map_err(|_| AppError::Platform("preview icon cache lock poisoned".into()))?;
-        let data_url = cache
-            .entry(source.id.clone())
-            .or_insert_with(|| {
-                let icon = platform::source_app_icon(&source.id);
-                if icon.is_none() {
-                    log::warn!("source icon unavailable for {}", source.id);
-                }
-                icon
-            })
-            .clone();
-        Ok(PreviewResource {
-            data_url,
-            byte_size: None,
-        })
     }
 
     pub fn open_clip(&self, app: &AppHandle, id: &str) -> AppResult<()> {
         let detail = self.history.get_full(id)?;
         match detail.summary.content_type {
-            ContentType::File => self.open_file(app, &detail, 0),
+            ContentType::File => open_file(app, &detail, 0),
             ContentType::Link => {
                 let url = detail.plain_text.unwrap_or(detail.summary.preview);
                 let parsed = url::Url::parse(&url)
@@ -152,7 +81,7 @@ impl PreviewService {
         if detail.summary.content_type != ContentType::File {
             return Err(AppError::Validation("clip is not a file record".into()));
         }
-        self.open_file(app, &detail, index)
+        open_file(app, &detail, index)
     }
 
     pub fn toggle(
@@ -235,24 +164,12 @@ impl PreviewService {
         Ok(())
     }
 
-    fn open_file(&self, app: &AppHandle, detail: &ClipDetail, index: usize) -> AppResult<()> {
-        let path = file_path_at(detail, index)
-            .map(normalized_path)
-            .ok_or(AppError::NotFound)?;
-        if !path.is_file() {
-            return Err(AppError::NotFound);
-        }
-        open_path(app, path)
-    }
-
     #[cfg(target_os = "macos")]
     fn clip_preview_path(&self, app: &AppHandle, id: &str, index: usize) -> AppResult<PathBuf> {
         let detail = self.history.get_full(id)?;
         match detail.summary.content_type {
             ContentType::File => {
-                let path = file_path_at(&detail, index)
-                    .map(normalized_path)
-                    .ok_or(AppError::NotFound)?;
+                let path = normalized_file_path(&detail, index).ok_or(AppError::NotFound)?;
                 if !path.is_file() {
                     return Err(AppError::NotFound);
                 }
@@ -299,6 +216,14 @@ fn open_path(app: &AppHandle, path: impl AsRef<Path>) -> AppResult<()> {
         .map_err(|error| AppError::Platform(error.to_string()))
 }
 
+fn open_file(app: &AppHandle, detail: &crate::history::ClipDetail, index: usize) -> AppResult<()> {
+    let path = normalized_file_path(detail, index).ok_or(AppError::NotFound)?;
+    if !path.is_file() {
+        return Err(AppError::NotFound);
+    }
+    open_path(app, path)
+}
+
 fn preview_path(app: &AppHandle, id: &str, extension: &str) -> AppResult<PathBuf> {
     let dir = cached_preview_dir(app)?;
     std::fs::create_dir_all(&dir).map_err(|error| AppError::Platform(error.to_string()))?;
@@ -330,26 +255,9 @@ fn write_preview_temp(path: &Path, bytes: &[u8]) -> AppResult<PathBuf> {
     Ok(temporary)
 }
 
-fn file_path(detail: &ClipDetail) -> Option<&str> {
-    file_path_at(detail, 0)
-}
-
-fn file_path_at(detail: &ClipDetail, index: usize) -> Option<&str> {
-    detail.summary.metadata.files.get(index).map(String::as_str)
-}
-
-fn normalized_path(path: &str) -> PathBuf {
-    url::Url::parse(path)
-        .ok()
-        .filter(|url| url.scheme() == "file")
-        .and_then(|url| url.to_file_path().ok())
-        .unwrap_or_else(|| PathBuf::from(path))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{engine::general_purpose::STANDARD, Engine};
     use chrono::Utc;
     use std::sync::Arc;
 
@@ -364,22 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn preview_derivation_and_cache_cleanup_preserve_shapes() {
-        let png = STANDARD
-            .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
-            .unwrap();
-        let flavors = vec![crate::history::Flavor {
-            format: "image/png".into(),
-            payload: png,
-        }];
-        assert!(platform::preview_asset(&flavors, None)
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
-        assert!(platform::thumbnail_asset(&flavors)
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
-        assert!(platform::source_app_icon("/not/a/real/application").is_none());
-
+    fn cache_cleanup_preserves_unrelated_previews() {
         let temp = tempfile::tempdir().unwrap();
         std::fs::write(temp.path().join("selected.png"), b"png").unwrap();
         std::fs::write(temp.path().join("selected.txt"), b"text").unwrap();
@@ -393,39 +286,11 @@ mod tests {
     }
 
     #[test]
-    fn source_icon_rejects_unknown_clip_and_accepts_missing_source() {
-        let history = HistoryService::new(Arc::new(crate::storage::Database::in_memory().unwrap()));
-        let preview = PreviewService::new(history.clone());
-        assert!(matches!(
-            preview.source_app_icon("missing"),
-            Err(AppError::NotFound)
-        ));
-
-        let id = history
-            .capture(&crate::history::NewClip {
-                content_type: ContentType::Text,
-                plain_text: Some("text".into()),
-                preview: "text".into(),
-                source_app: None,
-                flavors: vec![crate::history::Flavor {
-                    format: "text/plain".into(),
-                    payload: b"text".to_vec(),
-                }],
-                metadata: Default::default(),
-                content_hash: "icon-test".into(),
-                created_at: Utc::now(),
-            })
-            .unwrap()
-            .unwrap();
-        assert!(preview.source_app_icon(&id).unwrap().data_url.is_none());
-    }
-
-    #[test]
     fn generation_cannot_publish_after_delete_or_clear_wins_the_lifecycle_guard() {
         for clear in [false, true] {
             let history =
                 HistoryService::new(Arc::new(crate::storage::Database::in_memory().unwrap()));
-            let preview = PreviewService::new(history.clone());
+            let preview = ExternalPreviewService::new(history.clone());
             let id = history
                 .capture(&crate::history::NewClip {
                     content_type: ContentType::Text,

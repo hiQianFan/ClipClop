@@ -5,7 +5,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::{
     error::{AppError, AppResult},
     history::HistoryService,
-    preview::PreviewService,
+    preview::ExternalPreviewService,
     settings::{validate_hotkey, HotkeyValidationError, Settings, SettingsService},
 };
 
@@ -22,7 +22,7 @@ pub fn update(
     app: &AppHandle,
     service: &SettingsService,
     history: &HistoryService,
-    preview: &PreviewService,
+    preview: &ExternalPreviewService,
     mut settings: Settings,
 ) -> AppResult<Settings> {
     let _guard = service.lock_mutation()?;

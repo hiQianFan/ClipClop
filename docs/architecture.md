@@ -13,6 +13,10 @@ ClipClop has two application layers:
 
 Tauri commands are adapters. Business rules belong in their feature modules, and native window behavior belongs behind the `window` module.
 
+History UI state is split by ownership: `HistorySession` owns the list, pagination, and selection; `PreviewSession` owns resource URLs, thumbnails, caches, debounce, and request invalidation versions. `HistoryWorkspace` orchestrates their call order and continues to own DOM focus, keyboard routing, and the multi-file `fileIndex` cursor. A session must not reach back into component state, and runtime state must not have duplicate owners.
+
+The Rust host keeps concrete services; a single SQLite database or single platform implementation does not justify Repository, Factory, or DI interfaces. `AssetService` owns resources and thumbnails rendered in the webview. `ExternalPreviewService` owns Quick Look-style external preview and its temporary-file lifecycle. They share only a cheap cloned `HistoryService` handle. Platform paste code lives in platform submodules under `paste`; settings models, hotkey rules, and persistence service live in separate `settings` submodules. Storage migration and settings queries have separate implementation files while remaining methods on the one concrete `Database` type.
+
 ## Panel lifecycle
 
 The main window behaves like a transient command panel rather than a regular application window. Native focus and DOM focus are separate:
@@ -21,9 +25,11 @@ The main window behaves like a transient command panel rather than a regular app
 2. Rust sizes and shows the native window.
 3. The platform adapter requests foreground activation.
 4. Rust emits `panel_shown`.
-5. Svelte resets the browsing session and assigns DOM focus.
+5. Svelte handles `panel_shown` and assigns DOM focus.
 
 Do not emit `panel_shown` before native show and activation have been attempted. Otherwise the webview can focus an element while its native window is still in the background.
+
+On `panel_shown` the frontend does not blindly reset. Settings and onboarding are deliberate modes and are preserved across a summon (the history session underneath stays live via `history_changed`, so it is current on exit). Within history, the default is a fresh browsing session — jump to page 1, select the newest item, clear search — because the core loop is summon-and-paste. The `restore_browse_position` setting (off by default) instead resumes the last page, selection and search.
 
 ### State model
 
@@ -86,6 +92,8 @@ Windows GUI processes write to the per-app log file only. Do not add a Windows s
 Schema changes increment `SCHEMA_VERSION` and migrate every supported released schema explicitly. Schema v5 preserves immutable creation time separately from last-used time; retention by age follows last-used time when recently used items are configured to move to the top. Downgrading a migrated database to `0.1.x` is unsupported.
 
 History limits are enforced at capture and settings-update boundaries. The time and item-count limits are independent, and enabling both applies both. First-run quick start content is a fixed set of built-in examples and local resources; it never reads real clipboard history.
+
+History deletion cleans external preview caches before committing the database deletion. A cache cleanup failure must preserve the database row so the operation can be retried and cannot leave a sensitive orphan file without a persistent identity. This ordering is a required behavior, not an interchangeable implementation detail.
 
 ## Verification gates
 
