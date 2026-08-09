@@ -151,6 +151,16 @@ pub fn reconcile_autostart(app: &AppHandle, service: &SettingsService) -> AppRes
     let actual = autostart
         .is_enabled()
         .map_err(|error| AppError::Platform(format!("failed to read autostart state: {error}")))?;
+
+    // Refresh an existing Windows registry entry so upgrades pick up the current startup
+    // arguments (notably `--autostart`, which keeps login launches in the background).
+    #[cfg(target_os = "windows")]
+    if expected && actual {
+        return autostart.enable().map_err(|error| {
+            AppError::Platform(format!("failed to refresh autostart registration: {error}"))
+        });
+    }
+
     if actual == expected {
         return Ok(());
     }

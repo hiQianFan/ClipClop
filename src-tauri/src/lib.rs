@@ -37,6 +37,11 @@ use tauri_plugin_log::{Target, TargetKind};
 // Privacy: only operational events and error text are logged here; clipboard and
 // preview payloads are never passed to the logger.
 const LOG_ROTATION_BYTES: u128 = 5 * 1024 * 1024;
+const AUTOSTART_ARG: &str = "--autostart";
+
+fn is_autostart_launch(args: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
+    args.into_iter().any(|arg| arg.as_ref() == AUTOSTART_ARG)
+}
 
 fn build_log_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     // A Windows GUI process can outlive the terminal that launched `tauri dev`. Once that
@@ -77,12 +82,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            window::show_panel_on_main_thread(app);
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if !is_autostart_launch(&args) {
+                window::show_panel_on_main_thread(app);
+            }
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![AUTOSTART_ARG]),
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
@@ -196,10 +203,14 @@ pub fn run() {
                 });
             }
 
-            // The bundle is an accessory app: launching it should reveal the
-            // panel without turning ClipClop into a regular Dock application.
-            log::info!("initial show_panel");
-            window::show_panel(app.handle());
+            // Login startup keeps the window hidden while the tray, clipboard watcher, and
+            // global shortcut remain active. A normal user launch still reveals the panel.
+            if is_autostart_launch(std::env::args()) {
+                log::info!("autostart launch: keeping panel hidden");
+            } else {
+                log::info!("interactive launch: showing panel");
+                window::show_panel(app.handle());
+            }
             log::info!("setup complete");
 
             Ok(())
@@ -246,4 +257,16 @@ fn register_panel_hotkey(
                 window::toggle_panel(app);
             }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_autostart_launch;
+
+    #[test]
+    fn detects_only_the_dedicated_autostart_argument() {
+        assert!(is_autostart_launch(["clipclop.exe", "--autostart"]));
+        assert!(!is_autostart_launch(["clipclop.exe"]));
+        assert!(!is_autostart_launch(["clipclop.exe", "--autostart-extra"]));
+    }
 }
