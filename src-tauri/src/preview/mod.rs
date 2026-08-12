@@ -40,17 +40,6 @@ impl ExternalPreviewService {
         let detail = self.history.get_full(id)?;
         match detail.summary.content_type {
             ContentType::File => open_file(app, &detail, 0),
-            ContentType::Link => {
-                let url = detail.plain_text.unwrap_or(detail.summary.preview);
-                let parsed = url::Url::parse(&url)
-                    .map_err(|_| AppError::Validation("link is not a valid URL".into()))?;
-                if !matches!(parsed.scheme(), "http" | "https") {
-                    return Err(AppError::Validation("link must use http or https".into()));
-                }
-                app.opener()
-                    .open_url(url, None::<&str>)
-                    .map_err(|error| AppError::Platform(error.to_string()))
-            }
             ContentType::Image => {
                 let flavors = self.history.flavors(id)?;
                 let png = flavors
@@ -61,7 +50,7 @@ impl ExternalPreviewService {
                 self.publish_preview(id, &path, &png.payload)?;
                 open_path(app, path)
             }
-            ContentType::Text | ContentType::Color | ContentType::Code => {
+            ContentType::Text | ContentType::Color | ContentType::Code | ContentType::Link => {
                 let path = preview_path(app, id, "txt")?;
                 self.publish_preview(
                     id,
@@ -74,6 +63,17 @@ impl ExternalPreviewService {
                 open_path(app, path)
             }
         }
+    }
+
+    pub fn open_link(&self, app: &AppHandle, id: &str) -> AppResult<()> {
+        let detail = self.history.get_full(id)?;
+        if detail.summary.content_type != ContentType::Link {
+            return Err(AppError::Validation("clip is not a link record".into()));
+        }
+        let parsed = web_url(&detail.plain_text.unwrap_or(detail.summary.preview))?;
+        app.opener()
+            .open_url(parsed.as_str(), None::<&str>)
+            .map_err(|error| AppError::Platform(error.to_string()))
     }
 
     pub fn open_clip_file(&self, app: &AppHandle, id: &str, index: usize) -> AppResult<()> {
@@ -201,6 +201,16 @@ impl ExternalPreviewService {
     }
 }
 
+fn web_url(value: &str) -> AppResult<url::Url> {
+    let parsed = url::Url::parse(value.trim())
+        .map_err(|_| AppError::Validation("link is not a valid URL".into()))?;
+    if matches!(parsed.scheme(), "http" | "https") {
+        Ok(parsed)
+    } else {
+        Err(AppError::Validation("link must use http or https".into()))
+    }
+}
+
 #[cfg(any(target_os = "macos", test))]
 fn onboarding_preview(example: OnboardingExample) -> (&'static str, &'static str, &'static [u8]) {
     match example {
@@ -258,6 +268,16 @@ fn write_preview_temp(path: &Path, bytes: &[u8]) -> AppResult<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_links_are_trimmed_and_restricted_to_browsers() {
+        assert_eq!(
+            web_url("  https://example.com/path  ").unwrap().as_str(),
+            "https://example.com/path"
+        );
+        assert!(web_url("file:///tmp/private").is_err());
+        assert!(web_url("javascript:alert(1)").is_err());
+    }
     use chrono::Utc;
     use std::sync::Arc;
 

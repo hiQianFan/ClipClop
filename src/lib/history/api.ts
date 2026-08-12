@@ -33,6 +33,10 @@ export function previewClip(id: string, index = 0): Promise<PreviewOutcome> {
   return invoke("preview_clip", { id, index });
 }
 
+export function openClipLink(id: string): Promise<void> {
+  return invoke("open_clip_link", { id });
+}
+
 export function getSourceAppIcon(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
   return invoke("get_source_app_icon", { id });
 }

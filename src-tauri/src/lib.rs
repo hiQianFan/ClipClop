@@ -19,9 +19,9 @@ pub mod workflows;
 use commands::{
     clear_history, copy_clip, delete_clip, get_auto_paste_readiness, get_clip, get_clip_asset,
     get_clip_file_asset, get_clip_thumbnail, get_onboarding_state, get_settings,
-    get_source_app_icon, hide_panel, open_auto_paste_settings, open_file_preview_settings,
-    open_log_dir, paste_clip, preview_clip, preview_onboarding_example, query_history, quit_app,
-    record_update_check, request_auto_paste_access, save_onboarding_state,
+    get_source_app_icon, hide_panel, open_auto_paste_settings, open_clip_link,
+    open_file_preview_settings, open_log_dir, paste_clip, preview_clip, preview_onboarding_example,
+    query_history, quit_app, record_update_check, request_auto_paste_access, save_onboarding_state,
     set_file_preview_enabled, set_language_preference, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
@@ -220,6 +220,7 @@ pub fn run() {
             get_clip_file_asset,
             get_clip_thumbnail,
             preview_clip,
+            open_clip_link,
             preview_onboarding_example,
             get_source_app_icon,
             hide_panel,

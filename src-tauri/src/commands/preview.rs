@@ -81,6 +81,11 @@ pub fn preview_clip(
     )
 }
 
+#[tauri::command]
+pub fn open_clip_link(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
+    state.external_preview.open_link(&app, &id)
+}
+
 fn with_file_preview_access<T>(
     content_type: ContentType,
     enabled: bool,

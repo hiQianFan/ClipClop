@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { copyClip, hidePanel, pasteClip, previewClip } from "$lib/history/api";
+  import { copyClip, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
   import { canExpand, filePaths, shouldReadOriginalFile } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
   import { PreviewSession } from "$lib/history/preview-session.svelte";
@@ -282,6 +282,17 @@
     menuOpen = false;
   }
 
+  async function openSelectedLink() {
+    if (!session.selectedId || session.detail?.content_type !== "link") return;
+    try {
+      await openClipLink(session.selectedId);
+    } catch (reason) {
+      error = localizedError(reason);
+    }
+    menuOpen = false;
+    enterBrowse();
+  }
+
   function onSearch() {
     if (searchTimer !== undefined) window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(() => {
@@ -304,8 +315,7 @@
 
   function closeMenu() {
     menuOpen = false;
-    mode = "browse";
-    requestAnimationFrame(() => menuButton?.focus());
+    enterBrowse();
   }
 
   async function toggleAppMenu() {
@@ -731,16 +741,23 @@
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{#if showAutoPasteHelp}<button class="ghost" onclick={() => { copied = ""; showAutoPasteHelp = false; openOnboarding("auto_paste"); }}>{t("settings.autoPaste")}</button>{/if}{/if}
       <div bind:this={menuWrap} class="menu-wrap">
-        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
+        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
         {#if menuOpen}
           <div class="menu action-menu" role="menu" tabindex="-1" aria-label={t("history.actionMenu")} onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()} disabled={!session.selectedId}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></button>
+            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></button>
+            {#if session.detail?.content_type === "link"}
+              <button data-menu-item role="menuitem" onclick={() => void openSelectedLink()}><span>{t("history.openLink")}</span></button>
+            {/if}
             <div class="menu-separator" role="separator"></div>
-            <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()} disabled={session.detail?.plain_text == null}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></button>
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly()} disabled={!session.selectedId}><span>{t("history.copy")}</span></button>
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)} disabled={session.detail?.plain_text == null}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
+            {#if session.detail?.plain_text != null}
+              <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></button>
+            {/if}
+            <button data-menu-item role="menuitem" onclick={() => void copyOnly()}><span>{t("history.copy")}</span></button>
+            {#if session.detail?.plain_text != null}
+              <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
+            {/if}
             <div class="menu-separator" role="separator"></div>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()} disabled={!session.selectedId}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></button>
+            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></button>
           </div>
         {/if}
       </div>
