@@ -106,6 +106,21 @@ pub(super) fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration)
     }
 }
 
+pub(super) fn wait_until_stable(
+    mut predicate: impl FnMut() -> bool,
+    consecutive_matches: usize,
+    timeout: Duration,
+) -> bool {
+    let mut matches = 0;
+    wait_until(
+        || {
+            matches = if predicate() { matches + 1 } else { 0 };
+            matches >= consecutive_matches
+        },
+        timeout,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,6 +135,22 @@ mod tests {
             },
             Duration::from_millis(50)
         ));
+    }
+
+    #[test]
+    fn stable_wait_resets_after_a_transient_match() {
+        let states = [true, false, true, true, true];
+        let mut index = 0;
+        assert!(wait_until_stable(
+            || {
+                let state = states[index];
+                index += 1;
+                state
+            },
+            3,
+            Duration::from_millis(100)
+        ));
+        assert_eq!(index, states.len());
     }
 
     #[test]
