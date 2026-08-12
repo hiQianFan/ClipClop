@@ -192,8 +192,6 @@ pub fn run() {
                     let panel = window.to_panel::<ClipboardPanel>()?;
                     panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
                 }
-                window::resize_panel_for_monitor(&window);
-                let _ = window.center();
                 let panel = window.clone();
                 let app = app.handle().clone();
                 window.on_window_event(move |event| {

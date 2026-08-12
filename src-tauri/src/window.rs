@@ -10,7 +10,10 @@ use std::{
     time::Duration,
 };
 
-use tauri::{Emitter, LogicalSize, Manager, WebviewWindow};
+use tauri::{
+    Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalRect, PhysicalSize,
+    WebviewWindow,
+};
 
 use crate::state::AppState;
 
@@ -56,19 +59,66 @@ fn panel_content_size(work_area_width: f64, work_area_height: f64) -> (f64, f64)
     (target_width.min(max_width), target_height.min(max_height))
 }
 
-pub(crate) fn resize_panel_for_monitor(window: &WebviewWindow) {
-    let Ok(Some(monitor)) = window.current_monitor() else {
-        return;
-    };
-    let work_area = monitor
-        .work_area()
-        .size
-        .to_logical::<f64>(monitor.scale_factor());
-    let (content_width, content_height) = panel_content_size(work_area.width, work_area.height);
-    let _ = window.set_size(LogicalSize::new(
+fn panel_bounds(
+    work_area: &PhysicalRect<i32, u32>,
+    scale_factor: f64,
+) -> (PhysicalPosition<i32>, PhysicalSize<u32>) {
+    let logical_work_area = work_area.size.to_logical::<f64>(scale_factor);
+    let (content_width, content_height) =
+        panel_content_size(logical_work_area.width, logical_work_area.height);
+    let size = LogicalSize::new(
         content_width + SHADOW_INSET * 2.0,
         content_height + SHADOW_INSET * 2.0,
-    ));
+    )
+    .to_physical::<u32>(scale_factor);
+    let position = PhysicalPosition::new(
+        work_area.position.x + (work_area.size.width.saturating_sub(size.width) / 2) as i32,
+        work_area.position.y + (work_area.size.height.saturating_sub(size.height) / 2) as i32,
+    );
+    (position, size)
+}
+
+fn target_monitor(window: &WebviewWindow) -> Option<Monitor> {
+    let cursor_monitor = window
+        .cursor_position()
+        .and_then(|cursor| window.monitor_from_point(cursor.x, cursor.y));
+    match cursor_monitor {
+        Ok(Some(monitor)) => return Some(monitor),
+        Ok(None) => log::warn!("place_panel: no monitor contains the cursor"),
+        Err(error) => log::warn!("place_panel: failed to locate cursor monitor: {error}"),
+    }
+
+    match window.current_monitor() {
+        Ok(Some(monitor)) => Some(monitor),
+        Ok(None) => match window.primary_monitor() {
+            Ok(monitor) => monitor,
+            Err(error) => {
+                log::warn!("place_panel: failed to locate primary monitor: {error}");
+                None
+            }
+        },
+        Err(error) => {
+            log::warn!("place_panel: failed to locate current monitor: {error}");
+            window.primary_monitor().ok().flatten()
+        }
+    }
+}
+
+pub(crate) fn place_panel(window: &WebviewWindow) {
+    let Some(monitor) = target_monitor(window) else {
+        log::warn!("place_panel: no monitor is available");
+        return;
+    };
+    let (position, size) = panel_bounds(monitor.work_area(), monitor.scale_factor());
+
+    // Moving first lets the OS switch the window to the target monitor's DPI before the
+    // explicit physical size wins over any automatic cross-monitor DPI adjustment.
+    if let Err(error) = window.set_position(position) {
+        log::warn!("place_panel: failed to move window: {error}");
+    }
+    if let Err(error) = window.set_size(size) {
+        log::warn!("place_panel: failed to resize window: {error}");
+    }
 }
 
 pub(crate) fn show_panel(app: &tauri::AppHandle) {
@@ -80,8 +130,7 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
 
     let lifecycle = app.state::<PanelLifecycleState>();
     lifecycle.begin_show(window.is_focused().unwrap_or(false));
-    resize_panel_for_monitor(&window);
-    let _ = window.center();
+    place_panel(&window);
 
     #[cfg(target_os = "macos")]
     if macos::show_as_panel(app) {
@@ -201,7 +250,8 @@ pub(crate) use macos::install_quicklook_key_handler;
 
 #[cfg(test)]
 mod tests {
-    use super::panel_content_size;
+    use super::{panel_bounds, panel_content_size};
+    use tauri::{PhysicalPosition, PhysicalRect, PhysicalSize};
 
     #[test]
     fn panel_uses_bounded_size_tiers() {
@@ -213,5 +263,32 @@ mod tests {
     #[test]
     fn panel_never_exceeds_the_monitor_work_area() {
         assert_eq!(panel_content_size(800.0, 560.0), (720.0, 520.0));
+    }
+
+    #[test]
+    fn panel_bounds_use_the_target_monitor_scale_and_work_area() {
+        let standard = PhysicalRect {
+            position: PhysicalPosition::new(0, 0),
+            size: PhysicalSize::new(1920, 1080),
+        };
+        assert_eq!(
+            panel_bounds(&standard, 1.0),
+            (
+                PhysicalPosition::new(460, 160),
+                PhysicalSize::new(1000, 760)
+            )
+        );
+
+        let retina = PhysicalRect {
+            position: PhysicalPosition::new(-2880, 0),
+            size: PhysicalSize::new(2880, 1800),
+        };
+        assert_eq!(
+            panel_bounds(&retina, 2.0),
+            (
+                PhysicalPosition::new(-2280, 260),
+                PhysicalSize::new(1680, 1280)
+            )
+        );
     }
 }
