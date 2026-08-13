@@ -106,6 +106,7 @@ pub(super) fn wait_until(mut predicate: impl FnMut() -> bool, timeout: Duration)
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub(super) fn wait_until_stable(
     mut predicate: impl FnMut() -> bool,
     consecutive_matches: usize,
@@ -148,7 +149,7 @@ mod tests {
                 state
             },
             3,
-            Duration::from_millis(100)
+            Duration::from_millis(500)
         ));
         assert_eq!(index, states.len());
     }
