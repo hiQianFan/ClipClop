@@ -123,8 +123,7 @@ jobs:
           releaseDraft: true
           updaterJsonPreferNsis: true
           # latest.json has exactly one writer in finalize; matrix jobs only upload platform assets.
-          uploadUpdaterJson: false
-          uploadUpdaterSignatures: true
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
   finalize:
