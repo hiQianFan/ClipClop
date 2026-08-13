@@ -486,16 +486,16 @@
     else if (event.key === "ArrowUp") { event.preventDefault(); void moveSelection(-1); }
     else if (event.key === "Home") { event.preventDefault(); selectIndex(0); }
     else if (event.key === "End") { event.preventDefault(); selectIndex(session.page.items.length - 1); }
-    else if (event.key === "PageDown" && session.page.page < session.page.total_pages) { event.preventDefault(); void refresh(session.page.page + 1); }
-    else if (event.key === "PageUp" && session.page.page > 1) { event.preventDefault(); void refresh(session.page.page - 1); }
+    else if (event.key === "PageDown" && session.page.page < session.page.total_pages) { event.preventDefault(); listbox?.turnPage(1); }
+    else if (event.key === "PageUp" && session.page.page > 1) { event.preventDefault(); listbox?.turnPage(-1); }
     else if (event.key === "ArrowLeft") {
       event.preventDefault();
       if (expandedId === session.selectedId) expandedId = null;
-      else if (session.page.page > 1) void refresh(session.page.page - 1);
+      else if (session.page.page > 1) listbox?.turnPage(-1);
     }
     else if (event.key === "ArrowRight") {
       event.preventDefault();
-      if (session.page.page < session.page.total_pages) void refresh(session.page.page + 1);
+      if (session.page.page < session.page.total_pages) listbox?.turnPage(1);
     }
     else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
