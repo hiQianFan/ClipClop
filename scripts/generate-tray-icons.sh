@@ -4,7 +4,8 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 tray_root="$repo_root/src-tauri/icons/tray"
-source_svg="$tray_root/source/tray-hooves.svg"
+macos_source="$tray_root/source/tray-hooves.svg"
+windows_source="$tray_root/source/tray-cow-horse.png"
 
 for required_tool in magick; do
   if ! command -v "$required_tool" >/dev/null 2>&1; then
@@ -15,12 +16,10 @@ done
 
 mkdir -p "$tray_root/macos" "$tray_root/windows"
 
-magick -background none -density 384 "$source_svg" \
+magick -background none -density 384 "$macos_source" \
   -resize 36x36 "$tray_root/macos/trayTemplate@2x.png"
 
-magick -background none -density 384 "$source_svg" \
-  -resize 32x32 "$tray_root/windows/tray-light-32.png"
-magick "$tray_root/windows/tray-light-32.png" \
-  -channel RGB -fill white -colorize 100 "$tray_root/windows/tray-dark-32.png"
+magick "$windows_source" -resize 30x30 -gravity center -background none \
+  -extent 32x32 "$tray_root/windows/tray-32.png"
 
-echo "Generated tray assets from $source_svg"
+echo "Generated macOS and Windows tray assets"
