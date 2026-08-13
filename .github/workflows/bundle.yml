@@ -23,7 +23,7 @@ jobs:
     permissions:
       contents: write
     outputs:
-      release_id: ${{ steps.release.outputs.release_id }}
+      release_id: ${{ steps.version.outputs.release_id }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
