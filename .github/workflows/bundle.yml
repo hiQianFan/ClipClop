@@ -16,16 +16,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  prepare:
+    name: Prepare Draft Release
+    runs-on: ubuntu-latest
+    environment: production-release
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify release version
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANUAL_VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          app_version="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
+          release_version="${MANUAL_VERSION#v}"
+          test -n "$release_version"
+          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$release_version" = "$app_version"
+          test "$(node -p "require('./src-tauri/tauri.conf.json').version")" = "$app_version"
+          test "$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).packages[0].version))")" = "$app_version"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"v$release_version\")" | head -n 1)"
+          if [[ -n "$release_json" ]]; then
+            test "$(jq -r .draft <<<"$release_json")" = "true"
+            release_id="$(jq -r .id <<<"$release_json")"
+          else
+            release_id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="v$release_version" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="ClipClop v$release_version Preview" \
+              -f body=$'See CHANGELOG.md for release notes.\n\nPreview installation note: these installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require approval in Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity but do not provide operating-system publisher identity.' \
+              -F draft=true -F prerelease=false -F generate_release_notes=true --jq .id)"
+          fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  build:
     name: ${{ matrix.name }}
+    needs: prepare
     runs-on: ${{ matrix.os }}
     environment: production-release
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      # tauri-action updates a shared latest.json; serialize platforms to avoid lost updates.
-      max-parallel: 1
       matrix:
         include:
           - name: macOS Universal DMG
@@ -52,20 +95,6 @@ jobs:
           components: rustfmt, clippy
           targets: ${{ matrix.rust_targets }}
       - run: pnpm install --frozen-lockfile
-      - name: Verify release version
-        shell: bash
-        env:
-          MANUAL_VERSION: ${{ inputs.version }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          app_version="$(node -p "require('./package.json').version")"
-          test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"
-          release_version="${MANUAL_VERSION#v}"
-          test -n "$release_version"
-          [[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$release_version" = "$app_version"
-          test "$(node -p "require('./src-tauri/tauri.conf.json').version")" = "$app_version"
-          test "$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).packages[0].version))")" = "$app_version"
       - name: Frontend tests
         run: pnpm test
       - name: Frontend diagnostics
@@ -83,38 +112,24 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
-      - name: Protect published release assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          app_version="$(node -p "require('./package.json').version")"
-          if release_draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$app_version" --jq .draft 2>/dev/null)"; then
-            test "$release_draft" = "true"
-          fi
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
           tagName: v__VERSION__
-          releaseName: ClipClop v__VERSION__ Preview
-          releaseBody: |
-            See CHANGELOG.md for release notes.
-
-            Preview installation note: these installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require approval in Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity but do not provide operating-system publisher identity.
           releaseDraft: true
-          prerelease: false
-          generateReleaseNotes: true
           updaterJsonPreferNsis: true
-          uploadUpdaterJson: true
+          # latest.json has exactly one writer in finalize; matrix jobs only upload platform assets.
+          uploadUpdaterJson: false
           uploadUpdaterSignatures: true
           args: ${{ matrix.args }}
 
-  verify:
-    name: Verify Draft Release
-    needs: publish
+  finalize:
+    name: Finalize and Verify Draft Release
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       # GitHub hides draft releases from tokens without release write access.
@@ -124,55 +139,27 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install Minisign
         run: sudo apt-get update && sudo apt-get install --yes minisign
-      - name: Verify assets and updater manifest
+      - name: Generate updater manifest and verify release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MANUAL_VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          release_version="${MANUAL_VERSION#v}"
-          release_json="$(
-            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-              | jq -c --arg tag "v$release_version" \
-                '[.[] | select(.tag_name == $tag)] | first'
-          )"
-          test "$release_json" != "null"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID")"
           test "$(jq -r .draft <<<"$release_json")" = "true"
 
           asset_names="$(jq -r '.assets[].name' <<<"$release_json")"
           for asset in \
-            "ClipClop_${release_version}_universal.dmg" \
+            "ClipClop_${RELEASE_VERSION}_universal.dmg" \
             "ClipClop_universal.app.tar.gz" \
             "ClipClop_universal.app.tar.gz.sig" \
-            "ClipClop_${release_version}_x64-setup.exe" \
-            "ClipClop_${release_version}_x64-setup.exe.sig" \
-            "latest.json"; do
+            "ClipClop_${RELEASE_VERSION}_x64-setup.exe" \
+            "ClipClop_${RELEASE_VERSION}_x64-setup.exe.sig"; do
             grep -Fxq "$asset" <<<"$asset_names"
           done
 
           manifest_dir="$(mktemp -d)"
-          manifest_api_url="$(
-            jq -r '.assets[] | select(.name == "latest.json") | .url' \
-              <<<"$release_json"
-          )"
-          test -n "$manifest_api_url"
-          gh api \
-            --header "Accept: application/octet-stream" \
-            "$manifest_api_url" > "$manifest_dir/latest.json"
-          jq -e --arg version "$release_version" '
-            . as $manifest
-            | .version == $version
-            and ([
-              "darwin-aarch64",
-              "darwin-x86_64",
-              "windows-x86_64",
-              "windows-x86_64-nsis"
-            ] | all(. as $platform |
-              ($manifest.platforms[$platform].url | length > 0)
-              and ($manifest.platforms[$platform].signature | length > 0)
-            ))
-          ' "$manifest_dir/latest.json"
-
           download_asset() {
             local asset_name="$1"
             local asset_api_url
@@ -189,19 +176,44 @@ jobs:
 
           mac_bundle="ClipClop_universal.app.tar.gz"
           mac_signature="$mac_bundle.sig"
-          windows_bundle="ClipClop_${release_version}_x64-setup.exe"
+          windows_bundle="ClipClop_${RELEASE_VERSION}_x64-setup.exe"
           windows_signature="$windows_bundle.sig"
           download_asset "$mac_bundle"
           download_asset "$mac_signature"
           download_asset "$windows_bundle"
           download_asset "$windows_signature"
 
-          mac_manifest_signature="$(jq -r '.platforms["darwin-aarch64"].signature' "$manifest_dir/latest.json")"
-          windows_manifest_signature="$(jq -r '.platforms["windows-x86_64"].signature' "$manifest_dir/latest.json")"
-          test "$mac_manifest_signature" = "$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
-          test "$windows_manifest_signature" = "$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
-          test "$mac_manifest_signature" = "$(jq -r '.platforms["darwin-x86_64"].signature' "$manifest_dir/latest.json")"
-          test "$windows_manifest_signature" = "$(jq -r '.platforms["windows-x86_64-nsis"].signature' "$manifest_dir/latest.json")"
+          mac_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
+          windows_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
+          release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$RELEASE_VERSION"
+          jq -n \
+            --arg version "$RELEASE_VERSION" \
+            --arg notes "See CHANGELOG.md for release notes." \
+            --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --arg mac_url "$release_base/$mac_bundle" \
+            --arg mac_sig "$mac_manifest_signature" \
+            --arg win_url "$release_base/$windows_bundle" \
+            --arg win_sig "$windows_manifest_signature" \
+            '{version:$version,notes:$notes,pub_date:$pub_date,platforms:{
+              "darwin-aarch64":{signature:$mac_sig,url:$mac_url},
+              "darwin-x86_64":{signature:$mac_sig,url:$mac_url},
+              "windows-x86_64":{signature:$win_sig,url:$win_url},
+              "windows-x86_64-nsis":{signature:$win_sig,url:$win_url}
+            }}' > "$manifest_dir/latest.json"
+
+          existing_manifest_id="$(jq -r '.assets[] | select(.name == "latest.json") | .id' <<<"$release_json")"
+          if [[ -n "$existing_manifest_id" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$existing_manifest_id"
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
+            --header "Content-Type: application/json" \
+            --input "$manifest_dir/latest.json" > /dev/null
+
+          jq -e --arg version "$RELEASE_VERSION" '
+            . as $manifest
+            | .version == $version and (["darwin-aarch64","darwin-x86_64","windows-x86_64","windows-x86_64-nsis"]
+              | all(. as $platform | ($manifest.platforms[$platform].url | length > 0) and ($manifest.platforms[$platform].signature | length > 0)))
+          ' "$manifest_dir/latest.json"
 
           updater_pubkey="$(
             jq -r '.plugins.updater.pubkey' src-tauri/tauri.conf.json \
