@@ -45,6 +45,10 @@ export function hidePanel(): Promise<void> {
   return invoke("hide_panel");
 }
 
+export function performPagerHaptic(): Promise<void> {
+  return invoke("perform_pager_haptic");
+}
+
 export function copyClip(id: string, plainText = false): Promise<boolean> {
   return invoke("copy_clip", { id, plainText });
 }
