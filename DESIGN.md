@@ -149,7 +149,7 @@ The scale is **fixed px, not fluid** — correct for a product UI viewed at cons
 
 ### Hierarchy
 - **Heading** (sans, 680, 18px, lh 1.3, tracking −0.01em): The one heading size — settings section titles (h1) and the onboarding hero share it.
-- **Emphasis** (sans, 600, 14px): Update-card title — the one mid-weight step.
+- **Emphasis** (sans, 600, 14px): Window and update-card titles — the one mid-weight step.
 - **Body** (mono, 400, 13px, lh 1.5): Clipboard snippets, search input, preview text. Preview prose runs at lh 1.65.
 - **UI Label** (sans, 600, 12px, lh 1.4): The workhorse — nav, buttons, toggle labels, menu items.
 - **Meta** (mono, 400, 11px): Secondary meta, hints, file sub-rows.

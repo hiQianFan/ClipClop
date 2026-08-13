@@ -12,7 +12,7 @@
   import { currentPlatform } from "$lib/settings/shortcuts";
   import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
-  import { ArrowLeft } from "@lucide/svelte";
+  import { updateStore } from "$lib/updater/store.svelte";
   import OnboardingView from "$lib/onboarding/OnboardingView.svelte";
   import { getOnboardingState, type OnboardingState } from "$lib/onboarding/api";
 
@@ -35,6 +35,7 @@
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
+  let settingsTab = $state<"general" | "updates" | "about">("general");
   let onboarding = $state<OnboardingState | null>(null);
   let onboardingMode = $state<"first_run" | "quick_start" | "auto_paste">("first_run");
   let deletePending = $state(false);
@@ -363,9 +364,15 @@
     if (mode === "file-tablist" && !event.target.closest("[role='tablist']")) mode = "browse";
   }
 
-  async function openSettingsView() {
+  async function openSettingsView(tab: "general" | "updates" | "about" = "general") {
     appMenuOpen = false;
+    settingsTab = tab;
     view = "settings";
+  }
+
+  function checkForUpdates() {
+    void openSettingsView("updates");
+    void updateStore.check();
   }
 
   function openOnboarding(mode: "quick_start" | "auto_paste") {
@@ -675,14 +682,16 @@
           </button>
           {#if appMenuOpen}
             <div class="menu app-menu" role="menu" tabindex="-1" aria-label={t("history.appMenu")} onkeydown={onMenuKeydown}>
-              <button data-menu-item role="menuitem" onclick={() => { appMenuOpen = false; void openSettingsView(); }}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></button>
+              <button data-menu-item role="menuitem" onclick={() => void openSettingsView()}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></button>
+              <button data-menu-item role="menuitem" onclick={checkForUpdates}>{t("history.checkUpdates")}</button>
+              <button data-menu-item role="menuitem" onclick={() => void openSettingsView("about")}>{t("history.about")}</button>
+              <div class="menu-separator" role="separator"></div>
               <button data-menu-item role="menuitem" class="danger" onclick={() => void quitApp()}>{t("history.quit")}</button>
             </div>
           {/if}
         </div>
       </div>
     {:else}
-      <button class="back" aria-label={t("history.back")} onclick={closeSettingsView}><ArrowLeft size={16} aria-hidden="true" /></button>
       <span class="settings-title">{t("settings.title")}</span>
     {/if}
     <div class="titlebar-drag" data-tauri-drag-region></div>
@@ -765,7 +774,7 @@
     {/if}
   </footer>
   {:else}
-    <SettingsView onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={() => void openOnboarding("quick_start")} />
+    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={() => void openOnboarding("quick_start")} />
   {/if}
   {/if}
 </main>
@@ -780,9 +789,7 @@
   .app-menu-trigger { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
   .app-menu-trigger:hover { background:var(--bg-hover); }
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
-  .back { width:24px; height:24px; padding:0; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:16px; }
-  .back:hover { background:var(--bg-hover); }
-  .settings-title { margin-left:7px; color:var(--text-2); font-size:var(--fs-ui); font-weight:600; }
+  .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
   kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
   .copy, .ghost, .destructive { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
@@ -809,6 +816,7 @@
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
   .confirmation { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+  .confirmation button { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
   .confirmation > span { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
   .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
