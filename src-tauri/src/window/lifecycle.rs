@@ -86,6 +86,10 @@ impl PanelLifecycleState {
         state.revision = state.revision.wrapping_add(1);
         state.phase = PanelPhase::Hidden;
     }
+
+    pub(crate) fn is_shown(&self) -> bool {
+        self.lock().phase != PanelPhase::Hidden
+    }
 }
 
 #[cfg(test)]
@@ -131,5 +135,15 @@ mod tests {
         state.begin_show(true);
         assert!(state.begin_blur().is_some());
         assert_eq!(state.begin_blur(), None);
+    }
+
+    #[test]
+    fn shown_state_changes_synchronously() {
+        let state = PanelLifecycleState::default();
+        assert!(!state.is_shown());
+        state.begin_show(false);
+        assert!(state.is_shown());
+        state.mark_hidden();
+        assert!(!state.is_shown());
     }
 }

@@ -1,5 +1,26 @@
 use objc::{sel, sel_impl};
 
+pub(super) fn cursor_screen_work_area() -> Option<(f64, f64)> {
+    use tauri_nspanel::{
+        objc2::MainThreadMarker,
+        objc2_app_kit::{NSEvent, NSScreen},
+    };
+
+    let mtm = MainThreadMarker::new()?;
+    let mouse = NSEvent::mouseLocation();
+    NSScreen::screens(mtm).iter().find_map(|screen| {
+        let frame = screen.frame();
+        let contains_mouse = mouse.x >= frame.origin.x
+            && mouse.x < frame.origin.x + frame.size.width
+            && mouse.y >= frame.origin.y
+            && mouse.y < frame.origin.y + frame.size.height;
+        contains_mouse.then(|| {
+            let visible = screen.visibleFrame();
+            (visible.size.width, visible.size.height)
+        })
+    })
+}
+
 pub(super) fn show_as_panel(app: &tauri::AppHandle) -> bool {
     use objc::{class, msg_send};
     use tauri_nspanel::ManagerExt;
