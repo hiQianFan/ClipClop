@@ -200,14 +200,6 @@ jobs:
               "windows-x86_64-nsis":{signature:$win_sig,url:$win_url}
             }}' > "$manifest_dir/latest.json"
 
-          existing_manifest_id="$(jq -r '.assets[] | select(.name == "latest.json") | .id' <<<"$release_json")"
-          if [[ -n "$existing_manifest_id" ]]; then
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$existing_manifest_id"
-          fi
-          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=latest.json" \
-            --header "Content-Type: application/json" \
-            --input "$manifest_dir/latest.json" > /dev/null
-
           jq -e --arg version "$RELEASE_VERSION" '
             . as $manifest
             | .version == $version and (["darwin-aarch64","darwin-x86_64","windows-x86_64","windows-x86_64-nsis"]
@@ -224,3 +216,9 @@ jobs:
           base64 --decode < "$manifest_dir/$windows_signature" > "$manifest_dir/$windows_signature.decoded"
           minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
+
+          gh release upload "v$RELEASE_VERSION" "$manifest_dir/latest.json#latest.json" --clobber
+          gh release edit "v$RELEASE_VERSION" \
+            --draft=false \
+            --prerelease=false \
+            --title "ClipClop v$RELEASE_VERSION"
