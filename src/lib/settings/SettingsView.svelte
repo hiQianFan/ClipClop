@@ -145,6 +145,11 @@
     catch (reason) { status = localizedError(reason); }
   }
 
+  async function openReleasePage() {
+    try { await openLatestRelease(); }
+    catch (reason) { status = localizedError(reason); }
+  }
+
   function selectTab(next: Tab) {
     tab = next;
     recording = false;
@@ -382,7 +387,7 @@
                 <p class="update-status error" role="alert"><CircleAlert size={14} /><span>{updateMessage}</span></p>
               {/if}
               <div class="update-actions">
-                <button onclick={() => void openLatestRelease()}>{t("settings.releasePage")}</button>
+                <button onclick={() => void openReleasePage()}>{t("settings.releasePage")}</button>
                 <button class="primary" disabled={updateBusy} onclick={installUpdate}>{updateState === "error" ? t("settings.retry") : t("settings.install")}</button>
               </div>
             </div>

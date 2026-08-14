@@ -1,6 +1,5 @@
 import { getVersion } from "@tauri-apps/api/app";
-import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { error as logError } from "@tauri-apps/plugin-log";
@@ -247,7 +246,7 @@ export async function downloadAndInstall(
 }
 
 export async function openLatestRelease() {
-  await openUrl(RELEASE_URL);
+  await invoke("open_release_page");
 }
 
 export function scheduleAutomaticUpdateCheck() {
