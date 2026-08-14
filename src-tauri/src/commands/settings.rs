@@ -82,7 +82,7 @@ pub fn perform_pager_haptic() -> AppResult<()> {
     unsafe {
         use objc::{class, msg_send, runtime::Object, sel, sel_impl};
         let performer: *mut Object = msg_send![class!(NSHapticFeedbackManager), defaultPerformer];
-        let _: () = msg_send![performer, performFeedbackPattern: 0_i64 performanceTime: 0_i64];
+        let _: () = msg_send![performer, performFeedbackPattern: 1_i64 performanceTime: 0_i64];
     }
     Ok(())
 }
