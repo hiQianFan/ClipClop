@@ -8,6 +8,7 @@ import {
   checkForUpdate,
   currentVersion,
   downloadAndInstall,
+  skipUpdate,
   type AvailableUpdate,
 } from "./api";
 
@@ -15,6 +16,7 @@ export type UpdatePhase =
   | "idle"
   | "checking"
   | "current"
+  | "skipped"
   | "downloading"
   | "installing"
   | "error";
@@ -28,6 +30,7 @@ let errorSource = $state<UpdateErrorSource>(null);
 let appVersion = $state("…");
 let hydrated = false;
 let installing = false;
+let skippedVersion = $state<string | null>(null);
 
 // Seed appVersion and any cached pending update exactly once per session. On later
 // mounts the store already reflects the latest in-session truth (including an
@@ -59,6 +62,11 @@ async function check() {
       appVersion = result.currentVersion;
       update = null;
       phase = "current";
+    } else if (result.kind === "skipped") {
+      appVersion = result.currentVersion;
+      update = null;
+      skippedVersion = result.version;
+      phase = "skipped";
     } else {
       phase = "error";
       errorSource = "unsupported";
@@ -92,6 +100,14 @@ async function install() {
   }
 }
 
+async function skip() {
+  if (!update) return;
+  await skipUpdate(update);
+  skippedVersion = update.version;
+  update = null;
+  phase = "skipped";
+}
+
 // Retry after an error returns to the appropriate action for the last phase.
 function retry() {
   if (errorSource === "install" && update) return install();
@@ -105,9 +121,11 @@ export const updateStore = {
   get errorReason() { return errorReason; },
   get errorSource() { return errorSource; },
   get appVersion() { return appVersion; },
+  get skippedVersion() { return skippedVersion; },
   get busy() { return phase === "downloading" || phase === "installing"; },
   hydrate,
   check,
   install,
+  skip,
   retry,
 };

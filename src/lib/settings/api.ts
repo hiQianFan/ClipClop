@@ -15,11 +15,13 @@ export type Settings = {
   language: LanguagePreference;
   check_updates: boolean;
   last_update_check: string | null;
+  skipped_update_version: string | null;
 };
 
 export const getSettings = () => invoke<Settings>("get_settings");
 export const updateSettings = (settings: Settings) => invoke<Settings>("update_settings", { settings });
 export const recordUpdateCheck = () => invoke<string>("record_update_check");
+export const skipUpdateVersion = (version: string) => invoke<void>("skip_update_version", { version });
 export const openLogDir = () => invoke<void>("open_log_dir");
 export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
 export const setFilePreviewEnabled = (enabled: boolean) =>

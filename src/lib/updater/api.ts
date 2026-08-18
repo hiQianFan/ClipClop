@@ -3,7 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { error as logError } from "@tauri-apps/plugin-log";
-import { getSettings, recordUpdateCheck } from "$lib/settings/api";
+import { getSettings, recordUpdateCheck, skipUpdateVersion } from "$lib/settings/api";
 
 // Persist the raw failure cause to the diagnostic log before it is localized for
 // display. This closes the updater blind spot: without it, install failures collapse
@@ -14,7 +14,7 @@ function logUpdaterFailure(stage: string, reason: unknown) {
   void logError(`updater ${stage} failed: ${detail}`).catch(() => {});
 }
 
-export const RELEASE_URL = "https://github.com/hiQianFan/ClipClop/releases/latest";
+export const RELEASE_URL = "https://github.com/hiQianFan/ClipClop/releases";
 export const DEVELOPMENT_VERSION = "__clipclop_development__";
 type UpdaterErrorCode = "UPDATE_UNSUPPORTED" | "UPDATE_CHANGED";
 
@@ -89,9 +89,23 @@ export type AvailableUpdate = {
   notes: string;
 };
 
+export type ReleaseNote = { version: string; publishedAt: string; notes: string; notesHtml: string | null; url: string; isLatest: boolean };
+const RELEASES_API = "https://api.github.com/repos/hiQianFan/ClipClop/releases?per_page=30";
+
+export async function listReleaseNotes(): Promise<ReleaseNote[]> {
+  const response = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github.html+json" } });
+  if (!response.ok) throw new Error(`GitHub releases request failed (${response.status})`);
+  const releases = await response.json() as Array<{ tag_name?: string; published_at?: string; body?: string; body_html?: string; html_url?: string; draft?: boolean }>;
+  return releases.filter((release) => !release.draft && release.tag_name && release.published_at).map((release, index) => ({
+    // GitHub sanitizes Markdown when returning body_html through this media type.
+    version: release.tag_name!, publishedAt: release.published_at!, notes: release.body?.trim() ?? "", notesHtml: release.body_html?.trim() || null, url: release.html_url ?? RELEASE_URL, isLatest: index === 0,
+  }));
+}
+
 export type UpdateCheckResult =
   | { kind: "unsupported"; currentVersion: string }
   | { kind: "current"; currentVersion: string }
+  | { kind: "skipped"; currentVersion: string; version: string }
   | { kind: "available"; update: AvailableUpdate };
 
 let activeCheck: Promise<UpdateCheckResult> | null = null;
@@ -194,8 +208,18 @@ async function performCheck(): Promise<UpdateCheckResult> {
     notes: found.body?.trim() ?? "",
   };
   await found.close();
+  const settings = await getSettings();
+  if (settings.skipped_update_version === update.version) {
+    writeCachedUpdate(null);
+    return { kind: "skipped", currentVersion: version, version: update.version };
+  }
   writeCachedUpdate(update);
   return { kind: "available", update };
+}
+
+export async function skipUpdate(update: AvailableUpdate) {
+  await skipUpdateVersion(update.version);
+  writeCachedUpdate(null);
 }
 
 export async function downloadAndInstall(

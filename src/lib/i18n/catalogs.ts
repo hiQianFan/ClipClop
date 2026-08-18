@@ -180,6 +180,9 @@ export const en = {
   "settings.versionHelp": "Current version {version}; automatically checks at most once a day.",
   "settings.autoCheck": "Automatically check",
   "settings.updateAvailable": "ClipClop {version} is available",
+  "settings.releaseNotes": "Release notes",
+  "settings.latestRelease": "Latest",
+  "settings.refreshReleaseNotes": "Refresh release notes",
   "settings.releasePage": "View release page",
   "settings.install": "Download and install",
   "settings.check": "Check for updates",
@@ -195,6 +198,8 @@ export const en = {
   "settings.installing": "Installing and restarting…",
   "settings.installFailed": "Installation failed: {error}",
   "settings.retry": "Retry",
+  "settings.skipVersion": "Skip this version",
+  "settings.skippedVersion": "Skipped version {version}",
   "settings.iconAlt": "ClipClop icon",
   "settings.tagline": "A lightweight, offline-first, cross-platform clipboard history tool.",
   "settings.version": "Version {version} · MIT License",
@@ -328,6 +333,11 @@ export const zhCN = {
   "shortcut.group.panel": "面板操作", "shortcut.group.list": "历史列表", "shortcut.group.files": "文件预览", "shortcut.group.settings": "设置",
   "shortcut.search": "搜索", "shortcut.searchDesc": "将焦点移到搜索框", "shortcut.openSettings": "打开设置", "shortcut.openSettingsDesc": "从历史面板进入设置", "shortcut.itemActions": "当前记录操作", "shortcut.itemActionsDesc": "打开所选记录的操作菜单", "shortcut.menuNavigation": "操作菜单导航", "shortcut.menuNavigationDesc": "上、下方向键逐项移动；Home、End 跳到第一项或最后一项", "shortcut.backLayers": "逐层返回", "shortcut.backLayersDesc": "先关闭操作菜单，再关闭历史面板", "shortcut.closePanel": "直接关闭面板", "shortcut.closePanelDesc": "无论当前位于面板哪个区域，都关闭历史面板", "shortcut.moveSelection": "移动选择", "shortcut.moveSelectionDesc": "上方向键选择上一条，下方向键选择下一条", "shortcut.firstLast": "首条或末条", "shortcut.firstLastDesc": "Home 跳到当前页首条，End 跳到末条", "shortcut.pages": "翻页", "shortcut.pagesDesc": "左方向键或 Page Up 返回上一页；右方向键或 Page Down 前往下一页", "shortcut.visible": "跳到可见记录", "shortcut.visibleDesc": "1–9 对应前九条，0 对应第十条", "shortcut.paste": "粘贴", "shortcut.pasteDesc": "按原有格式粘贴当前记录", "shortcut.pastePlain": "粘贴为纯文本", "shortcut.pastePlainDesc": "去除原有格式后粘贴当前记录", "shortcut.open": "在默认应用查看", "shortcut.openDesc": "打开当前记录", "shortcut.copyPlain": "复制为纯文本", "shortcut.copyPlainDesc": "仅在记录包含纯文本时生效", "shortcut.remove": "删除", "shortcut.removeDesc": "先进入删除确认", "shortcut.switchFile": "切换组内文件", "shortcut.switchFileDesc": "组合左方向键查看上一个文件，组合右方向键查看下一个文件", "shortcut.previousNextFile": "上一个或下一个文件", "shortcut.previousNextFileDesc": "左方向键查看上一个文件，右方向键查看下一个文件", "shortcut.firstLastFile": "首个或末个文件", "shortcut.firstLastFileDesc": "Home 跳到首个文件，End 跳到末个文件", "shortcut.switchCategory": "切换分类", "shortcut.switchCategoryDesc": "上、下方向键逐项切换；Home、End 跳到第一个或最后一个分类", "shortcut.enterDetail": "进入详情", "shortcut.enterDetailDesc": "从侧栏进入当前分类的设置项", "shortcut.returnCategory": "返回分类", "shortcut.returnCategoryDesc": "从设置项回到左侧当前分类", "shortcut.saveSettings": "保存设置", "shortcut.saveSettingsDesc": "保存当前设置", "shortcut.returnHistory": "返回历史", "shortcut.returnHistoryDesc": "取消确认或离开设置",
   "error.notFound": "未找到请求的内容。", "error.validation": "请求无效。", "error.hotkeyInvalidFormat": "快捷键格式无效。", "error.hotkeyMissingModifier": "快捷键必须包含修饰键和主键。", "error.hotkeyUnsupportedKey": "快捷键包含不支持的主键。", "error.hotkeyDuplicateModifier": "快捷键包含无效或重复的修饰键。", "error.hotkeyReserved": "该组合是常用系统或窗口快捷键。", "error.hotkeyUnavailable": "无法注册该快捷键，可能已被其他应用占用。", "error.storage": "存储操作失败。", "error.clipboard": "剪贴板操作失败。", "error.platform": "系统集成操作失败。", "error.unknown": "发生未知错误。", "update.devVersion": "开发预览", "update.unsupported": "当前环境不支持自动更新。", "update.changed": "更新版本已经变化，请重新检查。"
+  , "settings.releaseNotes": "更新说明",
+  "settings.latestRelease": "最新",
+  "settings.refreshReleaseNotes": "刷新发布记录",
+  "settings.skipVersion": "跳过此版本",
+  "settings.skippedVersion": "已跳过版本 {version}",
 } satisfies Catalog;
 
 export type MessageKey = keyof Catalog;

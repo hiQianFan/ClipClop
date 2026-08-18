@@ -35,6 +35,7 @@ impl SettingsService {
         self.database
             .update_setting(SETTINGS_KEY, |existing: &mut Settings| {
                 settings.last_update_check = existing.last_update_check.clone();
+                settings.skipped_update_version = existing.skipped_update_version.clone();
                 *existing = settings.clone();
             })
     }
@@ -47,6 +48,18 @@ impl SettingsService {
                 settings.last_update_check = Some(checked_at.clone());
             })?;
         Ok(checked_at)
+    }
+
+    pub fn skip_update_version(&self, version: String) -> AppResult<()> {
+        if version.is_empty() || version.len() > 80 || version.trim() != version {
+            return Err(AppError::Validation("invalid update version".into()));
+        }
+        let _guard = self.lock_mutation()?;
+        self.database
+            .update_setting(SETTINGS_KEY, |settings: &mut Settings| {
+                settings.skipped_update_version = Some(version.clone());
+            })?;
+        Ok(())
     }
 
     pub fn set_language(&self, language: LanguagePreference) -> AppResult<LanguagePreference> {

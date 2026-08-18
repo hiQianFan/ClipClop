@@ -49,7 +49,7 @@ pub fn open_release_page(app: AppHandle) -> AppResult<()> {
 
     app.opener()
         .open_url(
-            "https://github.com/hiQianFan/ClipClop/releases/latest",
+            "https://github.com/hiQianFan/ClipClop/releases",
             None::<&str>,
         )
         .map_err(|error| crate::error::AppError::Platform(error.to_string()))
@@ -58,6 +58,11 @@ pub fn open_release_page(app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub fn record_update_check(state: State<'_, AppState>) -> AppResult<String> {
     state.settings.record_update_check()
+}
+
+#[tauri::command]
+pub fn skip_update_version(state: State<'_, AppState>, version: String) -> AppResult<()> {
+    state.settings.skip_update_version(version)
 }
 
 #[tauri::command]

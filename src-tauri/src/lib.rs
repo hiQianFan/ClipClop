@@ -23,7 +23,7 @@ use commands::{
     open_file_preview_settings, open_log_dir, open_release_page, paste_clip, perform_pager_haptic,
     preview_clip, preview_onboarding_example, query_history, quit_app, record_update_check,
     request_auto_paste_access, save_onboarding_state, set_file_preview_enabled,
-    set_language_preference, update_settings,
+    set_language_preference, skip_update_version, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -232,6 +232,7 @@ pub fn run() {
             get_settings,
             update_settings,
             record_update_check,
+            skip_update_version,
             set_file_preview_enabled,
             open_file_preview_settings,
             open_log_dir,

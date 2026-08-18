@@ -25,6 +25,8 @@ pub struct Settings {
     pub language: LanguagePreference,
     pub check_updates: bool,
     pub last_update_check: Option<String>,
+    #[serde(default)]
+    pub skipped_update_version: Option<String>,
 }
 
 impl Default for Settings {
@@ -41,6 +43,7 @@ impl Default for Settings {
             language: LanguagePreference::System,
             check_updates: true,
             last_update_check: None,
+            skipped_update_version: None,
         }
     }
 }
@@ -134,7 +137,8 @@ mod tests {
                 "theme": "system",
                 "language": "system",
                 "check_updates": true,
-                "last_update_check": null
+                "last_update_check": null,
+                "skipped_update_version": null
             })
         );
     }
