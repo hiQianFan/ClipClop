@@ -19,9 +19,13 @@ pub fn paste_clip(
     let Some(permit) = paste.try_begin() else {
         return Ok(PasteOutcome::AlreadyInProgress);
     };
-    let move_used_to_top = settings.get_stored()?.move_used_to_top;
-    SystemClipboard::write(history.flavors(id)?, plain_text_only)?;
-    if move_used_to_top {
+    let settings = settings.get_stored()?;
+    SystemClipboard::write(
+        history.flavors(id)?,
+        plain_text_only,
+        settings.trim_whitespace,
+    )?;
+    if settings.move_used_to_top {
         if let Err(error) = history.mark_used(id) {
             log::warn!("clipboard write succeeded but history promotion failed: {error}");
         }

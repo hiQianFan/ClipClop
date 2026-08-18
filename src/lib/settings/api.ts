@@ -8,6 +8,7 @@ export type Settings = {
   history_limit: 100 | 500 | 1000 | 5000 | null;
   move_used_to_top: boolean;
   restore_browse_position: boolean;
+  trim_whitespace: boolean;
   file_preview_enabled: boolean;
   launch_at_login: boolean;
   hotkey: string;

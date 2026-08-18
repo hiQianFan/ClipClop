@@ -49,9 +49,13 @@ pub fn copy_clip(
     id: &str,
     plain_text_only: bool,
 ) -> AppResult<bool> {
-    let move_used_to_top = settings.get_stored()?.move_used_to_top;
-    SystemClipboard::write(history.flavors(id)?, plain_text_only)?;
-    if move_used_to_top {
+    let settings = settings.get_stored()?;
+    SystemClipboard::write(
+        history.flavors(id)?,
+        plain_text_only,
+        settings.trim_whitespace,
+    )?;
+    if settings.move_used_to_top {
         match history.mark_used(id) {
             Ok(moved) => Ok(moved),
             Err(error) => {

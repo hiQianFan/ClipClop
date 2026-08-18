@@ -18,6 +18,8 @@ pub struct Settings {
     #[serde(default)]
     pub restore_browse_position: bool,
     #[serde(default)]
+    pub trim_whitespace: bool,
+    #[serde(default)]
     pub file_preview_enabled: bool,
     pub launch_at_login: bool,
     pub hotkey: String,
@@ -36,6 +38,7 @@ impl Default for Settings {
             history_limit: default_history_limit(),
             move_used_to_top: default_move_used_to_top(),
             restore_browse_position: false,
+            trim_whitespace: false,
             file_preview_enabled: false,
             launch_at_login: false,
             hotkey: DEFAULT_HOTKEY.into(),
@@ -110,6 +113,7 @@ mod tests {
         assert_eq!(settings.history_limit, Some(500));
         assert!(settings.move_used_to_top);
         assert!(!settings.restore_browse_position);
+        assert!(!settings.trim_whitespace);
         assert!(!settings.file_preview_enabled);
 
         let unlimited = Settings {
@@ -131,6 +135,7 @@ mod tests {
                 "history_limit": 500,
                 "move_used_to_top": true,
                 "restore_browse_position": false,
+                "trim_whitespace": false,
                 "file_preview_enabled": false,
                 "launch_at_login": false,
                 "hotkey": DEFAULT_HOTKEY,

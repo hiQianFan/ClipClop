@@ -23,9 +23,13 @@ const SELF_WRITE_FORMAT: &str = "com.clipclop.self-write";
 pub struct SystemClipboard;
 
 impl SystemClipboard {
-    pub fn write(flavors: Vec<Flavor>, plain_text_only: bool) -> AppResult<()> {
+    pub fn write(
+        flavors: Vec<Flavor>,
+        plain_text_only: bool,
+        trim_whitespace: bool,
+    ) -> AppResult<()> {
         let context = ClipboardContext::new().map_err(clipboard_error)?;
-        let mut contents = clipboard_contents(flavors, plain_text_only)?;
+        let mut contents = clipboard_contents(flavors, plain_text_only, trim_whitespace)?;
         if contents.is_empty() {
             return Err(AppError::Clipboard("clip has no writable flavors".into()));
         }
@@ -42,6 +46,7 @@ impl SystemClipboard {
 fn clipboard_contents(
     flavors: Vec<Flavor>,
     plain_text_only: bool,
+    trim_whitespace: bool,
 ) -> AppResult<Vec<ClipboardContent>> {
     let mut contents = Vec::new();
     for flavor in flavors {
@@ -49,9 +54,14 @@ fn clipboard_contents(
             continue;
         }
         match flavor.format.as_str() {
-            "text/plain" => contents.push(ClipboardContent::Text(
-                String::from_utf8_lossy(&flavor.payload).into_owned(),
-            )),
+            "text/plain" => {
+                let text = String::from_utf8_lossy(&flavor.payload);
+                contents.push(ClipboardContent::Text(if trim_whitespace {
+                    text.trim().into()
+                } else {
+                    text.into_owned()
+                }));
+            }
             "image/png" => {
                 let image = clipboard_rs::RustImageData::from_bytes(&flavor.payload)
                     .map_err(clipboard_error)?;
@@ -350,7 +360,7 @@ mod tests {
                 },
             ]
         };
-        let rich = clipboard_contents(flavors(), false).unwrap();
+        let rich = clipboard_contents(flavors(), false, false).unwrap();
         assert_eq!(rich.len(), 3);
         assert!(matches!(
             rich[1].get_format(),
@@ -361,11 +371,54 @@ mod tests {
             clipboard_rs::ContentFormat::Rtf
         ));
 
-        let plain = clipboard_contents(flavors(), true).unwrap();
+        let plain = clipboard_contents(flavors(), true, false).unwrap();
         assert_eq!(plain.len(), 1);
         assert!(matches!(
             plain[0].get_format(),
             clipboard_rs::ContentFormat::Text
         ));
+    }
+
+    #[test]
+    fn trims_only_plain_text_when_enabled() {
+        let unchanged = clipboard_contents(
+            vec![Flavor {
+                format: "text/plain".into(),
+                payload: b"  hello\n".to_vec(),
+            }],
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(unchanged[0].as_str().unwrap(), "  hello\n");
+
+        let contents = clipboard_contents(
+            vec![
+                Flavor {
+                    format: "text/plain".into(),
+                    payload: " \u{2003}hello  world\n ".as_bytes().to_vec(),
+                },
+                Flavor {
+                    format: "text/html".into(),
+                    payload: b"  <b>hello</b>  ".to_vec(),
+                },
+            ],
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(contents[0].as_str().unwrap(), "hello  world");
+        assert_eq!(contents[1].as_str().unwrap(), "  <b>hello</b>  ");
+
+        let blank = clipboard_contents(
+            vec![Flavor {
+                format: "text/plain".into(),
+                payload: b" \n\t".to_vec(),
+            }],
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(blank[0].as_str().unwrap(), "");
     }
 }
