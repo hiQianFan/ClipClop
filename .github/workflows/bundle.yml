@@ -44,6 +44,13 @@ jobs:
           test "$release_version" = "$app_version"
           test "$(node -p "require('./src-tauri/tauri.conf.json').version")" = "$app_version"
           test "$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).packages[0].version))")" = "$app_version"
+          release_notes_file="docs/release-notes/v$release_version.md"
+          test -s "$release_notes_file"
+          release_body="$(cat "$release_notes_file")"
+          if [[ -s docs/release-notes/_installation-note.md ]]; then
+            release_body+=$'\n\n---\n\n'
+            release_body+="$(cat docs/release-notes/_installation-note.md)"
+          fi
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
 
           release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name == \"v$release_version\")" | head -n 1)"
@@ -55,7 +62,7 @@ jobs:
               -f tag_name="v$release_version" \
               -f target_commitish="$GITHUB_SHA" \
               -f name="ClipClop v$release_version Preview" \
-              -f body=$'See CHANGELOG.md for release notes.\n\nPreview installation note: these installers are not currently signed with Apple Developer ID or Windows Authenticode. macOS may require approval in Privacy & Security, and Windows may show an Unknown Publisher or SmartScreen warning. Tauri updater signatures verify update integrity but do not provide operating-system publisher identity.' \
+              -f body="$release_body" \
               -F draft=true -F prerelease=false -F generate_release_notes=true --jq .id)"
           fi
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
@@ -185,9 +192,16 @@ jobs:
           mac_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
           windows_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
           release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$RELEASE_VERSION"
+          release_notes_file="docs/release-notes/v$RELEASE_VERSION.md"
+          test -s "$release_notes_file"
+          release_notes="$(cat "$release_notes_file")"
+          if [[ -s docs/release-notes/_installation-note.md ]]; then
+            release_notes+=$'\n\n---\n\n'
+            release_notes+="$(cat docs/release-notes/_installation-note.md)"
+          fi
           jq -n \
             --arg version "$RELEASE_VERSION" \
-            --arg notes "See CHANGELOG.md for release notes." \
+            --arg notes "$release_notes" \
             --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             --arg mac_url "$release_base/$mac_bundle" \
             --arg mac_sig "$mac_manifest_signature" \
