@@ -1,6 +1,6 @@
 {
   "name": "clipclop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Your clipboard, always one shortcut away.",
   "repository": {
     "type": "git",
@@ -28,7 +28,8 @@
     "@tauri-apps/plugin-log": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2",
-    "@tauri-apps/plugin-updater": "^2"
+    "@tauri-apps/plugin-updater": "^2",
+    "bits-ui": "^2.18.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
