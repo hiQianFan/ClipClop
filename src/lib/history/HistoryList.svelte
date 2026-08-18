@@ -236,7 +236,7 @@
     <input bind:this={searchInput} bind:value={query} oninput={onsearch} onfocus={onsearchfocus} onkeydown={onsearchkeydown} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
     <kbd>/</kbd>
   </form>
-  <div bind:this={listbox} class:full={page.items.length === page.page_size} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onpointerdown={() => listbox.focus()} onfocus={onlistfocus} onkeydown={onkeydown}>
+  <div bind:this={listbox} class:full={page.items.length > 0} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onpointerdown={() => listbox.focus()} onfocus={onlistfocus} onkeydown={onkeydown}>
     {#if loading && page.items.length === 0}
       <div bind:this={emptyAnchor} class="empty" tabindex="-1">{t("history.loading")}</div>
     {:else if error && page.items.length === 0}
@@ -265,6 +265,9 @@
           {/if}
         </div>
       {/each}
+      {#each Array(page.page_size - page.items.length) as _}
+        <div class="list-slot" aria-hidden="true"></div>
+      {/each}
     {/if}
   </div>
 </section>
@@ -290,7 +293,7 @@
   .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; overflow-y:auto; }
   .list:focus-visible { outline:none; }
   .clip-item { width:100%; }
-  .list.full .clip-item:not(.expanded) { flex:1 0 44px; }
+  .list.full .clip-item:not(.expanded), .list-slot { flex:1 0 44px; }
   .list.full .clip-item:not(.expanded) .row { height:100%; }
   .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:var(--radius-lg); color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
