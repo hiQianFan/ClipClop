@@ -58,7 +58,8 @@ pub fn set_language_preference(
 ) -> AppResult<LanguagePreference> {
     state.settings.set_language(language)?;
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    if let Err(error) = crate::tray::refresh_menu(&app, language) {
+    let settings = state.settings.get_stored()?;
+    if let Err(error) = crate::tray::refresh_menu(&app, &settings) {
         log::warn!("language saved but tray refresh failed: {error}");
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]

@@ -99,6 +99,10 @@ pub fn update(
                 ),
             )
         })?;
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    if let Err(error) = crate::tray::refresh_menu(app, &saved) {
+        log::warn!("settings saved but tray refresh failed: {error}");
+    }
     if hotkey_changed
         && app
             .global_shortcut()

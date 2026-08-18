@@ -69,10 +69,12 @@
     void initializeView();
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
     const unlistenPanel = listen("panel_shown", () => void onPanelShown());
+    const unlistenSettings = listen("open_settings", () => void openSettingsView());
     return () => {
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
       unlistenPanel.then((fn) => fn());
+      unlistenSettings.then((fn) => fn());
     };
   });
 

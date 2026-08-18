@@ -142,6 +142,13 @@ pub(crate) fn show_panel_on_main_thread(app: &tauri::AppHandle) {
     }
 }
 
+pub(crate) fn show_settings(app: &tauri::AppHandle) {
+    show_panel(app);
+    if let Err(error) = app.emit("open_settings", ()) {
+        log::warn!("show_settings: failed to emit open_settings: {error}");
+    }
+}
+
 fn emit_panel_shown(app: &tauri::AppHandle) {
     if let Err(error) = app.emit("panel_shown", ()) {
         log::warn!("show_panel: failed to emit panel_shown: {error}");

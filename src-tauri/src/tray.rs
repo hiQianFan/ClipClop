@@ -8,20 +8,35 @@ use crate::settings::{LanguagePreference, Settings};
 
 const TRAY_ID: &str = "main-tray";
 const OPEN_ID: &str = "tray-open";
+const SETTINGS_ID: &str = "tray-settings";
 const QUIT_ID: &str = "tray-quit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct MenuLabels {
     open: &'static str,
+    settings: &'static str,
     quit: &'static str,
 }
 
 pub(crate) fn install(app: &tauri::App, settings: &Settings) -> tauri::Result<()> {
     let labels = menu_labels(settings.language, sys_locale::get_locale().as_deref());
-    let open = MenuItem::with_id(app, OPEN_ID, labels.open, true, None::<&str>)?;
+    let open = MenuItem::with_id(
+        app,
+        OPEN_ID,
+        labels.open,
+        true,
+        Some(settings.hotkey.as_str()),
+    )?;
+    let settings = MenuItem::with_id(
+        app,
+        SETTINGS_ID,
+        labels.settings,
+        true,
+        Some("CmdOrCtrl+Comma"),
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, QUIT_ID, labels.quit, true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    let quit = MenuItem::with_id(app, QUIT_ID, labels.quit, true, Some("CmdOrCtrl+Q"))?;
+    let menu = Menu::with_items(app, &[&open, &settings, &separator, &quit])?;
 
     let builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
@@ -50,6 +65,7 @@ pub(crate) fn install(app: &tauri::App, settings: &Settings) -> tauri::Result<()
     builder
         .on_menu_event(|app, event| match event.id().as_ref() {
             OPEN_ID => crate::window::show_panel(app),
+            SETTINGS_ID => crate::window::show_settings(app),
             QUIT_ID => app.exit(0),
             _ => {}
         })
@@ -58,15 +74,25 @@ pub(crate) fn install(app: &tauri::App, settings: &Settings) -> tauri::Result<()
     Ok(())
 }
 
-pub(crate) fn refresh_menu(
-    app: &tauri::AppHandle,
-    language: LanguagePreference,
-) -> tauri::Result<()> {
-    let labels = menu_labels(language, sys_locale::get_locale().as_deref());
-    let open = MenuItem::with_id(app, OPEN_ID, labels.open, true, None::<&str>)?;
+pub(crate) fn refresh_menu(app: &tauri::AppHandle, settings: &Settings) -> tauri::Result<()> {
+    let labels = menu_labels(settings.language, sys_locale::get_locale().as_deref());
+    let open = MenuItem::with_id(
+        app,
+        OPEN_ID,
+        labels.open,
+        true,
+        Some(settings.hotkey.as_str()),
+    )?;
+    let settings = MenuItem::with_id(
+        app,
+        SETTINGS_ID,
+        labels.settings,
+        true,
+        Some("CmdOrCtrl+Comma"),
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, QUIT_ID, labels.quit, true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &separator, &quit])?;
+    let quit = MenuItem::with_id(app, QUIT_ID, labels.quit, true, Some("CmdOrCtrl+Q"))?;
+    let menu = Menu::with_items(app, &[&open, &settings, &separator, &quit])?;
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         tray.set_menu(Some(menu))?;
     }
@@ -84,13 +110,15 @@ fn menu_labels(preference: LanguagePreference, system_locale: Option<&str>) -> M
 
     if chinese {
         MenuLabels {
-            open: "打开 ClipClop",
-            quit: "退出 ClipClop",
+            open: "打开",
+            settings: "设置",
+            quit: "退出",
         }
     } else {
         MenuLabels {
-            open: "Open ClipClop",
-            quit: "Quit ClipClop",
+            open: "Open",
+            settings: "Settings",
+            quit: "Quit",
         }
     }
 }
@@ -114,15 +142,17 @@ mod tests {
         assert_eq!(
             menu_labels(LanguagePreference::ChineseSimplified, Some("en-US")),
             MenuLabels {
-                open: "打开 ClipClop",
-                quit: "退出 ClipClop"
+                open: "打开",
+                settings: "设置",
+                quit: "退出"
             }
         );
         assert_eq!(
             menu_labels(LanguagePreference::English, Some("zh-CN")),
             MenuLabels {
-                open: "Open ClipClop",
-                quit: "Quit ClipClop"
+                open: "Open",
+                settings: "Settings",
+                quit: "Quit"
             }
         );
     }
@@ -133,8 +163,9 @@ mod tests {
             assert_eq!(
                 menu_labels(LanguagePreference::System, Some(locale)),
                 MenuLabels {
-                    open: "打开 ClipClop",
-                    quit: "退出 ClipClop"
+                    open: "打开",
+                    settings: "设置",
+                    quit: "退出"
                 }
             );
         }
@@ -146,8 +177,9 @@ mod tests {
             assert_eq!(
                 menu_labels(LanguagePreference::System, locale),
                 MenuLabels {
-                    open: "Open ClipClop",
-                    quit: "Quit ClipClop"
+                    open: "Open",
+                    settings: "Settings",
+                    quit: "Quit"
                 }
             );
         }

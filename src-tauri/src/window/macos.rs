@@ -23,11 +23,17 @@ pub(super) fn cursor_screen_work_area() -> Option<(f64, f64)> {
 
 pub(super) fn show_as_panel(app: &tauri::AppHandle) -> bool {
     use objc::{class, msg_send};
-    use tauri_nspanel::ManagerExt;
+    use tauri_nspanel::{CollectionBehavior, ManagerExt};
 
     let Ok(panel) = app.get_webview_panel("main") else {
         return false;
     };
+    panel.set_collection_behavior(
+        CollectionBehavior::new()
+            .can_join_all_spaces()
+            .full_screen_auxiliary()
+            .into(),
+    );
     unsafe {
         let application: *mut objc::runtime::Object =
             msg_send![class!(NSApplication), sharedApplication];
