@@ -25,8 +25,6 @@ export const recordUpdateCheck = () => invoke<string>("record_update_check");
 export const skipUpdateVersion = (version: string) => invoke<void>("skip_update_version", { version });
 export const openLogDir = () => invoke<void>("open_log_dir");
 export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
-export const setFilePreviewEnabled = (enabled: boolean) =>
-  invoke<boolean>("set_file_preview_enabled", { enabled });
 export const quitApp = () => invoke<void>("quit_app");
 
 export function applyTheme(theme: Theme) {

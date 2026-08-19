@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { copyClip, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
-  import { canExpand, filePaths, shouldReadOriginalFile } from "$lib/history/presentation";
+  import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
   import { PreviewSession } from "$lib/history/preview-session.svelte";
   import { routeWindowKey } from "$lib/history/keyboard";
@@ -25,7 +25,6 @@
   let previewExternal = false;
   let confirmationInvoker: HTMLElement | null = null;
   let fileIndex = $state(0);
-  let filePreviewEnabled = $state(false);
   let trimWhitespace = $state(false);
   let restoreBrowsePosition = $state(false);
   let expandedId = $state<string | null>(null);
@@ -102,9 +101,6 @@
       const settings = await getSettings();
       restoreBrowsePosition = settings.restore_browse_position;
       trimWhitespace = settings.trim_whitespace;
-      // File preview is macOS-gated; other platforms always read.
-      filePreviewEnabled = isMac ? settings.file_preview_enabled : true;
-      if (!filePreviewEnabled) resetPreviewState();
     } catch (reason) {
       error = localizedError(reason);
     }
@@ -171,7 +167,7 @@
     if (!next || !id) return;
     // Auto-selecting the first row must not touch its original file. Only a
     // user click/key selection or preview request opts into that read.
-    const readOriginalFile = readSelectedFile && shouldReadOriginalFile(next.content_type, filePreviewEnabled);
+    const readOriginalFile = readSelectedFile && next.content_type === "file";
     try {
       await preview.loadSelection(id, next, readOriginalFile);
     } catch (reason) {
@@ -270,14 +266,6 @@
 
   async function viewSelectedClip() {
     if (!session.selectedId) return;
-    // Space on a file with the switch off must not read the original. Show a gentle,
-    // non-blocking hint pointing to Settings rather than attempting the read.
-    if (session.detail?.content_type === "file" && !shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) {
-      error = t("history.filePreviewHint");
-      menuOpen = false;
-      enterBrowse();
-      return;
-    }
     try {
       const outcome = await previewClip(session.selectedId, fileIndex);
       previewExternal = outcome === "native_opened";
@@ -428,7 +416,7 @@
     listbox?.focus();
     const item = session.page.items.find((candidate) => candidate.id === id);
     if (session.selectedId === id && item && canExpand(item)) {
-      if (session.detail && shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) {
+      if (session.detail?.content_type === "file") {
         void preview.loadFile(id, fileIndex);
       }
       expandedId = expandedId === id ? null : id;
@@ -644,7 +632,7 @@
     const paths = filePaths(session.detail);
     if (index < 0 || index >= paths.length || index === fileIndex) return;
     fileIndex = index;
-    if (shouldReadOriginalFile(session.detail.content_type, filePreviewEnabled)) void preview.loadFile(session.selectedId, index);
+    void preview.loadFile(session.selectedId, index);
   }
 
   function resetPreviewState() {
@@ -730,11 +718,11 @@
     page={session.page}
     pending={session.detailPending}
     assetUrl={preview.assetUrl}
+    fileAccessDenied={preview.fileAccessDenied}
     sourceIconUrl={preview.sourceIconUrl}
     fileThumbnailUrls={preview.fileThumbnailUrls}
     fileByteSizes={preview.fileByteSizes}
     {fileIndex}
-    {filePreviewEnabled}
     {trimWhitespace}
     {previousFileShortcut}
     {nextFileShortcut}

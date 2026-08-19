@@ -1,8 +1,5 @@
 import type { ClipDetail, ClipSummary } from "./types";
 
-export const shouldReadOriginalFile = (contentType: ClipDetail["content_type"], enabled: boolean) =>
-  contentType === "file" && enabled;
-
 type NumberFormatter = (value: number, options?: Intl.NumberFormatOptions) => string;
 type MetadataLabels = {
   dimensions: string;

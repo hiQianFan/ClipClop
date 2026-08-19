@@ -22,6 +22,7 @@ pub struct AssetService {
 pub struct PreviewResource {
     pub data_url: Option<String>,
     pub byte_size: Option<u64>,
+    pub access_denied: bool,
 }
 
 impl AssetService {
@@ -41,6 +42,7 @@ impl AssetService {
                 normalized_file_path(&detail, 0).as_deref(),
             ),
             byte_size: None,
+            access_denied: false,
         })
     }
 
@@ -51,12 +53,17 @@ impl AssetService {
         }
         let flavors = self.history.flavors(id)?;
         let path = normalized_file_path(&detail, index);
+        let access_denied = path.as_deref().is_some_and(|path| {
+            std::fs::File::open(path)
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::PermissionDenied)
+        });
         Ok(PreviewResource {
             data_url: platform::preview_asset(&flavors, path.as_deref()),
             byte_size: path
                 .and_then(|path| std::fs::metadata(path).ok())
                 .filter(|metadata| metadata.is_file())
                 .map(|metadata| metadata.len()),
+            access_denied,
         })
     }
 
@@ -65,6 +72,7 @@ impl AssetService {
         Ok(PreviewResource {
             data_url: platform::thumbnail_asset(&self.history.flavors(id)?),
             byte_size: None,
+            access_denied: false,
         })
     }
 
@@ -74,6 +82,7 @@ impl AssetService {
             return Ok(PreviewResource {
                 data_url: None,
                 byte_size: None,
+                access_denied: false,
             });
         };
         let mut cache = self
@@ -93,6 +102,7 @@ impl AssetService {
         Ok(PreviewResource {
             data_url,
             byte_size: None,
+            access_denied: false,
         })
     }
 }
@@ -115,11 +125,13 @@ mod tests {
             serde_json::to_value(PreviewResource {
                 data_url: Some("data:image/png;base64,AA==".into()),
                 byte_size: Some(1),
+                access_denied: false,
             })
             .unwrap(),
             serde_json::json!({
                 "data_url": "data:image/png;base64,AA==",
-                "byte_size": 1
+                "byte_size": 1,
+                "access_denied": false
             })
         );
     }

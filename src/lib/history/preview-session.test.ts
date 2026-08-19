@@ -5,6 +5,7 @@ import type { ClipDetail, ClipSummary } from "./types";
 const resource = (data_url: string | null, byte_size: number | null = null): PreviewResource => ({
   data_url,
   byte_size,
+  access_denied: false,
 });
 
 function api(overrides: Partial<PreviewApi> = {}): PreviewApi {
@@ -90,6 +91,17 @@ describe("PreviewSession", () => {
     await Promise.all([first, second]);
     expect(preview.assetUrl).toBe("file-1");
     expect(preview.fileByteSizes[1]).toBe(1);
+  });
+
+  it("exposes file access denial separately from an unsupported preview", async () => {
+    vi.useFakeTimers();
+    const preview = new PreviewSession(api({
+      getClipFileAsset: vi.fn(async () => ({ ...resource(null), access_denied: true })),
+    }));
+    const pending = preview.loadFile("clip-1", 0);
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(preview.fileAccessDenied).toBe(true);
   });
 
   it("invalidates old-page thumbnails before a refresh", async () => {

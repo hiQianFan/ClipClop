@@ -66,11 +66,6 @@ pub fn skip_update_version(state: State<'_, AppState>, version: String) -> AppRe
 }
 
 #[tauri::command]
-pub fn set_file_preview_enabled(state: State<'_, AppState>, enabled: bool) -> AppResult<bool> {
-    state.settings.set_file_preview_enabled(enabled)
-}
-
-#[tauri::command]
 pub fn open_file_preview_settings(app: AppHandle) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     {

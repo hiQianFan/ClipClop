@@ -144,9 +144,6 @@
     catch (reason) { status = localizedError(reason); }
   }
 
-  // The button is a pure shortcut to macOS Full Disk Access; it never records or
-  // reflects any state. The in-app switch below is the authoritative gate and is
-  // persisted through the normal save() flow like every other setting.
   async function openFilePreviewSystemSettings() {
     try { await openFilePreviewSettings(); }
     catch (reason) { status = localizedError(reason); }
@@ -394,7 +391,7 @@
           <div class="row setting-row"><span><strong id="launch-label">{t("settings.launch")}</strong><small id="launch-help">{t("settings.launchHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="launch-label" aria-describedby="launch-help" bind:checked={settings.launch_at_login} /><span class="switch-track"></span></label></div>
           <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small></span><button onclick={() => void openAutoPasteSystemSettings()}>{t("settings.manage")}</button></div>{/if}
-          {#if platform === "macos"}<div class="row"><span><strong id="file-preview-label">{t("settings.filePreview")}</strong><small id="file-preview-help">{t("settings.filePreviewHelp")}</small></span><div class="row-actions"><button onclick={() => void openFilePreviewSystemSettings()}>{t("settings.manage")}</button><label class="switch"><input type="checkbox" role="switch" aria-labelledby="file-preview-label" aria-describedby="file-preview-help" bind:checked={settings.file_preview_enabled} /><span class="switch-track"></span></label></div></div>{/if}
+          {#if platform === "macos"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelp")}</small></span><button onclick={() => void openFilePreviewSystemSettings()}>{t("settings.manage")}</button></div>{/if}
         {:else if tab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <label><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><select bind:value={settings.retention_days}><option value={1}>{t("settings.days", { count: formatNumber(1) })}</option><option value={7}>{t("settings.days", { count: formatNumber(7) })}</option><option value={30}>{t("settings.days", { count: formatNumber(30) })}</option><option value={90}>{t("settings.days", { count: formatNumber(90) })}</option><option value={365}>{t("settings.year")}</option><option value={null}>{t("settings.forever")}</option></select></label>
@@ -506,11 +503,9 @@
   .nav-separator{height:1px;margin:8px 6px;background:var(--hairline)}
   /* Setting-row contract: text zone flexes (rule above), action zone is protected
      and never compresses. Every row's action lives in one of these. */
-  .row>button,.row>.row-actions,.settings-content>label>select,.update-head>.update-head-controls,.shortcut-row>.shortcut-actions,.shortcut-row>.key-list{flex:none}
-  /* Action group: button + switch riding together in one row's action zone. */
-  .row-actions{display:flex;align-items:center;gap:8px}
+  .row>button,.settings-content>label>select,.update-head>.update-head-controls,.shortcut-row>.shortcut-actions,.shortcut-row>.key-list{flex:none}
   /* Unified action-button sizing across every section (ghost per DESIGN.md). */
-  .row>button,.row-actions>button,.update-check-btn{min-height:32px;padding:0 12px;white-space:nowrap}
+  .row>button,.update-check-btn{min-height:32px;padding:0 12px;white-space:nowrap}
   .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
   .settings-content.updates-content{overflow:hidden;padding-bottom:0}
   .updates-layout{height:100%;min-height:0;display:flex;flex-direction:column}

@@ -17,13 +17,13 @@ pub mod window;
 pub mod workflows;
 
 use commands::{
-    clear_history, copy_clip, delete_clip, get_auto_paste_readiness, get_clip, get_clip_asset,
+    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset,
     get_clip_file_asset, get_clip_thumbnail, get_onboarding_state, get_settings,
     get_source_app_icon, hide_panel, open_auto_paste_settings, open_clip_link,
     open_file_preview_settings, open_log_dir, open_release_page, paste_clip, perform_pager_haptic,
     preview_clip, preview_onboarding_example, query_history, quit_app, record_update_check,
-    request_auto_paste_access, save_onboarding_state, set_file_preview_enabled,
-    set_language_preference, skip_update_version, update_settings,
+    save_onboarding_state, set_language_preference,
+    skip_update_version, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -233,7 +233,6 @@ pub fn run() {
             update_settings,
             record_update_check,
             skip_update_version,
-            set_file_preview_enabled,
             open_file_preview_settings,
             open_log_dir,
             open_release_page,
@@ -241,8 +240,6 @@ pub fn run() {
             perform_pager_haptic,
             get_onboarding_state,
             save_onboarding_state,
-            get_auto_paste_readiness,
-            request_auto_paste_access,
             open_auto_paste_settings,
             set_language_preference
         ])

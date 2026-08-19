@@ -9,19 +9,9 @@ export type OnboardingState = {
   visited_steps: OnboardingStep[];
   selected_example: OnboardingExample | null;
 };
-export type AutoPasteReadiness =
-  | "available"
-  | "permission_required"
-  | "available_with_elevated_target_limit"
-  | "unsupported";
-
 export const getOnboardingState = () => invoke<OnboardingState>("get_onboarding_state");
 export const saveOnboardingState = (onboarding: OnboardingState) =>
   invoke<OnboardingState>("save_onboarding_state", { onboarding });
-export const getAutoPasteReadiness = () =>
-  invoke<AutoPasteReadiness>("get_auto_paste_readiness");
-export const requestAutoPasteAccess = () =>
-  invoke<boolean>("request_auto_paste_access");
 export const openAutoPasteSettings = () => invoke<void>("open_auto_paste_settings");
 export const saveLanguagePreference = (language: LanguagePreference) =>
   invoke<LanguagePreference>("set_language_preference", { language });

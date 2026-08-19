@@ -2,7 +2,7 @@ use tauri::{AppHandle, State};
 
 use crate::{
     error::AppResult,
-    onboarding::{self, AutoPasteReadiness, OnboardingState},
+    onboarding::OnboardingState,
     settings::LanguagePreference,
     state::AppState,
 };
@@ -21,16 +21,6 @@ pub fn save_onboarding_state(
     onboarding: OnboardingState,
 ) -> AppResult<OnboardingState> {
     state.onboarding.save(onboarding)
-}
-
-#[tauri::command]
-pub fn get_auto_paste_readiness() -> AppResult<AutoPasteReadiness> {
-    Ok(onboarding::auto_paste_readiness())
-}
-
-#[tauri::command]
-pub fn request_auto_paste_access() -> AppResult<bool> {
-    Ok(onboarding::request_auto_paste_access())
 }
 
 #[tauri::command]

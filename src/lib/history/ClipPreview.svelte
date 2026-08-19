@@ -10,11 +10,11 @@
     page,
     pending,
     assetUrl,
+    fileAccessDenied,
     sourceIconUrl,
     fileThumbnailUrls,
     fileByteSizes,
     fileIndex,
-    filePreviewEnabled,
     trimWhitespace,
     previousFileShortcut,
     nextFileShortcut,
@@ -28,11 +28,11 @@
     page: HistoryPage;
     pending: boolean;
     assetUrl: string | null;
+    fileAccessDenied: boolean;
     sourceIconUrl: string | null;
     fileThumbnailUrls: Array<string | null>;
     fileByteSizes: Array<number | null>;
     fileIndex: number;
-    filePreviewEnabled: boolean;
     trimWhitespace: boolean;
     previousFileShortcut: string;
     nextFileShortcut: string;
@@ -50,7 +50,7 @@
         <div class="color-preview"><span style:background={detail.preview}></span><code>{detail.preview}</code></div>
       {:else if detail.content_type === "file"}
         {#if assetUrl}<img class="asset" src={assetUrl} alt={t("history.fileThumbnail")} />
-        {:else}<div class="file-preview-placeholder">{t(filePreviewEnabled ? "history.noPreview" : "history.filePreviewDisabled")}</div>{/if}
+        {:else}<div class="file-preview-placeholder">{t(fileAccessDenied ? "history.fileAccessDenied" : "history.systemPreviewHint")}</div>{/if}
       {:else if detail.content_type === "image"}
         {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt={t("history.imagePreview")} /></div>
         {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}

@@ -6,7 +6,7 @@ import {
 } from "./api";
 import type { ClipDetail, ClipSummary } from "./types";
 
-export type PreviewResource = { data_url: string | null; byte_size: number | null };
+export type PreviewResource = { data_url: string | null; byte_size: number | null; access_denied: boolean };
 
 export type PreviewApi = {
   getClipAsset(id: string): Promise<PreviewResource>;
@@ -26,6 +26,7 @@ const ASSET_DEBOUNCE_MS = 80;
 
 export class PreviewSession {
   assetUrl = $state<string | null>(null);
+  fileAccessDenied = $state(false);
   sourceIconUrl = $state<string | null>(null);
   thumbnailUrls = $state<Record<string, string>>({});
   fileThumbnailUrls = $state<Array<string | null>>([]);
@@ -50,6 +51,7 @@ export class PreviewSession {
     ++this.#fileVersion;
     this.#cancelTimer();
     this.assetUrl = null;
+    this.fileAccessDenied = false;
     this.sourceIconUrl = null;
     this.fileThumbnailUrls = [];
     this.fileByteSizes = [];
@@ -73,6 +75,7 @@ export class PreviewSession {
   async loadFile(id: string, index: number) {
     const fileVersion = ++this.#fileVersion;
     this.assetUrl = null;
+    this.fileAccessDenied = false;
     await this.#loadAsset(id, index, this.#selectionVersion, fileVersion);
   }
 
@@ -165,6 +168,7 @@ export class PreviewSession {
   ) {
     if (!this.#isCurrent(selectionVersion, fileVersion)) return;
     this.assetUrl = asset.data_url;
+    this.fileAccessDenied = index !== null && asset.access_denied;
     if (index === null) return;
     this.fileThumbnailUrls[index] = asset.data_url;
     if (asset.byte_size !== null) this.fileByteSizes[index] = asset.byte_size;

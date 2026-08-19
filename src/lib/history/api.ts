@@ -11,15 +11,15 @@ export function getClip(id: string): Promise<ClipDetail> {
   return invoke("get_clip", { id });
 }
 
-export function getClipAsset(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
+export function getClipAsset(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
   return invoke("get_clip_asset", { id });
 }
 
-export function getClipFileAsset(id: string, index: number): Promise<{ data_url: string | null; byte_size: number | null }> {
+export function getClipFileAsset(id: string, index: number): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
   return invoke("get_clip_file_asset", { id, index });
 }
 
-export function getClipThumbnail(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
+export function getClipThumbnail(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
   return invoke("get_clip_thumbnail", { id });
 }
 
@@ -37,7 +37,7 @@ export function openClipLink(id: string): Promise<void> {
   return invoke("open_clip_link", { id });
 }
 
-export function getSourceAppIcon(id: string): Promise<{ data_url: string | null; byte_size: number | null }> {
+export function getSourceAppIcon(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
   return invoke("get_source_app_icon", { id });
 }
 

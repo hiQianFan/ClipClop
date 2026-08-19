@@ -3,26 +3,19 @@
   import { ArrowLeft, ArrowRight, Check, Languages, Link, Search, Type } from "@lucide/svelte";
   import { currentPlatform, defaultShortcut, shortcutKeycaps, shortcutSpokenLabel } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
-  import { getSettings, openFilePreviewSettings, setFilePreviewEnabled, type LanguagePreference } from "$lib/settings/api";
+  import { openFilePreviewSettings, type LanguagePreference } from "$lib/settings/api";
   import {
-    getAutoPasteReadiness,
     openAutoPasteSettings,
     previewOnboardingExample,
-    requestAutoPasteAccess,
     saveLanguagePreference,
     saveOnboardingState,
     supportsOnboardingPreview,
-    type AutoPasteReadiness,
     type OnboardingExample,
     type OnboardingState,
     type OnboardingStep,
   } from "./api";
 
   type Mode = "first_run" | "quick_start" | "auto_paste";
-  type AutoPasteViewState =
-    | "checking" | "ready" | "requesting" | "request_initiated"
-    | "opening_settings" | "check_failed" | "settings_open_failed";
-
   let { initial, mode = "first_run", onfinish }: {
     initial: OnboardingState;
     mode?: Mode;
@@ -30,23 +23,17 @@
   } = $props();
 
   const platform = currentPlatform();
-  // File preview permission is macOS-only, so the step only exists there; Windows
-  // keeps the original three-step flow (spec: no macOS permission entry on Windows).
   const steps: OnboardingStep[] = platform === "macos"
-    ? ["overview", "practice", "auto_paste", "file_preview"]
-    : ["overview", "practice", "auto_paste"];
+    ? ["overview", "practice", "auto_paste"]
+    : ["overview", "practice"];
   const examples: OnboardingExample[] = ["image", "text", "link"];
   const starting = untrack(() => $state.snapshot(initial)) as OnboardingState;
   let journey = $state<OnboardingState>(starting);
-  let step = $state<OnboardingStep>(untrack(() => mode === "auto_paste") ? "auto_paste" : starting.current_step ?? "overview");
+  let step = $state<OnboardingStep>(untrack(() => mode === "auto_paste" || starting.current_step === "file_preview") ? "auto_paste" : starting.current_step ?? "overview");
   let selected = $state<OnboardingExample>(starting.selected_example ?? "image");
   let inputValue = $state("");
   let pastedImage = $state(false);
-  let readiness = $state<AutoPasteReadiness | null>(null);
-  let autoState = $state<AutoPasteViewState>("checking");
   let error = $state("");
-  let filePreviewEnabled = $state(false);
-  let filePreviewSaving = $state(false);
   let sandboxList = $state<HTMLDivElement>();
   let languageWrap = $state<HTMLDivElement>();
   let languageButton = $state<HTMLButtonElement>();
@@ -59,17 +46,11 @@
     name: t(`onboarding.step.${step}` as "onboarding.step.overview"),
     status: t("onboarding.current"),
   }));
-  const isLastStep = $derived(step === steps[steps.length - 1]);
+  const isLastStep = $derived(mode === "auto_paste" || step === steps[steps.length - 1]);
 
   onMount(() => {
     void enter(step, false);
-    if (platform === "macos") void loadFilePreviewSetting();
   });
-
-  async function loadFilePreviewSetting() {
-    try { filePreviewEnabled = (await getSettings()).file_preview_enabled; }
-    catch (reason) { error = localizedError(reason); }
-  }
 
   async function persist() {
     if (mode !== "first_run") return;
@@ -92,7 +73,6 @@
     if (save) {
       try { await persist(); } catch (reason) { error = localizedError(reason); }
     }
-    if (next === "auto_paste") await checkReadiness();
     await tick();
     // The practice step puts focus straight on the sandbox so it is immediately
     // operable (up/down select rows; left/right still page between steps). Other
@@ -146,60 +126,12 @@
     previewOpen = false;
   }
 
-  async function checkReadiness() {
-    autoState = "checking";
+  async function openPermissionSettings(kind: "auto_paste" | "file_preview") {
     error = "";
     try {
-      readiness = await getAutoPasteReadiness();
-      autoState = "ready";
+      await (kind === "auto_paste" ? openAutoPasteSettings() : openFilePreviewSettings());
     } catch (reason) {
       error = localizedError(reason);
-      autoState = "check_failed";
-    }
-  }
-
-  async function requestAccess() {
-    autoState = "requesting";
-    error = "";
-    try {
-      await requestAutoPasteAccess();
-      autoState = "request_initiated";
-    } catch (reason) {
-      error = localizedError(reason);
-      autoState = "check_failed";
-    }
-  }
-
-  async function openSettings() {
-    autoState = "opening_settings";
-    try {
-      await openAutoPasteSettings();
-      autoState = "request_initiated";
-    } catch (reason) {
-      error = localizedError(reason);
-      autoState = "settings_open_failed";
-    }
-  }
-
-  // Pure shortcut to macOS Full Disk Access — never records or reflects state.
-  async function openFilePreviewAccess() {
-    error = "";
-    try { await openFilePreviewSettings(); }
-    catch (reason) { error = localizedError(reason); }
-  }
-
-  // The switch is the in-app gate. Onboarding has no save button, so it persists
-  // immediately (matches the other onboarding actions).
-  async function toggleFilePreview(enabled: boolean) {
-    if (filePreviewSaving) return;
-    filePreviewSaving = true;
-    error = "";
-    try { filePreviewEnabled = await setFilePreviewEnabled(enabled); }
-    catch (reason) {
-      filePreviewEnabled = !enabled;
-      error = localizedError(reason);
-    } finally {
-      filePreviewSaving = false;
     }
   }
 
@@ -306,7 +238,6 @@
   }
 
   function onWindowFocus() {
-    if (step === "auto_paste") void checkReadiness();
     // Quick Look took keyboard focus while open; regaining window focus means the
     // user dismissed it (Space/Esc). The backend already reset PreviewState on
     // focus; clear our flag and return focus to the sandbox so keys work again.
@@ -395,33 +326,22 @@
       {/if}
     </div>
   {:else if step === "auto_paste"}
-    {@const ready = readiness === "available" || readiness === "available_with_elevated_target_limit"}
-    <div class="center">
+    <div class="center capability-step">
       <h1>{t("onboarding.auto.title")}</h1>
       <p>{t("onboarding.auto.body")}</p>
-      <p class="statecap" class:ok={ready} class:warn={!ready && autoState !== "checking" && autoState !== "requesting"} class:limit={readiness === "available_with_elevated_target_limit"} aria-live="polite">
-        <span class="dot" aria-hidden="true"></span>
-        {#if autoState === "checking"}{t("onboarding.auto.checking")}
-        {:else if autoState === "requesting"}{t("onboarding.auto.requesting")}
-        {:else if readiness === "available"}{t("onboarding.auto.available")}
-        {:else if readiness === "available_with_elevated_target_limit"}{t("onboarding.auto.windows")}
-        {:else if readiness === "unsupported"}{t("onboarding.auto.unsupported")}
-        {:else}{t("onboarding.auto.permission")}{/if}
-      </p>
-      {#if autoState === "check_failed"}<button class="primary" onclick={() => void checkReadiness()}>{t("onboarding.auto.retry")}</button>
-      {:else if autoState === "request_initiated" || autoState === "settings_open_failed"}<button class="primary" onclick={() => void openSettings()}>{t("onboarding.auto.openSettings")}</button>
-      {:else if readiness === "permission_required" && autoState === "ready"}<button class="primary" onclick={() => void requestAccess()}>{t("onboarding.auto.enable")}</button>{/if}
-      <small>{t("onboarding.auto.fallback")}</small>
-    </div>
-  {:else}
-    <div class="center">
-      <h1>{t("onboarding.filePreview.title")}</h1>
-      <p>{t("onboarding.filePreview.body")}</p>
-      <div class="permission-actions">
-        <button onclick={() => void openFilePreviewAccess()}>{t("onboarding.filePreview.openSettings")}</button>
-        <label class="switch-inline"><input type="checkbox" role="switch" bind:checked={filePreviewEnabled} disabled={filePreviewSaving} onchange={(event) => void toggleFilePreview(event.currentTarget.checked)} /><span class="switch-track"></span><span class="switch-label">{t("onboarding.filePreview.toggle")}</span></label>
+      <div class="capabilities">
+        <div class="capability-row">
+          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small></span>
+          <button onclick={() => void openPermissionSettings("auto_paste")}>{t("onboarding.auto.openSettings")}</button>
+        </div>
+        <div class="capability-row">
+          <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("onboarding.auto.filePreviewHelp")}</small></span>
+          <button onclick={() => void openPermissionSettings("file_preview")}>{t("onboarding.auto.manageFileAccess")}</button>
+        </div>
       </div>
-      <small>{t("onboarding.filePreview.fallback")}</small>
+      <small class="capability-note">
+        {t("onboarding.auto.fallback")} {t("onboarding.auto.systemPreviewPrefix")} <kbd>Space</kbd> {t("onboarding.auto.systemPreviewSuffix")}
+      </small>
     </div>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -457,23 +377,11 @@
   .center{max-width:60ch;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
   .center h1,.legend h1{margin:0;font-size:var(--fs-heading);font-weight:680;letter-spacing:-.01em}
   .center p{margin:0;max-width:60ch;color:var(--text-2);font-size:var(--fs-body);line-height:var(--lh-relaxed)}
-  /* Step 4: Full Disk Access jump button + in-app enable switch, side by side. */
-  .permission-actions{display:flex;align-items:center;gap:16px;margin-top:2px}
-  .switch-inline{display:inline-flex;align-items:center;gap:9px;cursor:pointer}
-  .switch-inline input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}
-  .switch-inline .switch-track{position:relative;flex:none;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}
-  .switch-inline .switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}
-  .switch-inline input:checked+.switch-track{border-color:var(--action);background:var(--action)}
-  .switch-inline input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}
-  .switch-inline input:focus-visible+.switch-track{outline:2px solid var(--text-1);outline-offset:2px}
-  .switch-inline .switch-label{color:var(--text-2);font-size:var(--fs-ui)}
-  @media(prefers-reduced-motion:reduce){.switch-inline .switch-track,.switch-inline .switch-track:after{transition:none}}
-  @media(forced-colors:active){.switch-inline .switch-track{border:1px solid ButtonText;background:Canvas}.switch-inline .switch-track:after{background:ButtonText}.switch-inline input:checked+.switch-track{background:Highlight}.switch-inline input:checked+.switch-track:after{background:HighlightText}}
   /* 列表缩影 / 沙盒 (仿 HistoryList 行) */
   .mini{width:min(360px,82vw);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-shell);overflow:hidden}
   .mini-search{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--text-3);border-bottom:1px solid var(--hairline);font-size:var(--fs-ui)}
   .mini-search .ph{flex:1;text-align:left}
-  .mini-search kbd,.legend kbd{font:var(--fs-caption)/var(--lh-snug) var(--mono);color:var(--text-2);border:1px solid var(--hairline);border-radius:var(--radius-sm);padding:1px 5px;white-space:nowrap}
+  .mini-search kbd,.legend kbd,.capability-note kbd{font:var(--fs-caption)/var(--lh-snug) var(--mono);color:var(--text-2);border:1px solid var(--hairline);border-radius:var(--radius-sm);padding:1px 5px;white-space:nowrap}
   .mini-list{padding:6px;display:flex;flex-direction:column;gap:1px}
   .mini-row{min-height:44px;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--radius-lg);color:var(--text-1);background:transparent;text-align:left}
   .mini-row .num{width:16px;flex:none;color:var(--text-3);font:650 var(--fs-ui) var(--mono);text-align:center}
@@ -502,15 +410,18 @@
   .mock input::placeholder{color:var(--text-3)}
   .pasted-image{min-height:72px;align-items:center;justify-content:center}
   .pasted-image img{width:56px;height:56px;object-fit:contain}
-  /* 第3屏 权限状态 */
-  .statecap{display:flex;align-items:center;justify-content:center;gap:7px;margin:0;color:var(--text-2);font-size:var(--fs-ui)}
-  .statecap .dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--text-3)}
-  .statecap.warn{color:#e6b968}.statecap.warn .dot{background:#e0a53f}
-  .statecap.ok{color:var(--ok,#5fd39a)}.statecap.ok .dot{background:var(--ok,#5fd39a)}
-  .statecap.limit{color:var(--text-2)}.statecap.limit .dot{background:var(--text-3)}
   .primary{color:var(--action-on)!important;background:var(--action)!important;font-weight:650}
-  .center>button{padding:7px 10px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-hover);font-size:var(--fs-ui)}
   .center small{color:var(--text-3);font-size:var(--fs-meta)}
+  .capability-step{width:min(640px,82vw);max-width:none;gap:0}
+  .capability-step h1{margin-bottom:10px}
+  .capabilities{width:100%;margin-top:28px;border-top:1px solid var(--hairline)}
+  .capability-row{min-height:76px;display:flex;align-items:center;gap:24px;border-bottom:1px solid var(--hairline);text-align:left}
+  .capability-row>span{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+  .capability-row strong{color:var(--text-1);font-size:var(--fs-ui)}
+  .capability-row small{color:var(--text-3);font-size:var(--fs-meta);line-height:var(--lh-normal)}
+  .capability-row button{flex:none;min-height:32px;padding:0 12px;border-radius:var(--radius-md);color:var(--text-1);background:var(--bg-selected);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
+  .capability-row button:hover{background:var(--hairline)}
+  .capability-note{margin-top:14px}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */
   footer{grid-column:1/-1;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-top:1px solid var(--hairline)}

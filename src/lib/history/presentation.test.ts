@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts, shouldReadOriginalFile } from "./presentation";
+import { cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts } from "./presentation";
 import type { ClipDetail } from "./types";
 
 describe("clip view helpers", () => {
@@ -7,13 +7,6 @@ describe("clip view helpers", () => {
     expect(fileName("file:///Users/me/My%20File.txt")).toBe("My%20File.txt");
     expect(fileName("C:\\Temp\\note.txt")).toBe("note.txt");
     expect(formatBytes(1536)).toBe("1.5 KB");
-  });
-
-  it("reads an original file only for file content with the switch enabled", () => {
-    expect(shouldReadOriginalFile("file", false)).toBe(false);
-    expect(shouldReadOriginalFile("file", true)).toBe(true);
-    expect(shouldReadOriginalFile("image", false)).toBe(false);
-    expect(shouldReadOriginalFile("image", true)).toBe(false);
   });
 
   it("evicts the oldest cached entry at the configured ceiling", () => {
