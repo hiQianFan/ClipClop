@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheSet, clipPreview, fileName, formatBytes, metadataFacts, shouldReadOriginalFile } from "./presentation";
+import { cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts, shouldReadOriginalFile } from "./presentation";
 import type { ClipDetail } from "./types";
 
 describe("clip view helpers", () => {
@@ -25,6 +25,12 @@ describe("clip view helpers", () => {
   it("receives localized fallback text from its caller", () => {
     expect(fileName("", "File")).toBe("File");
     expect(clipPreview({ content_type: "file", preview: "" }, "文件")).toBe("文件");
+  });
+
+  it("matches detail text to the whitespace setting", () => {
+    const detail = { plain_text: "  hello\n", preview: "preview" } as ClipDetail;
+    expect(detailText(detail, false)).toBe("  hello\n");
+    expect(detailText(detail, true)).toBe("hello");
   });
 
   it("uses runtime file sizes without mutating persisted detail metadata", () => {

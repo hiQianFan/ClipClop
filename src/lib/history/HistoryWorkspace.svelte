@@ -26,6 +26,7 @@
   let confirmationInvoker: HTMLElement | null = null;
   let fileIndex = $state(0);
   let filePreviewEnabled = $state(false);
+  let trimWhitespace = $state(false);
   let restoreBrowsePosition = $state(false);
   let expandedId = $state<string | null>(null);
   let error = $state("");
@@ -100,6 +101,7 @@
     try {
       const settings = await getSettings();
       restoreBrowsePosition = settings.restore_browse_position;
+      trimWhitespace = settings.trim_whitespace;
       // File preview is macOS-gated; other platforms always read.
       filePreviewEnabled = isMac ? settings.file_preview_enabled : true;
       if (!filePreviewEnabled) resetPreviewState();
@@ -733,6 +735,7 @@
     fileByteSizes={preview.fileByteSizes}
     {fileIndex}
     {filePreviewEnabled}
+    {trimWhitespace}
     {previousFileShortcut}
     {nextFileShortcut}
     onfile={(index) => void selectFile(index)}

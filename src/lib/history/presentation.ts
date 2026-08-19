@@ -71,6 +71,9 @@ export function clipPreview(
   return item.preview || (item.content_type === "file" ? fileFallback : "");
 }
 
+export const detailText = (detail: ClipDetail, trimWhitespace: boolean) =>
+  trimWhitespace ? (detail.plain_text ?? detail.preview).trim() : detail.plain_text ?? detail.preview;
+
 export function cacheSet<K, V>(cache: Map<K, V>, key: K, value: V, limit = 100) {
   if (!cache.has(key) && cache.size >= limit) {
     const oldest = cache.keys().next().value;

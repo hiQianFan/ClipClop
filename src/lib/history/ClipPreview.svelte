@@ -1,7 +1,7 @@
 <script lang="ts">
   import { File } from "@lucide/svelte";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
-  import { clipPreview, fileName, filePaths, metadataFacts } from "./presentation";
+  import { clipPreview, detailText, fileName, filePaths, metadataFacts } from "./presentation";
   import type { ClipDetail, HistoryPage } from "./types";
 
   let {
@@ -15,6 +15,7 @@
     fileByteSizes,
     fileIndex,
     filePreviewEnabled,
+    trimWhitespace,
     previousFileShortcut,
     nextFileShortcut,
     onfile,
@@ -32,6 +33,7 @@
     fileByteSizes: Array<number | null>;
     fileIndex: number;
     filePreviewEnabled: boolean;
+    trimWhitespace: boolean;
     previousFileShortcut: string;
     nextFileShortcut: string;
     onfile: (index: number) => void;
@@ -53,7 +55,7 @@
         {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt={t("history.imagePreview")} /></div>
         {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}
       {:else}
-        <pre>{detail.plain_text ?? detail.preview}</pre>
+        <pre>{detailText(detail, trimWhitespace)}</pre>
       {/if}
     </div>
     {#if detail.content_type === "file" && filePaths(detail).length > 1}
