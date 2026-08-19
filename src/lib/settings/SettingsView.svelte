@@ -442,9 +442,9 @@
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.updates")}</h1>
           <div class="update-head"><span><strong>{t("settings.updateHeading")}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span><div class="update-head-controls"><span id="auto-check-label">{t("settings.autoCheck")}</span><label class="switch compact-switch"><input type="checkbox" role="switch" aria-labelledby="auto-check-label" bind:checked={settings.check_updates} /><span class="switch-track"></span></label></div></div>
           <div class="update-check update-head-controls">
-            <span class="update-status" class:error={updateState === "error"} aria-live="polite">
-              {#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}
-              <span>{updateMessage || t("settings.upToDate", { version: displayVersion(appVersion) })}</span>
+            <span class="update-status" class:error={updateState === "error"} role="status" aria-live="polite" aria-atomic="true">
+              {#if updateState === "checking"}<span class="visually-hidden">{updateMessage}</span>
+              {:else}{#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}<span>{updateMessage || t("settings.upToDate", { version: displayVersion(appVersion) })}</span>{/if}
             </span>
             <div class="update-actions"><button onclick={() => void openReleasePage()}>{t("settings.releasePage")}</button><button class="update-check-btn" disabled={updateState === "checking"} aria-busy={updateState === "checking"} onclick={checkUpdates}><RefreshCw size={14} class={updateState === "checking" ? "spin" : ""} />{updateState === "checking" ? t("settings.checking") : t("settings.check")}</button></div>
           </div>
