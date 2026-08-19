@@ -1,10 +1,7 @@
 use tauri::{AppHandle, State};
 
 use crate::{
-    error::AppResult,
-    onboarding::OnboardingState,
-    settings::LanguagePreference,
-    state::AppState,
+    error::AppResult, onboarding::OnboardingState, settings::LanguagePreference, state::AppState,
 };
 
 #[cfg(target_os = "macos")]
