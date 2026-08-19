@@ -516,6 +516,11 @@
   .release-history{flex:1 1 auto;min-height:0;margin-top:16px;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr)}
   .release-browser{height:100%;min-height:0;overflow:hidden;display:grid;grid-template-columns:180px minmax(0,1fr)}
   .release-list{min-height:0;overflow-y:auto;padding:4px 8px 0 0;border-right:1px solid var(--hairline)}
+  .release-list,.release-body{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-3) 52%,transparent) transparent}
+  .release-list::-webkit-scrollbar,.release-body::-webkit-scrollbar{width:9px}
+  .release-list::-webkit-scrollbar-track,.release-body::-webkit-scrollbar-track{background:transparent}
+  .release-list::-webkit-scrollbar-thumb,.release-body::-webkit-scrollbar-thumb{border:3px solid transparent;border-radius:var(--radius-pill);background:color-mix(in srgb,var(--text-3) 52%,transparent);background-clip:padding-box}
+  .release-list::-webkit-scrollbar-thumb:hover,.release-body::-webkit-scrollbar-thumb:hover{background-color:var(--text-3)}
   .release-option{display:flex;min-height:36px;padding:4px 8px;align-items:center;justify-content:space-between;gap:8px;border-radius:var(--radius-lg);cursor:pointer}
   .release-option strong,.release-option small{white-space:nowrap}
   .release-option small{font-variant-numeric:tabular-nums}

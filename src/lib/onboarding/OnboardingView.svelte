@@ -375,7 +375,7 @@
   .language-menu button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border:0;border-radius:var(--radius-md);color:var(--text-1);background:transparent;font-size:var(--fs-ui);text-align:left}
   .language-menu button:hover,.language-menu button:focus-visible{background:var(--bg-hover)}
   /* 主体 */
-  .body{grid-column:1/-1;grid-row:2;min-height:0;position:relative;display:grid;place-items:center;padding:24px;overflow:auto}
+  .body{grid-column:1/-1;grid-row:2;min-height:0;position:relative;display:grid;place-items:center;padding:24px;overflow:auto;scrollbar-gutter:stable both-edges}
   .center{max-width:60ch;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
   .center h1,.legend h1{margin:0;font-size:var(--fs-heading);font-weight:680;letter-spacing:-.01em}
   .center p{margin:0;max-width:60ch;color:var(--text-2);font-size:var(--fs-body);line-height:var(--lh-relaxed)}
@@ -441,5 +441,5 @@
   .sandbox-list:focus-visible,.mini-row[role=option]:focus-visible{outline:none}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   @media(max-width:780px){.body.practice{grid-template-columns:1fr;grid-template-rows:auto minmax(250px,1fr)}.legend{padding:16px 22px 8px;border-right:0}.sandbox{padding:8px 22px 16px}}
-  @media(prefers-reduced-motion:no-preference){.body>.center,.body>.legend,.body>.sandbox{animation:enter .17s ease-out}@keyframes enter{from{opacity:.25;transform:translateY(3px)}}}
+  @media(prefers-reduced-motion:no-preference){.body>.center,.body>.legend,.body>.sandbox{animation:enter .17s ease-out}@keyframes enter{from{opacity:.25}}}
 </style>
