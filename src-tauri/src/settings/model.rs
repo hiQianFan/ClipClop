@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[cfg(target_os = "macos")]
 pub const DEFAULT_HOTKEY: &str = "Control+Command+C";
@@ -7,7 +8,6 @@ pub const DEFAULT_HOTKEY: &str = "Control+Command+C";
 pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+C";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct Settings {
     #[serde(default = "default_retention_days")]
     pub retention_days: Option<u32>,
@@ -29,6 +29,8 @@ pub struct Settings {
     pub last_update_check: Option<String>,
     #[serde(default)]
     pub skipped_update_version: Option<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for Settings {
@@ -47,6 +49,7 @@ impl Default for Settings {
             check_updates: true,
             last_update_check: None,
             skipped_update_version: None,
+            extra: BTreeMap::new(),
         }
     }
 }
@@ -88,9 +91,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rejects_outdated_settings_fields() {
-        let json = r#"{"retention_days":30,"launch_at_login":false,"hotkey":"test","ignored_apps":[],"theme":"system","check_updates":true,"last_update_check":null}"#;
-        assert!(serde_json::from_str::<Settings>(json).is_err());
+    fn future_settings_fields_survive_a_round_trip() {
+        let mut value = serde_json::to_value(Settings::default()).unwrap();
+        value["future_setting"] = serde_json::json!({ "enabled": true });
+
+        let settings: Settings = serde_json::from_value(value).unwrap();
+        assert_eq!(
+            serde_json::to_value(settings).unwrap()["future_setting"],
+            serde_json::json!({ "enabled": true })
+        );
     }
 
     #[test]

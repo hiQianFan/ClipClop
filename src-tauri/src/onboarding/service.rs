@@ -79,6 +79,7 @@ mod tests {
             current_step: Some(OnboardingStep::Practice),
             visited_steps: vec![OnboardingStep::Overview, OnboardingStep::Practice],
             selected_example: Some(OnboardingExample::Text),
+            extra: Default::default(),
         };
         service.save(state.clone()).unwrap();
         service.initialize(true).unwrap();
@@ -94,6 +95,7 @@ mod tests {
             current_step: Some(OnboardingStep::Practice),
             visited_steps: vec![OnboardingStep::Overview],
             selected_example: None,
+            extra: Default::default(),
         };
         assert!(service.save(invalid).is_err());
         assert_eq!(

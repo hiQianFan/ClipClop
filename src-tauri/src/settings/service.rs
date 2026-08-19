@@ -99,6 +99,22 @@ mod tests {
     }
 
     #[test]
+    fn updating_known_settings_preserves_future_fields() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let mut value = serde_json::to_value(Settings::default()).unwrap();
+        value["future_setting"] = serde_json::json!({ "enabled": true });
+        service.database.set_setting(SETTINGS_KEY, &value).unwrap();
+
+        service.record_update_check().unwrap();
+
+        let saved: serde_json::Value = service.database.get_setting(SETTINGS_KEY).unwrap().unwrap();
+        assert_eq!(
+            saved["future_setting"],
+            serde_json::json!({ "enabled": true })
+        );
+    }
+
+    #[test]
     fn update_check_waits_for_an_active_settings_mutation() {
         let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
         let guard = service.lock_mutation().unwrap();

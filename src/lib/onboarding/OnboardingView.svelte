@@ -56,6 +56,7 @@
     if (mode !== "first_run") return;
     const visited = journey.visited_steps.includes(step) ? journey.visited_steps : [...journey.visited_steps, step];
     const state = {
+      ...journey,
       completed_revision: null,
       current_step: step,
       visited_steps: visited,
@@ -140,6 +141,7 @@
       try {
         await saveQueue;
         await saveOnboardingState({
+          ...journey,
           completed_revision: 1,
           current_step: null,
           visited_steps: [],

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub const ONBOARDING_KEY: &str = "onboarding";
 pub const ONBOARDING_REVISION: u32 = 1;
@@ -21,12 +22,13 @@ pub enum OnboardingExample {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
 pub struct OnboardingState {
     pub completed_revision: Option<u32>,
     pub current_step: Option<OnboardingStep>,
     pub visited_steps: Vec<OnboardingStep>,
     pub selected_example: Option<OnboardingExample>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl OnboardingState {
@@ -36,6 +38,7 @@ impl OnboardingState {
             current_step: Some(OnboardingStep::Overview),
             visited_steps: vec![OnboardingStep::Overview],
             selected_example: Some(OnboardingExample::Image),
+            extra: BTreeMap::new(),
         }
     }
 
@@ -45,6 +48,7 @@ impl OnboardingState {
             current_step: None,
             visited_steps: vec![],
             selected_example: None,
+            extra: BTreeMap::new(),
         }
     }
 
