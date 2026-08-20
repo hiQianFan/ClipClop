@@ -54,7 +54,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU2RDg4NDcyREQxQ0QxNTMKUldSVDBSemRjb1RZVmx5K2xTSkEzbEsyTmREcndYUnJVVURDdS90ZHhoRTNUT2l1TW5iTE5XSS8K",
       "endpoints": [
-        "https://github.com/hiQianFan/ClipClop/releases/latest/download/latest.json"
+        "https://clipclop.mapin.net/latest.json"
       ],
       "windows": {
         "installMode": "passive"

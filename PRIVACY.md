@@ -12,7 +12,7 @@ The local database is protected by the current operating-system account and disk
 
 ## Network access
 
-When automatic update checks are enabled, ClipClop contacts GitHub Releases at most once every 24 hours to compare versions and retrieve update information. These requests do not include clipboard contents, history, file paths, or source-application metadata. Automatic checks can be disabled in Settings.
+When automatic update checks are enabled, ClipClop contacts `clipclop.mapin.net` (hosted on Cloudflare R2) at most once every 24 hours to compare versions, retrieve update information, and download an update you choose to install. The release-notes view also contacts GitHub Releases. These requests do not include clipboard contents, history, file paths, or source-application metadata. Automatic checks can be disabled in Settings.
 
 ## Your controls
 

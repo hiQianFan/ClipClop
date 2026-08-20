@@ -165,7 +165,8 @@ jobs:
             grep -Fxq "$asset" <<<"$asset_names"
           done
 
-          manifest_dir="$(mktemp -d)"
+          manifest_dir="$GITHUB_WORKSPACE/.release-assets"
+          mkdir -p "$manifest_dir"
           download_asset() {
             local asset_name="$1"
             local asset_api_url
@@ -191,7 +192,7 @@ jobs:
 
           mac_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
           windows_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
-          release_base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$RELEASE_VERSION"
+          release_base="https://clipclop.mapin.net/latest"
           release_notes_file="docs/release-notes/v$RELEASE_VERSION.md"
           test -s "$release_notes_file"
           release_notes="$(cat "$release_notes_file")"
@@ -203,9 +204,9 @@ jobs:
             --arg version "$RELEASE_VERSION" \
             --arg notes "$release_notes" \
             --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --arg mac_url "$release_base/$mac_bundle" \
+            --arg mac_url "$release_base/ClipClop_macos_universal.app.tar.gz?v=$RELEASE_VERSION" \
             --arg mac_sig "$mac_manifest_signature" \
-            --arg win_url "$release_base/$windows_bundle" \
+            --arg win_url "$release_base/ClipClop_windows_x64-setup.exe?v=$RELEASE_VERSION" \
             --arg win_sig "$windows_manifest_signature" \
             '{version:$version,notes:$notes,pub_date:$pub_date,platforms:{
               "darwin-aarch64":{signature:$mac_sig,url:$mac_url},
@@ -231,7 +232,22 @@ jobs:
           minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
-          gh release upload "v$RELEASE_VERSION" "$manifest_dir/latest.json#latest.json" --clobber
+      - name: Upload latest updater files to R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            r2 object put clipclop-releases/latest/ClipClop_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --cache-control="public, max-age=31536000, immutable" --remote
+            r2 object put clipclop-releases/latest/ClipClop_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --cache-control="public, max-age=31536000, immutable" --remote
+            r2 object put clipclop-releases/latest.json --file=.release-assets/latest.json --content-type=application/json --cache-control="no-cache" --remote
+      - name: Publish verified release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release upload "v$RELEASE_VERSION" ".release-assets/latest.json#latest.json" --clobber
           gh release edit "v$RELEASE_VERSION" \
             --draft=false \
             --prerelease=false \
