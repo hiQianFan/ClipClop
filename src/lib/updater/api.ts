@@ -1,7 +1,8 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { check } from "@tauri-apps/plugin-updater";
 import { error as logError } from "@tauri-apps/plugin-log";
 import { getSettings, recordUpdateCheck, skipUpdateVersion } from "$lib/settings/api";
 
@@ -222,51 +223,69 @@ export async function skipUpdate(update: AvailableUpdate) {
   writeCachedUpdate(null);
 }
 
-export async function downloadAndInstall(
+type ControlledDownloadEvent = {
+  requestId: string;
+  kind: "progress" | "finished" | "error";
+  percent: number | null;
+  error: string | null;
+};
+
+export async function downloadUpdate(
   expectedVersion: string,
   onProgress: (percent: number | null) => void,
 ) {
   if (!isTauri() || import.meta.env.DEV) throw updaterError("UPDATE_UNSUPPORTED");
-
+  const requestId = crypto.randomUUID();
   try {
-    await withRetry(
-      async () => {
-        // Re-acquire a fresh handle each attempt. This both recovers from a broken
-        // connection and re-targets the latest release: if a newer version shipped
-        // mid-download, the stale partial is abandoned and the version guard below
-        // aborts cleanly (UPDATE_CHANGED, non-retryable) so the next check picks it up.
-        const found = await check({ timeout: 30_000 });
-        if (!found || found.version !== expectedVersion) {
-          await found?.close();
-          writeCachedUpdate(null);
-          throw updaterError("UPDATE_CHANGED");
-        }
-
-        // Progress counters reset per attempt — a retried download starts from zero.
-        let downloaded = 0;
-        let total: number | undefined;
-        const progress = (event: DownloadEvent) => {
-          if (event.event === "Started") total = event.data.contentLength;
-          if (event.event === "Progress") downloaded += event.data.chunkLength;
-          if (event.event === "Finished") onProgress(100);
-          else onProgress(total ? Math.min(99, Math.round((downloaded / total) * 100)) : null);
-        };
-
-        try {
-          await found.downloadAndInstall(progress, { timeout: 120_000 });
-        } finally {
-          try { await found.close(); } catch { /* Do not mask failure or block relaunch. */ }
-        }
-      },
-      // Reset the progress bar to indeterminate at the start of every attempt.
-      () => onProgress(null),
-    );
+    onProgress(null);
+    let finish: ((event: ControlledDownloadEvent) => void) | null = null;
+    const unlisten = await listen<ControlledDownloadEvent>("clipclop://update-download", ({ payload }) => {
+        if (payload.requestId !== requestId) return;
+        if (payload.kind === "progress") onProgress(payload.percent);
+        else finish?.(payload);
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        finish = (payload) => payload.kind === "finished" ? resolve() : reject(payload.error ?? "Update download failed");
+        void invoke("start_update_download", { expectedVersion, requestId }).catch(reject);
+      });
+    } finally {
+      unlisten();
+    }
   } catch (reason) {
-    logUpdaterFailure("download-and-install", reason);
+    if (reason !== "UPDATE_CANCELLED") logUpdaterFailure("download", reason);
+    if (reason === "UPDATE_CHANGED") throw updaterError("UPDATE_CHANGED");
+    throw reason;
+  }
+}
+
+export async function cancelUpdateDownload() {
+  await invoke("cancel_update_download");
+}
+
+export async function discardDownloadedUpdate() {
+  await invoke("discard_downloaded_update");
+}
+
+export async function installDownloadedUpdate(expectedVersion: string) {
+  if (!isTauri() || import.meta.env.DEV) throw updaterError("UPDATE_UNSUPPORTED");
+  try {
+    await invoke("install_downloaded_update", { expectedVersion });
+  } catch (reason) {
+    logUpdaterFailure("install", reason);
+    if (reason === "UPDATE_CHANGED") throw updaterError("UPDATE_CHANGED");
     throw reason;
   }
   writeCachedUpdate(null);
-  await relaunch();
+}
+
+export async function relaunchAfterUpdate() {
+  try {
+    await relaunch();
+  } catch (reason) {
+    logUpdaterFailure("relaunch", reason);
+    throw reason;
+  }
 }
 
 export async function openLatestRelease() {

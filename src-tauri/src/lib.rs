@@ -17,12 +17,13 @@ pub mod window;
 pub mod workflows;
 
 use commands::{
-    clear_history, copy_clip, delete_clip, get_clip, get_clip_asset, get_clip_file_asset,
-    get_clip_thumbnail, get_onboarding_state, get_settings, get_source_app_icon, hide_panel,
+    cancel_update_download, clear_history, copy_clip, delete_clip, discard_downloaded_update,
+    get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_onboarding_state,
+    get_settings, get_source_app_icon, hide_panel, install_downloaded_update,
     open_auto_paste_settings, open_clip_link, open_file_preview_settings, open_log_dir,
     open_release_page, paste_clip, perform_pager_haptic, preview_clip, preview_onboarding_example,
     query_history, quit_app, record_update_check, save_onboarding_state, set_language_preference,
-    skip_update_version, update_settings,
+    skip_update_version, start_update_download, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -150,6 +151,7 @@ pub fn run() {
             app.manage(app_state);
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::PreviewState::default());
+            app.manage(commands::UpdaterDownloadState::default());
             if let Err(error) = workflows::settings_update::reconcile_autostart(
                 app.handle(),
                 &app.state::<AppState>().settings,
@@ -240,7 +242,11 @@ pub fn run() {
             get_onboarding_state,
             save_onboarding_state,
             open_auto_paste_settings,
-            set_language_preference
+            set_language_preference,
+            start_update_download,
+            cancel_update_download,
+            discard_downloaded_update,
+            install_downloaded_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

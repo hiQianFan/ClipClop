@@ -32,18 +32,23 @@
     effectiveLocale();
     switch (updateState) {
       case "checking": return t("settings.checkingLong");
-      case "current": return t("settings.current");
+      case "current": return t("settings.upToDate", { version: displayVersion(appVersion) });
       case "skipped": return t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" });
       case "downloading":
         return updateProgress === null
           ? t("settings.downloading")
           : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) });
+      case "downloaded": return t("settings.downloaded");
       case "installing": return t("settings.installing");
       case "error":
         return updateStore.errorSource === "unsupported"
           ? t("settings.devUpdate")
           : updateStore.errorSource === "install"
             ? t("settings.installFailed", { error: localizedUpdateError(updateStore.errorReason) })
+            : updateStore.errorSource === "relaunch"
+              ? t("settings.restartFailed", { error: localizedUpdateError(updateStore.errorReason) })
+            : updateStore.errorSource === "download"
+              ? t("settings.downloadFailed", { error: localizedUpdateError(updateStore.errorReason) })
             : t("settings.checkFailed", { error: localizedUpdateError(updateStore.errorReason) });
       default: return update ? t("settings.found", { version: update.version }) : "";
     }
@@ -330,9 +335,10 @@
     void updateStore.check();
   }
 
-  function installUpdate() {
-    void (updateState === "error" ? updateStore.retry() : updateStore.install());
-  }
+  function installUpdate() { void updateStore.install(); }
+  function downloadUpdate(autoInstall = false) { void updateStore.download(autoInstall); }
+  function cancelDownload() { void updateStore.cancel(); }
+  function retryUpdate() { void updateStore.retry(); }
 
   function skipUpdate() { void updateStore.skip(); }
 
@@ -440,10 +446,10 @@
           <div class="update-head"><span><strong>{t("settings.updateHeading")}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span><div class="update-head-controls"><span id="auto-check-label">{t("settings.autoCheck")}</span><label class="switch compact-switch"><input type="checkbox" role="switch" aria-labelledby="auto-check-label" bind:checked={settings.check_updates} /><span class="switch-track"></span></label></div></div>
           <div class="update-check update-head-controls">
             <span class="update-status" class:error={updateState === "error"} role="status" aria-live="polite" aria-atomic="true">
-              {#if updateState === "checking"}<span class="visually-hidden">{updateMessage}</span>
-              {:else}{#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}<span>{updateMessage || t("settings.upToDate", { version: displayVersion(appVersion) })}</span>{/if}
+              {#if updateState === "checking"}<span class="visually-hidden">{updateMessage}</span><span>{updateStore.displayStatus === "current" ? t("settings.upToDate", { version: displayVersion(appVersion) }) : updateStore.displayStatus === "available" && update ? t("settings.found", { version: update.version }) : updateStore.displayStatus === "skipped" ? t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" }) : updateMessage}</span>
+              {:else}{#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}<span>{updateMessage}</span>{/if}
             </span>
-            <div class="update-actions"><button onclick={() => void openReleasePage()}>{t("settings.releasePage")}</button><button class="update-check-btn" disabled={updateState === "checking"} aria-busy={updateState === "checking"} onclick={checkUpdates}><RefreshCw size={14} class={updateState === "checking" ? "spin" : ""} />{updateState === "checking" ? t("settings.checking") : t("settings.check")}</button></div>
+            <div class="update-actions"><button onclick={() => void openReleasePage()}>{t("settings.releasePage")}</button><button class="update-check-btn" disabled={updateState === "checking" || updateBusy} aria-busy={updateState === "checking"} onclick={checkUpdates}><RefreshCw size={14} class={updateState === "checking" ? "spin" : ""} />{updateState === "checking" ? t("settings.checking") : t("settings.check")}</button></div>
           </div>
           {#if update}
             <div class="update-card">
@@ -458,10 +464,21 @@
                 </div>
               {:else if updateState === "error"}
                 <p class="update-status error" role="alert"><CircleAlert size={14} /><span>{updateMessage}</span></p>
+              {:else if updateState === "downloaded"}
+                <p class="update-status" role="status"><CircleCheck size={14} /><span>{updateMessage}</span></p>
               {/if}
               <div class="update-actions">
-                <button disabled={updateBusy} onclick={skipUpdate}>{t("settings.skipVersion")}</button>
-                <button class="primary" disabled={updateBusy} onclick={installUpdate}>{updateState === "error" ? t("settings.retry") : t("settings.install")}</button>
+                {#if updateState === "downloading"}
+                  <button onclick={cancelDownload}>{t("settings.cancelDownload")}</button>
+                {:else if updateState === "downloaded" || (updateState === "error" && updateStore.errorSource === "install")}
+                  <button onclick={updateState === "error" ? retryUpdate : installUpdate}>{t("settings.installRestart")}</button>
+                {:else if updateState === "error" && updateStore.errorSource === "relaunch"}
+                  <button onclick={retryUpdate}>{t("settings.retry")}</button>
+                {:else if updateState === "error"}
+                  <button onclick={skipUpdate}>{t("settings.skipVersion")}</button><button onclick={retryUpdate}>{t("settings.retry")}</button>
+                {:else if updateState !== "installing" && updateState !== "checking"}
+                  <button onclick={skipUpdate}>{t("settings.skipVersion")}</button><button onclick={() => downloadUpdate()}>{t("settings.download")}</button><button onclick={() => downloadUpdate(true)}>{t("settings.install")}</button>
+                {/if}
               </div>
             </div>
           {/if}
@@ -513,6 +530,7 @@
   .update-check .update-status{min-width:0}
   .update-check .update-actions{flex:none}
   .update-check .update-actions>button{min-height:32px;padding:0 12px;white-space:nowrap}
+  .update-card .update-actions>button{min-height:32px;padding:0 12px;white-space:nowrap}
   .release-history{flex:1 1 auto;min-height:0;margin-top:16px;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr)}
   .release-browser{height:100%;min-height:0;overflow:hidden;display:grid;grid-template-columns:180px minmax(0,1fr)}
   .release-list{min-height:0;overflow-y:auto;padding:4px 8px 0 0;border-right:1px solid var(--hairline)}

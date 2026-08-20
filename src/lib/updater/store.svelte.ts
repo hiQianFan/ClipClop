@@ -5,9 +5,13 @@
 // from this raw state so they re-localize on language change.
 import {
   cachedUpdate,
+  cancelUpdateDownload,
   checkForUpdate,
   currentVersion,
-  downloadAndInstall,
+  discardDownloadedUpdate,
+  downloadUpdate,
+  installDownloadedUpdate,
+  relaunchAfterUpdate,
   skipUpdate,
   type AvailableUpdate,
 } from "./api";
@@ -18,9 +22,11 @@ export type UpdatePhase =
   | "current"
   | "skipped"
   | "downloading"
+  | "downloaded"
   | "installing"
   | "error";
-export type UpdateErrorSource = null | "check" | "install" | "unsupported";
+export type UpdateErrorSource = null | "check" | "download" | "install" | "relaunch" | "unsupported";
+export type UpdateDisplayStatus = null | "current" | "available" | "skipped";
 
 let phase = $state<UpdatePhase>("idle");
 let update = $state<AvailableUpdate | null>(null);
@@ -29,8 +35,31 @@ let errorReason = $state<unknown>(null);
 let errorSource = $state<UpdateErrorSource>(null);
 let appVersion = $state("…");
 let hydrated = false;
-let installing = false;
+let working = false;
+let activeDownload: Promise<void> | null = null;
 let skippedVersion = $state<string | null>(null);
+let displayStatus = $state<UpdateDisplayStatus>(null);
+let developmentPreview = false;
+
+export type DevelopmentUpdatePreview = "available" | "downloading" | "downloaded" | "installing" | "download-error" | "install-error";
+
+export function parseDevelopmentUpdatePreview(search: string): DevelopmentUpdatePreview | null {
+  const value = new URLSearchParams(search).get("updatePreview");
+  return value === "available" || value === "downloading" || value === "downloaded" || value === "installing" || value === "download-error" || value === "install-error"
+    ? value
+    : null;
+}
+
+function applyDevelopmentPreview(preview: DevelopmentUpdatePreview) {
+  developmentPreview = true;
+  appVersion = "0.4.3";
+  update = { version: "0.5.0", currentVersion: appVersion, date: null, notes: "Development update preview" };
+  progress = preview === "downloading" ? 42 : null;
+  errorReason = preview.endsWith("error") ? "Development preview error" : null;
+  errorSource = preview === "download-error" ? "download" : preview === "install-error" ? "install" : null;
+  phase = preview === "available" ? "idle" : preview === "download-error" || preview === "install-error" ? "error" : preview;
+  displayStatus = "available";
+}
 
 // Seed appVersion and any cached pending update exactly once per session. On later
 // mounts the store already reflects the latest in-session truth (including an
@@ -43,12 +72,25 @@ async function hydrate() {
   } catch {
     appVersion = "__clipclop_unknown__";
   }
+  if (import.meta.env.DEV) {
+    const preview = parseDevelopmentUpdatePreview(window.location.search);
+    if (preview) {
+      applyDevelopmentPreview(preview);
+      return;
+    }
+  }
   // Only seed from cache when no check has been started this session.
-  if (phase === "idle" && !update) update = cachedUpdate(appVersion);
+  if (phase === "idle" && !update) {
+    update = cachedUpdate(appVersion);
+    if (update) displayStatus = "available";
+  }
 }
 
 async function check() {
-  if (phase === "checking") return; // a check is already running
+  if (phase === "checking" || working) return;
+  if (developmentPreview) return;
+  const previousVersion = update?.version;
+  const previousPhase = phase;
   phase = "checking";
   errorReason = null;
   errorSource = null;
@@ -57,15 +99,21 @@ async function check() {
     if (result.kind === "available") {
       appVersion = result.update.currentVersion;
       update = result.update;
-      phase = "idle";
+      if (previousVersion && previousVersion !== update.version) await discardDownloadedUpdate();
+      displayStatus = "available";
+      phase = previousPhase === "downloaded" && previousVersion === update.version ? "downloaded" : "idle";
     } else if (result.kind === "current") {
+      await discardDownloadedUpdate();
       appVersion = result.currentVersion;
       update = null;
+      displayStatus = "current";
       phase = "current";
     } else if (result.kind === "skipped") {
+      await discardDownloadedUpdate();
       appVersion = result.currentVersion;
       update = null;
       skippedVersion = result.version;
+      displayStatus = "skipped";
       phase = "skipped";
     } else {
       phase = "error";
@@ -78,40 +126,120 @@ async function check() {
   }
 }
 
-async function install() {
-  if (!update || installing) return;
-  installing = true;
+async function download(autoInstall = false) {
+  if (!update || working) return;
+  if (developmentPreview) {
+    phase = autoInstall ? "installing" : "downloaded";
+    progress = autoInstall ? null : 100;
+    return;
+  }
+  working = true;
   phase = "downloading";
   progress = null;
   errorReason = null;
   errorSource = null;
+  let changed = false;
   try {
-    await downloadAndInstall(update.version, (value) => {
+    activeDownload = downloadUpdate(update.version, (value) => {
       progress = value;
     });
-    // The app relaunches on success; this phase shows until the process exits.
-    phase = "installing";
+    await activeDownload;
+    phase = "downloaded";
+    if (autoInstall) {
+      working = false;
+      await install();
+    }
+  } catch (reason) {
+    if (reason === "UPDATE_CANCELLED") phase = "idle";
+    else if (reason && typeof reason === "object" && "code" in reason && reason.code === "UPDATE_CHANGED") {
+      update = null;
+      displayStatus = null;
+      changed = true;
+    }
+    else {
+      phase = "error";
+      errorReason = reason;
+      errorSource = "download";
+    }
+  } finally {
+    activeDownload = null;
+    working = false;
+  }
+  if (changed) await check();
+}
+
+async function cancel() {
+  if (phase !== "downloading") return;
+  if (developmentPreview) { progress = null; phase = "idle"; return; }
+  try {
+    await cancelUpdateDownload();
+    await activeDownload;
+  } catch (reason) {
+    if (reason !== "UPDATE_CANCELLED") {
+      phase = "error";
+      errorReason = reason;
+      errorSource = "download";
+    }
+  }
+}
+
+async function install() {
+  if (!update || working || phase !== "downloaded") return;
+  if (developmentPreview) { phase = "installing"; return; }
+  working = true;
+  phase = "installing";
+  try {
+    await installDownloadedUpdate(update.version);
+    try {
+      await relaunchAfterUpdate();
+    } catch (reason) {
+      phase = "error";
+      errorReason = reason;
+      errorSource = "relaunch";
+    }
   } catch (reason) {
     phase = "error";
     errorReason = reason;
     errorSource = "install";
   } finally {
-    installing = false;
+    working = false;
   }
 }
 
 async function skip() {
-  if (!update) return;
+  if (!update || working) return;
+  if (developmentPreview) { skippedVersion = update.version; update = null; phase = "skipped"; displayStatus = "skipped"; return; }
+  await discardDownloadedUpdate();
   await skipUpdate(update);
   skippedVersion = update.version;
   update = null;
+  displayStatus = "skipped";
   phase = "skipped";
 }
 
 // Retry after an error returns to the appropriate action for the last phase.
-function retry() {
-  if (errorSource === "install" && update) return install();
-  return check();
+async function retry() {
+  if (working) return;
+  if (errorSource === "relaunch") {
+    working = true;
+    phase = "installing";
+    try {
+      await relaunchAfterUpdate();
+    } catch (reason) {
+      phase = "error";
+      errorReason = reason;
+      errorSource = "relaunch";
+    } finally {
+      working = false;
+    }
+    return;
+  }
+  if (errorSource === "install" && update) {
+    phase = "downloaded";
+    return await install();
+  }
+  if (errorSource === "download" && update) return await download();
+  return await check();
 }
 
 export const updateStore = {
@@ -122,9 +250,12 @@ export const updateStore = {
   get errorSource() { return errorSource; },
   get appVersion() { return appVersion; },
   get skippedVersion() { return skippedVersion; },
+  get displayStatus() { return displayStatus; },
   get busy() { return phase === "downloading" || phase === "installing"; },
   hydrate,
   check,
+  download,
+  cancel,
   install,
   skip,
   retry,
