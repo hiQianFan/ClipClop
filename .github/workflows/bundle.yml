@@ -232,14 +232,12 @@ jobs:
           minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
-      - uses: pnpm/action-setup@v4.4.0
-        with:
-          version: 9.15.3
       - name: Upload latest updater files to R2
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: npm
           command: |
             r2 object put clipclop-releases/latest/ClipClop_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --cache-control="public, max-age=31536000, immutable" --remote
             r2 object put clipclop-releases/latest/ClipClop_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --cache-control="public, max-age=31536000, immutable" --remote
