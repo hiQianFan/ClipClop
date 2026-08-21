@@ -39,7 +39,6 @@
   let languageMenuOpen = $state(false);
   let languageButton = $state<HTMLButtonElement | null>(null);
   let languageOpenFocus: "current" | "last" = "current";
-  let languageKeyboardOpen = false;
   let languageTabExit = false;
   let previewOpen = $state(false);
   let saveQueue = Promise.resolve();
@@ -177,15 +176,8 @@
   function onLanguageButtonKeydown(event: KeyboardEvent) {
     if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
     event.preventDefault();
-    languageKeyboardOpen = true;
     languageOpenFocus = event.key === 'ArrowUp' ? "last" : "current";
     languageMenuOpen = true;
-  }
-
-  function onLanguageOpenChange(open: boolean) {
-    if (open && !languageKeyboardOpen) languageOpenFocus = "current";
-    languageKeyboardOpen = false;
-    languageMenuOpen = open;
   }
 
   function onLanguageMenuKeydown(event: KeyboardEvent) {
@@ -268,9 +260,9 @@
 <header class="titlebar">
   <span class="brand"><span class="brand-mark" aria-hidden="true"></span>ClipClop</span>
   <div class="drag" data-tauri-drag-region></div>
-  <DropdownMenu.Root open={languageMenuOpen} onOpenChange={onLanguageOpenChange}>
+  <DropdownMenu.Root bind:open={languageMenuOpen}>
   <div class="language-menu-wrap">
-    <DropdownMenu.Trigger bind:ref={languageButton} class={`language-trigger${languageMenuOpen ? " open" : ""}`} aria-label={t("onboarding.language")} onkeydown={onLanguageButtonKeydown}><Languages size={15} aria-hidden="true" /></DropdownMenu.Trigger>
+    <DropdownMenu.Trigger bind:ref={languageButton} class={`language-trigger${languageMenuOpen ? " open" : ""}`} aria-label={t("onboarding.language")} onclick={() => languageOpenFocus = "current"} onkeydown={onLanguageButtonKeydown}><Languages size={15} aria-hidden="true" /></DropdownMenu.Trigger>
     <DropdownMenu.ContentStatic class="language-menu" aria-label={t("onboarding.language")} loop={true} onkeydown={onLanguageMenuKeydown} onOpenAutoFocus={focusLanguageItem} onCloseAutoFocus={restoreLanguageFocus}>
       <DropdownMenu.RadioGroup value={languagePreference()}>
         {#each [["system", t("settings.languageSystem")], ["zh-CN", t("settings.languageChinese")], ["en", t("settings.languageEnglish")]] as item}
@@ -420,8 +412,9 @@
   .capability-row>span{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
   .capability-row strong{color:var(--text-1);font-size:var(--fs-ui)}
   .capability-row small{color:var(--text-3);font-size:var(--fs-meta);line-height:var(--lh-normal)}
-  .capability-row button{flex:none;min-height:32px;padding:0 12px;border-radius:var(--radius-md);color:var(--text-1);background:var(--bg-selected);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
-  .capability-row button:hover{background:var(--hairline)}
+  .capability-row button{flex:none;min-height:32px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
+  .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
+  .capability-row button:active{background:var(--bg-selected)}
   .capability-note{margin-top:14px}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */
