@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from "svelte";
+  import { AlertDialog, Progress, Tabs } from "bits-ui";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
@@ -26,6 +27,7 @@
   const updateState = $derived(updateStore.phase);
   const updateProgress = $derived(updateStore.progress);
   const updateBusy = $derived(updateStore.busy);
+  const progressLabel = $derived(updateState === "installing" ? t("settings.installing") : updateProgress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) }));
   // Derived so the message re-localizes on language change instead of freezing
   // at the locale that was active when the task ran.
   const updateMessage = $derived.by(() => {
@@ -58,11 +60,11 @@
   let shortcutError = $state("");
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
-  let navButtons = $state<HTMLButtonElement[]>([]);
-  let settingsContent = $state<HTMLElement>();
+  let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
+  let settingsContent = $state<HTMLElement | null>(null);
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
-  let confirmClearButton = $state<HTMLButtonElement>();
+  let confirmClearButton = $state<HTMLButtonElement | null>(null);
   let recorder = $state<HTMLButtonElement>();
   let releases = $state<ReleaseNote[]>([]);
   let selectedRelease = $state<ReleaseNote | null>(null);
@@ -227,21 +229,10 @@
   }
 
   async function onNavKeydown(event: KeyboardEvent) {
-    const current = tabs.indexOf(tab);
-    let next = current;
-    if (event.key === "ArrowDown") next = (current + 1) % tabs.length;
-    else if (event.key === "ArrowUp") next = (current - 1 + tabs.length) % tabs.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = tabs.length - 1;
-    else if (event.key === "ArrowRight" || (event.key === "Tab" && !event.shiftKey)) {
+    if (event.key === "ArrowRight" || (event.key === "Tab" && !event.shiftKey)) {
       event.preventDefault();
       await focusDetail();
-      return;
-    } else return;
-    event.preventDefault();
-    selectTab(tabs[next]);
-    await tick();
-    navButtons[next]?.focus();
+    }
   }
 
   function onContentKeydown(event: KeyboardEvent) {
@@ -316,16 +307,12 @@
     status = t("settings.restored");
   }
 
-  async function requestClear() {
+  function requestClear() {
     confirmClear = true;
-    await tick();
-    confirmClearButton?.focus();
   }
 
-  async function cancelClear() {
+  function cancelClear() {
     confirmClear = false;
-    await tick();
-    clearTrigger?.focus();
   }
 
   // The store owns the async lifecycle; these just trigger it. State updates flow
@@ -345,7 +332,7 @@
   async function removeAll() {
     try {
       await clearHistory(); confirmClear = false; status = t("settings.cleared"); oncleared();
-    } catch (reason) { confirmClear = false; status = t("settings.clearFailed", { error: localizedError(reason) }); await tick(); clearTrigger?.focus(); }
+    } catch (reason) { confirmClear = false; status = t("settings.clearFailed", { error: localizedError(reason) }); }
   }
 
   async function openLogs() {
@@ -365,10 +352,11 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
     if (event.key === "Escape") {
       event.preventDefault();
       if (recording) { recording = false; shortcutError = ""; status = t("settings.recordCancelled"); }
-      else if (confirmClear) void cancelClear();
+      else if (confirmClear) cancelClear();
       else onclose();
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -380,17 +368,19 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="settings-shell">
-  <div class="settings-body">
-    <div class="settings-nav" role="tablist" aria-orientation="vertical" aria-label={t("settings.categories")}>
-      <button bind:this={navButtons[0]} id="settings-tab-general" role="tab" aria-controls="settings-panel" aria-selected={tab === "general"} tabindex={tab === "general" ? 0 : -1} class:active={tab === "general"} onclick={() => selectTab("general")} onkeydown={onNavKeydown}>{t("settings.general")}</button>
-      <button bind:this={navButtons[1]} id="settings-tab-history" role="tab" aria-controls="settings-panel" aria-selected={tab === "history"} tabindex={tab === "history" ? 0 : -1} class:active={tab === "history"} onclick={() => selectTab("history")} onkeydown={onNavKeydown}>{t("settings.history")}</button>
-      <button bind:this={navButtons[2]} id="settings-tab-appearance" role="tab" aria-controls="settings-panel" aria-selected={tab === "appearance"} tabindex={tab === "appearance" ? 0 : -1} class:active={tab === "appearance"} onclick={() => selectTab("appearance")} onkeydown={onNavKeydown}>{t("settings.appearance")}</button>
-      <button bind:this={navButtons[3]} id="settings-tab-shortcuts" role="tab" aria-controls="settings-panel" aria-selected={tab === "shortcuts"} tabindex={tab === "shortcuts" ? 0 : -1} class:active={tab === "shortcuts"} onclick={() => selectTab("shortcuts")} onkeydown={onNavKeydown}>{t("settings.shortcuts")}</button>
+  <Tabs.Root class="settings-body" value={tab} onValueChange={(value) => selectTab(value as Tab)} orientation="vertical" activationMode="automatic" loop={true}>
+    <Tabs.List class="settings-nav" aria-label={t("settings.categories")}>
+      <Tabs.Trigger bind:ref={navButtons[0]} value="general" class={tab === "general" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.general")}</Tabs.Trigger>
+      <Tabs.Trigger bind:ref={navButtons[1]} value="history" class={tab === "history" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.history")}</Tabs.Trigger>
+      <Tabs.Trigger bind:ref={navButtons[2]} value="appearance" class={tab === "appearance" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.appearance")}</Tabs.Trigger>
+      <Tabs.Trigger bind:ref={navButtons[3]} value="shortcuts" class={tab === "shortcuts" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.shortcuts")}</Tabs.Trigger>
       <span class="nav-separator" aria-hidden="true"></span>
-      <button bind:this={navButtons[4]} id="settings-tab-updates" role="tab" aria-controls="settings-panel" aria-selected={tab === "updates"} tabindex={tab === "updates" ? 0 : -1} class:active={tab === "updates"} onclick={() => selectTab("updates")} onkeydown={onNavKeydown}>{t("settings.updates")}</button>
-      <button bind:this={navButtons[5]} id="settings-tab-about" role="tab" aria-controls="settings-panel" aria-selected={tab === "about"} tabindex={tab === "about" ? 0 : -1} class:active={tab === "about"} onclick={() => selectTab("about")} onkeydown={onNavKeydown}>{t("settings.about")}</button>
-    </div>
-    <div bind:this={settingsContent} id="settings-panel" class="settings-content" class:updates-content={tab === "updates"} role="tabpanel" aria-labelledby={`settings-tab-${tab}`} tabindex="-1" onkeydown={onContentKeydown}>
+      <Tabs.Trigger bind:ref={navButtons[4]} value="updates" class={tab === "updates" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.updates")}</Tabs.Trigger>
+      <Tabs.Trigger bind:ref={navButtons[5]} value="about" class={tab === "about" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.about")}</Tabs.Trigger>
+    </Tabs.List>
+    {#each tabs as panelTab}
+    {#if panelTab === tab}
+    <Tabs.Content bind:ref={settingsContent} value={panelTab} class={`settings-content${tab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
       {#if settings}
         {#if tab === "general"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.general")}</h1>
@@ -459,8 +449,8 @@
               </div>
               {#if updateBusy}
                 <div class="update-progress">
-                  <div class="progress-track"><div class="progress-fill" class:indeterminate={updateProgress === null} style={updateProgress === null ? "" : `width:${updateProgress}%`}></div></div>
-                  <span class="progress-label">{updateState === "installing" ? t("settings.installing") : updateProgress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) })}</span>
+                  <Progress.Root class="progress-track" value={updateProgress} max={100} aria-label={progressLabel} aria-valuetext={progressLabel}><div class="progress-fill" class:indeterminate={updateProgress === null} style={updateProgress === null ? "" : `width:${updateProgress}%`}></div></Progress.Root>
+                  <span class="progress-label">{progressLabel}</span>
                 </div>
               {:else if updateState === "error"}
                 <p class="update-status error" role="alert"><CircleAlert size={14} /><span>{updateMessage}</span></p>
@@ -507,14 +497,21 @@
           </div>
         {/if}
       {:else}<div class="loading" role="status">{status || t("settings.loading")}</div>{/if}
-    </div>
-  </div>
+    </Tabs.Content>
+    {:else}
+      <Tabs.Content value={panelTab} class="settings-content" tabindex={-1} />
+    {/if}
+    {/each}
+  </Tabs.Root>
+  <AlertDialog.Root open={confirmClear} onOpenChange={(open) => confirmClear = open}>
   <footer>
-    {#if confirmClear}<strong>{t("settings.clearConfirm")}</strong><button onclick={cancelClear}>{t("common.cancel")}</button><button bind:this={confirmClearButton} class="danger" onclick={() => void removeAll()}>{t("settings.clear")}</button>
+    {#if confirmClear}<AlertDialog.Content class="clear-confirmation" aria-label={t("settings.clearConfirm")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmClearButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); clearTrigger?.focus(); }}><strong>{t("settings.clearConfirm")}</strong><AlertDialog.Cancel onclick={cancelClear}>{t("common.cancel")}</AlertDialog.Cancel><AlertDialog.Action bind:ref={confirmClearButton} class="danger" onclick={() => void removeAll()}>{t("settings.clear")}</AlertDialog.Action></AlertDialog.Content>
     {:else}<span aria-live="polite" aria-atomic="true">{status}</span><button onclick={onclose}>{t("common.back")}</button>{#if tab !== "about"}<button class="primary" onclick={() => void save()} disabled={!settings || saving} aria-busy={saving}>{t("common.save")}</button>{/if}{/if}
   </footer>
+  </AlertDialog.Root>
 </div>
 
+<!-- svelte-ignore css_unused_selector -->
 <style>
   .settings-shell{grid-column:1/-1;grid-row:2/4;min-height:0;display:grid;grid-template-rows:1fr 48px}.settings-body{min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}.settings-nav{display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}button{padding:8px 10px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);line-height:1.4}.settings-nav button{min-height:40px;padding:0 12px;text-align:left;font-size:var(--fs-body);font-weight:600}.settings-nav button:hover,.settings-nav button.active,button:hover{color:var(--text-1);background:var(--bg-hover)}.settings-nav button.active{background:var(--bg-selected)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.settings-nav button:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}.settings-content{min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}.settings-content h1{margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}.settings-content h1:focus{outline:none}.section-intro{margin:0 0 8px;color:var(--text-2);font-size:var(--fs-ui);line-height:1.5}.shortcut-help{max-width:72ch;margin:0 0 18px;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.55}.shortcut-help strong{color:var(--text-1)}.settings-content>label,.row,.update-head{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}label>span,.row>span,.update-head>span,.shortcut-row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}select{min-width:116px;padding:7px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-1);background:var(--bg-raised);font-size:var(--fs-ui)}input{width:18px;height:18px}.shortcut-group{margin-top:18px}.shortcut-group h2{margin:0;padding-bottom:6px;border-bottom:1px solid var(--hairline);font-size:var(--fs-ui);color:var(--text-2)}.shortcut-row{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}.shortcut-actions,.key-list{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}.key-combination{display:flex;align-items:center;gap:4px;border:0;background:transparent}.shortcut-actions .key-combination{min-width:92px;justify-content:center}.keycap{padding:3px 6px;border:1px solid var(--hairline);border-radius:var(--radius-sm);color:var(--text-1);background:var(--bg-raised);font:var(--fs-ui)/var(--lh-snug) ui-monospace,monospace;white-space:nowrap}.key-plus,.alternative{color:var(--text-3);font-size:var(--fs-meta);line-height:1.3}.alternative{margin:0 2px}.recording{color:var(--text-1);background:var(--bg-selected)}.inline-error{margin:8px 0 0;color:var(--danger);font-size:var(--fs-ui)}.update-head label{display:flex;align-items:center;gap:8px}.update-head-controls{display:flex;align-items:center;gap:16px}.update-head-controls .update-check-btn{flex:none;border-radius:var(--radius-md)}.update-card{display:flex;flex-direction:column;gap:12px;margin-top:16px;padding:16px;border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised)}.update-card-head{display:flex;align-items:center;gap:12px}.update-badge{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--radius-lg);color:var(--action-on);background:var(--action)}.update-card-title{display:flex;flex-direction:column;gap:2px}.update-card-title strong{font-size:var(--fs-emphasis)}.update-progress{display:flex;flex-direction:column;gap:7px}.progress-track{height:6px;overflow:hidden;border-radius:var(--radius-pill);background:var(--bg-selected)}.progress-fill{height:100%;border-radius:var(--radius-pill);background:var(--action);transition:width var(--dur-slow) ease}.progress-fill.indeterminate{width:35%;animation:progress-slide 1.1s ease-in-out infinite}.progress-label{color:var(--text-2);font-size:var(--fs-ui);font-variant-numeric:tabular-nums}.update-status{display:flex;align-items:center;gap:6px;font-size:var(--fs-ui);line-height:1.4}.update-status :global(svg){flex:none}.update-card .update-status{margin:0}.update-actions,.update-check{display:flex;align-items:center;gap:8px}.update-actions{justify-content:flex-end}.update-check{justify-content:space-between;margin-top:16px}.update-check-btn{display:inline-flex;align-items:center;gap:6px}.update-check-btn :global(svg.spin){animation:spin 1s linear infinite}@keyframes progress-slide{0%{transform:translateX(-120%)}100%{transform:translateX(340%)}}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.progress-fill.indeterminate,.update-check-btn :global(svg.spin){animation:none}}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:56px;height:56px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:var(--fs-ui)}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:var(--fs-meta);font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 16px;border-top:1px solid var(--hairline)}footer span,footer strong{min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}footer button{min-width:92px;min-height:32px;padding:0 12px}.primary{color:var(--action-on);background:var(--action)}.primary:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}.danger,.error{color:var(--danger)}footer .danger{color:var(--danger-on);background:var(--danger-fill);font-weight:600}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.primary:disabled:hover{background:var(--action)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .nav-separator{height:1px;margin:8px 6px;background:var(--hairline)}
@@ -557,4 +554,21 @@
   .release-detail header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .release-detail header>span{display:flex;min-width:0;flex-direction:column;gap:2px}.release-detail-title{display:flex;align-items:center;gap:6px}.release-detail-title em{padding:1px 4px;border-radius:var(--radius-sm);color:var(--text-2);background:var(--bg-hover);font-size:var(--fs-meta);font-style:normal;font-weight:400;line-height:1.3;white-space:nowrap}
   .release-body{min-height:0;margin-top:8px;padding:10px 12px;overflow-y:auto;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-shell);font-size:var(--fs-ui);line-height:1.55}.release-body.raw-release-body{white-space:pre-wrap}.release-body :global(h2),.release-body :global(h3){margin:0 0 8px;color:var(--text-1);font-size:var(--fs-body);line-height:1.35}.release-body :global(h2:not(:first-child)),.release-body :global(h3:not(:first-child)){margin-top:18px}.release-body :global(p),.release-body :global(ul),.release-body :global(blockquote){margin:0 0 12px}.release-body :global(ul){padding-left:20px}.release-body :global(li+li){margin-top:4px}.release-body :global(blockquote){padding:8px 10px;border-left:2px solid var(--hairline);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--bg-raised)}.release-body :global(a){color:var(--action);text-decoration:underline;text-underline-offset:2px}
+  :global(.settings-body){min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}
+  :global(.settings-nav){display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}
+  :global(.settings-nav button){min-height:40px;padding:0 12px;text-align:left;font-size:var(--fs-body);font-weight:600}
+  :global(.settings-nav button:hover),:global(.settings-nav button.active){color:var(--text-1);background:var(--bg-hover)}
+  :global(.settings-nav button.active){background:var(--bg-selected)}
+  :global(.settings-nav button:focus-visible){outline:none;box-shadow:inset 0 0 0 2px var(--text-1)}
+  :global(.settings-content){min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}
+  :global(.settings-content h1){margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}
+  :global(.settings-content h1:focus){outline:none}
+  :global(.settings-content>label){min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}
+  :global(.settings-content>label>select){flex:none}
+  :global(.settings-content.updates-content){overflow:hidden;padding-bottom:0}
+  :global(.progress-track){height:6px;overflow:hidden;border-radius:var(--radius-pill);background:var(--bg-selected)}
+  :global(.clear-confirmation){width:100%;display:flex;align-items:center;justify-content:flex-end;gap:10px}
+  :global(.clear-confirmation strong){min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  :global(.clear-confirmation button){min-width:92px;min-height:32px;padding:0 12px}
+  :global(.clear-confirmation .danger){color:var(--danger-on);background:var(--danger-fill);font-weight:600}
 </style>
