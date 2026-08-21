@@ -203,7 +203,7 @@ ARIA 用于补充原生 HTML 无法表达的语义，不替代原生行为：
 
 1. 优先迁移应用菜单、操作菜单和语言菜单。
 2. 设置分类可在确认自定义左右焦点行为不变后迁移。
-3. 历史列表、更新版本列表、练习列表和多文件导航保留现有实现，除非 Bits UI 能无损覆盖其分页、快捷选择和焦点模型。
+3. 历史列表、更新版本列表和练习列表保留现有实现；多文件导航使用 Bits UI Tabs，并保留预览加载与 Escape 回退逻辑。
 4. 原生按钮、输入框、选择框和开关不迁移。
 
 每个迁移必须同时满足：
@@ -218,6 +218,9 @@ ARIA 用于补充原生 HTML 无法表达的语义，不替代原生行为：
 
 | 行为 | 自动化检查 |
 | --- | --- |
+| 菜单、Tabs、确认与 Progress 基础 DOM 语义 | `src/lib/ui/BitsInteractionHarness.test.ts` |
+| 快速入门语言菜单的特殊打开焦点与 Tab 退出 | `src/lib/onboarding/OnboardingView.test.ts` |
+| 多文件 Tabs 非循环、单次激活与 Escape 转发 | `src/lib/history/ClipPreview.test.ts` |
 | 历史窗口退出优先级 | `src/lib/history/keyboard.test.ts` |
 | 历史列表跨页位置语义 | `src/lib/history/HistoryList.test.ts` |
 | 快捷键解析、保留组合和平台显示 | `src/lib/settings/shortcuts.test.ts` |
