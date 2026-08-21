@@ -289,7 +289,7 @@
     }, 120);
   }
 
-  async function openMenu() {
+  function openMenu() {
     if (menuOpen) {
       closeMenu();
       return;
@@ -506,10 +506,10 @@
       return false;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault(); void openMenu(); return true;
+      event.preventDefault(); openMenu(); return true;
     }
     if (event.shiftKey && event.key === "F10" && listHasFocus()) {
-      event.preventDefault(); void openMenu();
+      event.preventDefault(); openMenu();
       return true;
     }
     return false;
