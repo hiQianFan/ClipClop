@@ -232,6 +232,9 @@ jobs:
           minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
+      - uses: pnpm/action-setup@v4.4.0
+        with:
+          version: 9.15.3
       - name: Upload latest updater files to R2
         uses: cloudflare/wrangler-action@v3
         with:
