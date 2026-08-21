@@ -239,9 +239,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
           command: |
-            r2 object put clipclop-releases/latest/ClipClop_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --cache-control="public, max-age=31536000, immutable" --remote
-            r2 object put clipclop-releases/latest/ClipClop_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --cache-control="public, max-age=31536000, immutable" --remote
-            r2 object put clipclop-releases/latest.json --file=.release-assets/latest.json --content-type=application/json --cache-control="no-cache" --remote
+            r2 object put clipclop-releases/latest/ClipClop_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/latest/ClipClop_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/latest.json --file=.release-assets/latest.json --content-type=application/json --cache-control="no-cache"
       - name: Publish verified release
         shell: bash
         env:
