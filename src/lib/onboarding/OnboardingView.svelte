@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
+  import { DropdownMenu } from "bits-ui";
   import { ArrowLeft, ArrowRight, Check, Languages, Link, Search, Type } from "@lucide/svelte";
   import { currentPlatform, defaultShortcut, shortcutKeycaps, shortcutSpokenLabel } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
@@ -35,9 +36,11 @@
   let pastedImage = $state(false);
   let error = $state("");
   let sandboxList = $state<HTMLDivElement>();
-  let languageWrap = $state<HTMLDivElement>();
-  let languageButton = $state<HTMLButtonElement>();
   let languageMenuOpen = $state(false);
+  let languageButton = $state<HTMLButtonElement | null>(null);
+  let languageOpenFocus: "current" | "last" = "current";
+  let languageKeyboardOpen = false;
+  let languageTabExit = false;
   let previewOpen = $state(false);
   let saveQueue = Promise.resolve();
   const announcement = $derived(t("onboarding.stepLabel", {
@@ -166,53 +169,47 @@
     }
   }
 
-  function languageItems() {
-    return Array.from(languageWrap?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']") ?? []);
-  }
-
-  async function openLanguageMenu(focus: "current" | "first" | "last" = "current") {
-    languageMenuOpen = true;
-    await tick();
-    const items = languageItems();
-    const index = focus === "first" ? 0 : focus === "last" ? items.length - 1
-      : Math.max(0, items.findIndex((item) => item.dataset.language === languagePreference()));
-    items[index]?.focus();
-  }
-
-  function closeLanguageMenu(focusButton = false) {
-    languageMenuOpen = false;
-    if (focusButton) requestAnimationFrame(() => languageButton?.focus());
-  }
-
   async function chooseLanguage(language: LanguagePreference) {
-    closeLanguageMenu(true);
+    languageMenuOpen = false;
     await changeLanguage(language);
   }
 
   function onLanguageButtonKeydown(event: KeyboardEvent) {
     if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
     event.preventDefault();
-    void openLanguageMenu(event.key === 'ArrowUp' ? "last" : "current");
+    languageKeyboardOpen = true;
+    languageOpenFocus = event.key === 'ArrowUp' ? "last" : "current";
+    languageMenuOpen = true;
+  }
+
+  function onLanguageOpenChange(open: boolean) {
+    if (open && !languageKeyboardOpen) languageOpenFocus = "current";
+    languageKeyboardOpen = false;
+    languageMenuOpen = open;
   }
 
   function onLanguageMenuKeydown(event: KeyboardEvent) {
-    const items = languageItems();
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeLanguageMenu(true);
-    } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-      event.preventDefault();
-      const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
-        : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-      items[next]?.focus();
-    } else if (event.key === "Tab") {
-      closeLanguageMenu();
-    }
+    if (event.key === "Tab") languageTabExit = true;
   }
 
-  function dismissLanguageMenu(event: PointerEvent) {
-    if (languageMenuOpen && event.target instanceof Node && !languageWrap?.contains(event.target)) closeLanguageMenu();
+  function restoreLanguageFocus(event: Event) {
+    event.preventDefault();
+    if (languageTabExit) {
+      languageTabExit = false;
+      return;
+    }
+    languageButton?.focus();
+  }
+
+  function focusLanguageItem(event: Event) {
+    event.preventDefault();
+    requestAnimationFrame(() => {
+      const items = Array.from(document.querySelectorAll<HTMLElement>("[data-language]"));
+      const target = languageOpenFocus === "last"
+        ? items.at(-1)
+        : items.find((item) => item.dataset.language === languagePreference());
+      target?.focus();
+    });
   }
 
   function onWindowKeydown(event: KeyboardEvent) {
@@ -254,7 +251,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onfocus={onWindowFocus} onpointerdown={dismissLanguageMenu} />
+<svelte:window onkeydown={onWindowKeydown} onfocus={onWindowFocus} />
 
 {#snippet exampleIcon(example: OnboardingExample)}
   {#if example === "image"}<img src="/app-icon.png" alt={exampleText(example)} />
@@ -271,17 +268,19 @@
 <header class="titlebar">
   <span class="brand"><span class="brand-mark" aria-hidden="true"></span>ClipClop</span>
   <div class="drag" data-tauri-drag-region></div>
-  <div bind:this={languageWrap} class="language-menu-wrap" onfocusout={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeLanguageMenu(); }}>
-    <button bind:this={languageButton} class="language-trigger" class:open={languageMenuOpen} aria-label={t("onboarding.language")} aria-haspopup="menu" aria-expanded={languageMenuOpen} onclick={() => languageMenuOpen ? closeLanguageMenu() : void openLanguageMenu()} onkeydown={onLanguageButtonKeydown}><Languages size={15} aria-hidden="true" /></button>
-    {#if languageMenuOpen}
-      <div class="language-menu" role="menu" tabindex="-1" aria-label={t("onboarding.language")} onkeydown={onLanguageMenuKeydown}>
+  <DropdownMenu.Root open={languageMenuOpen} onOpenChange={onLanguageOpenChange}>
+  <div class="language-menu-wrap">
+    <DropdownMenu.Trigger bind:ref={languageButton} class={`language-trigger${languageMenuOpen ? " open" : ""}`} aria-label={t("onboarding.language")} onkeydown={onLanguageButtonKeydown}><Languages size={15} aria-hidden="true" /></DropdownMenu.Trigger>
+    <DropdownMenu.ContentStatic class="language-menu" aria-label={t("onboarding.language")} loop={true} onkeydown={onLanguageMenuKeydown} onOpenAutoFocus={focusLanguageItem} onCloseAutoFocus={restoreLanguageFocus}>
+      <DropdownMenu.RadioGroup value={languagePreference()}>
         {#each [["system", t("settings.languageSystem")], ["zh-CN", t("settings.languageChinese")], ["en", t("settings.languageEnglish")]] as item}
           {@const value = item[0] as LanguagePreference}
-          <button role="menuitemradio" aria-checked={languagePreference() === value} data-language={value} onclick={() => void chooseLanguage(value)}><span>{item[1]}</span>{#if languagePreference() === value}<Check size={13} aria-hidden="true" />{/if}</button>
+          <DropdownMenu.RadioItem {value} data-language={value} onclick={() => void chooseLanguage(value)}><span>{item[1]}</span>{#if languagePreference() === value}<Check size={13} aria-hidden="true" />{/if}</DropdownMenu.RadioItem>
         {/each}
-      </div>
-    {/if}
+      </DropdownMenu.RadioGroup>
+    </DropdownMenu.ContentStatic>
   </div>
+  </DropdownMenu.Root>
 </header>
 
 <section class:practice={step === "practice"} class="body">
@@ -369,11 +368,11 @@
   .brand-mark{width:14px;height:14px;background:currentColor;mask:url("/clipclop-mark.svg") center/contain no-repeat;-webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat}
   .drag{flex:1;align-self:stretch}
   .language-menu-wrap{position:relative}
-  .language-trigger{width:26px;height:24px;display:grid;place-items:center;padding:0;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent}
-  .language-trigger:hover,.language-trigger.open{color:var(--text-1);background:var(--bg-hover)}
-  .language-menu{position:absolute;z-index:var(--z-menu);top:30px;right:0;width:150px;padding:5px;border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:0 6px 18px rgba(0,0,0,.35)}
-  .language-menu button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border:0;border-radius:var(--radius-md);color:var(--text-1);background:transparent;font-size:var(--fs-ui);text-align:left}
-  .language-menu button:hover,.language-menu button:focus-visible{background:var(--bg-hover)}
+  :global(.language-trigger){width:26px;height:24px;display:grid;place-items:center;padding:0;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent}
+  :global(.language-trigger:hover),:global(.language-trigger.open){color:var(--text-1);background:var(--bg-hover)}
+  :global(.language-menu){position:absolute;z-index:var(--z-menu);top:30px;right:0;width:150px;padding:5px;border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+  :global(.language-menu [role="menuitemradio"]){width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border:0;border-radius:var(--radius-md);color:var(--text-1);background:transparent;font-size:var(--fs-ui);text-align:left}
+  :global(.language-menu [role="menuitemradio"]:hover),:global(.language-menu [role="menuitemradio"]:focus-visible),:global(.language-menu [role="menuitemradio"][data-highlighted]){background:var(--bg-hover)}
   /* 主体 */
   .body{grid-column:1/-1;grid-row:2;min-height:0;position:relative;display:grid;place-items:center;padding:24px;overflow:auto;scrollbar-gutter:stable both-edges}
   .center{max-width:60ch;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center}
@@ -437,7 +436,7 @@
   .dots .dot.current{width:9px;height:9px;background:var(--action);box-shadow:0 0 0 2px var(--bg-shell)}
   button:hover:not(:disabled){background:var(--bg-hover)}
   button:disabled{opacity:.4}
-  .language-trigger:focus-visible,.language-menu button:focus-visible,.body button:focus-visible,footer button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
+  :global(.language-trigger:focus-visible),:global(.language-menu [role="menuitemradio"]:focus-visible),.body button:focus-visible,footer button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
   .sandbox-list:focus-visible,.mini-row[role=option]:focus-visible{outline:none}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   @media(max-width:780px){.body.practice{grid-template-columns:1fr;grid-template-rows:auto minmax(250px,1fr)}.legend{padding:16px 22px 8px;border-right:0}.sandbox{padding:8px 22px 16px}}
