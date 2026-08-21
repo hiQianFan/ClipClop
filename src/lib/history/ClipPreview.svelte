@@ -1,5 +1,6 @@
 <script lang="ts">
   import { File } from "@lucide/svelte";
+  import { Tabs } from "bits-ui";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
   import { clipPreview, detailText, fileName, filePaths, metadataFacts } from "./presentation";
   import type { ClipDetail, HistoryPage } from "./types";
@@ -61,14 +62,16 @@
     {#if detail.content_type === "file" && filePaths(detail).length > 1}
       <nav class="file-nav" aria-label={t("history.fileNavigation")}>
         <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
-        <div class="file-strip" role="tablist" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
+        <Tabs.Root class="file-tabs" value={String(fileIndex)} onValueChange={(value) => onfile(Number(value))} orientation="horizontal" activationMode="automatic" loop={false}>
+        <Tabs.List class="file-strip" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
           {#each filePaths(detail) as path, index}
-            <button data-file-index={index} tabindex={index === fileIndex ? 0 : -1} role="tab" class:selected={index === fileIndex} class="file-thumb" aria-selected={index === fileIndex} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path, t("meta.file")) })} title={fileName(path, t("meta.file"))} onclick={() => onfile(index)} onfocus={onfilefocus} onkeydown={onfilekeydown}>
+            <Tabs.Trigger value={String(index)} data-file-index={index} class={`file-thumb${index === fileIndex ? " selected" : ""}`} aria-label={t("history.viewFile", { index: formatNumber(index + 1), name: fileName(path, t("meta.file")) })} title={fileName(path, t("meta.file"))} onfocus={onfilefocus} onkeydown={onfilekeydown}>
               {#if fileThumbnailUrls[index]}<img src={fileThumbnailUrls[index] ?? undefined} alt="" />
               {:else}<File size={16} aria-hidden="true" />{/if}
-            </button>
+            </Tabs.Trigger>
           {/each}
-        </div>
+        </Tabs.List>
+        </Tabs.Root>
         <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.nextFile", { shortcut: nextFileShortcut })} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => onfile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
         <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
       </nav>
@@ -133,10 +136,11 @@
   .image-placeholder, .empty { flex:1; display:grid; place-items:center; color:var(--text-3); }
   .file-preview-placeholder { color:var(--text-3); font-size:var(--fs-ui); }
   .file-nav { height:58px; flex:none; display:flex; align-items:center; gap:8px; padding:6px 20px; border-top:1px solid var(--hairline); }
-  .file-strip { min-width:0; flex:1; display:flex; gap:6px; overflow-x:auto; }
-  .file-thumb { width:38px; height:38px; flex:none; display:grid; place-items:center; padding:3px; border-radius:var(--radius-md); background:transparent; }
-  .file-thumb.selected { background:var(--bg-selected); }
-  .file-thumb img { width:100%; height:100%; border-radius:var(--radius-sm); object-fit:cover; }
+  :global(.file-tabs) { min-width:0; flex:1; }
+  :global(.file-strip) { min-width:0; flex:1; display:flex; gap:6px; overflow-x:auto; }
+  :global(.file-thumb) { width:38px; height:38px; flex:none; display:grid; place-items:center; padding:3px; border-radius:var(--radius-md); background:transparent; }
+  :global(.file-thumb.selected) { background:var(--bg-selected); }
+  :global(.file-thumb) img { width:100%; height:100%; border-radius:var(--radius-sm); object-fit:cover; }
   .file-nav-arrow { min-width:38px; height:28px; padding:0 3px; color:var(--text-2); background:transparent; }
   .file-nav-count { color:var(--text-3); font:var(--fs-caption) var(--mono); }
   .preview-loading { flex:1; min-height:0; padding:20px; color:var(--text-2); }
