@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { AlertDialog, DropdownMenu } from "bits-ui";
   import { listen } from "@tauri-apps/api/event";
   import { copyClip, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
   import { canExpand, filePaths } from "$lib/history/presentation";
@@ -42,12 +43,9 @@
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
   let listbox = $state<HistoryList>();
-  let menuButton = $state<HTMLButtonElement>();
-  let appMenuButton = $state<HTMLButtonElement>();
-  let menuWrap = $state<HTMLDivElement>();
-  let appMenuWrap = $state<HTMLDivElement>();
-  let cancelActionButton = $state<HTMLButtonElement>();
-  let confirmActionButton = $state<HTMLButtonElement>();
+  let appMenuButton = $state<HTMLButtonElement | null>(null);
+  let menuButton = $state<HTMLButtonElement | null>(null);
+  let confirmActionButton = $state<HTMLButtonElement | null>(null);
   let pageNavigationPending = false;
   let searchTimer: number | undefined;
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
@@ -236,22 +234,19 @@
     menuOpen = false;
   }
 
-  async function requestDelete() {
+  function requestDelete() {
     if (!session.selectedId) return;
     confirmationInvoker = document.activeElement instanceof HTMLElement
-      ? document.activeElement.closest("[data-menu-item]") ? menuButton ?? null : document.activeElement
+      ? document.activeElement.closest("[role='menuitem']") ? menuButton ?? null : document.activeElement
       : null;
     menuOpen = false;
     deletePending = true;
     mode = "confirmation";
-    await tick();
-    confirmActionButton?.focus();
   }
 
   function cancelDelete() {
     deletePending = false;
     mode = "browse";
-    requestAnimationFrame(focusConfirmationInvoker);
   }
 
   function focusConfirmationInvoker() {
@@ -302,8 +297,6 @@
     appMenuOpen = false;
     menuOpen = true;
     mode = "menu";
-    await tick();
-    menuItemElements().find((item) => !item.disabled)?.focus();
   }
 
   function closeMenu() {
@@ -311,46 +304,12 @@
     enterBrowse();
   }
 
-  async function toggleAppMenu() {
-    if (appMenuOpen) {
-      closeAppMenu();
-      return;
-    }
-    menuOpen = false;
-    appMenuOpen = true;
-    mode = "menu";
-    await tick();
-    menuItemElements().find((item) => !item.disabled)?.focus();
-  }
-
   function closeAppMenu() {
     appMenuOpen = false;
     mode = "browse";
-    requestAnimationFrame(() => appMenuButton?.focus());
   }
 
-  function dismissMenusFromOutsidePointer(event: PointerEvent) {
-    if (!(event.target instanceof Node)) return;
-    if (menuOpen && !menuWrap?.contains(event.target)) {
-      menuOpen = false;
-      mode = "browse";
-    }
-    if (appMenuOpen && !appMenuWrap?.contains(event.target)) {
-      appMenuOpen = false;
-      mode = "browse";
-    }
-  }
-
-  function dismissMenusFromOutsideFocus(event: FocusEvent) {
-    if (!(event.target instanceof Node)) return;
-    if (menuOpen && !menuWrap?.contains(event.target)) {
-      menuOpen = false;
-      mode = "browse";
-    }
-    if (appMenuOpen && !appMenuWrap?.contains(event.target)) {
-      appMenuOpen = false;
-      mode = "browse";
-    }
+  function updateModeFromFocus(event: FocusEvent) {
     if (!(event.target instanceof Element)) return;
     if (mode === "search" && !event.target.closest("input")) mode = "browse";
     if (mode === "file-tablist" && !event.target.closest("[role='tablist']")) mode = "browse";
@@ -385,27 +344,6 @@
     await syncSettings();
     view = "history";
     enterBrowse();
-  }
-
-  function menuItemElements() {
-    return Array.from(document.querySelectorAll<HTMLButtonElement>("[data-menu-item]"));
-  }
-
-  function onMenuKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      if (menuOpen) closeMenu();
-      else closeAppMenu();
-      return;
-    }
-    const items = menuItemElements().filter((item) => !item.disabled);
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
-      event.preventDefault();
-      const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
-        : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
-      items[next]?.focus();
-    }
   }
 
   function listHasFocus() {
@@ -539,22 +477,9 @@
   }
 
   function onFileNavigatorKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      enterBrowse();
-      return;
-    }
-    if (!session.detail || session.detail.content_type !== "file") return;
-    const lastIndex = filePaths(session.detail).length - 1;
-    const next = event.key === "ArrowLeft" ? fileIndex - 1
-      : event.key === "ArrowRight" ? fileIndex + 1
-      : event.key === "Home" ? 0
-      : event.key === "End" ? lastIndex
-      : null;
-    if (next === null || next < 0 || next > lastIndex) return;
+    if (event.key !== "Escape") return;
     event.preventDefault();
-    void selectFile(next);
-    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-file-index="${next}"]`)?.focus());
+    enterBrowse();
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -606,21 +531,6 @@
     }
   }
 
-  function onConfirmationKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      cancelDelete();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const controls = [cancelActionButton, confirmActionButton].filter(
-      (item): item is HTMLButtonElement => Boolean(item),
-    );
-    const index = controls.indexOf(document.activeElement as HTMLButtonElement);
-    event.preventDefault();
-    controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
-  }
-
   function restoreAfterNativePreview() {
     if (!previewExternal || view !== "history") return;
     previewExternal = false;
@@ -656,7 +566,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onpointerdown={dismissMenusFromOutsidePointer} onfocusin={dismissMenusFromOutsideFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onWindowKeydown} onfocusin={updateModeFromFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   {#if view === "onboarding" && onboarding}
@@ -667,21 +577,21 @@
   <header class="titlebar">
     {#if view === "history"}
       <div class="brand">
-        <div bind:this={appMenuWrap} class="app-menu-wrap">
-          <button bind:this={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")} aria-haspopup="menu" aria-expanded={appMenuOpen} onclick={() => void toggleAppMenu()}>
+        <DropdownMenu.Root open={appMenuOpen} onOpenChange={(open) => { appMenuOpen = open; mode = open ? "menu" : "browse"; if (open) menuOpen = false; }}>
+        <div class="app-menu-wrap">
+          <DropdownMenu.Trigger bind:ref={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")}>
             <span class="brand-mark" aria-hidden="true"></span>
             <span>ClipClop</span>
-          </button>
-          {#if appMenuOpen}
-            <div class="menu app-menu" role="menu" tabindex="-1" aria-label={t("history.appMenu")} onkeydown={onMenuKeydown}>
-              <button data-menu-item role="menuitem" onclick={() => void openSettingsView()}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></button>
-              <button data-menu-item role="menuitem" onclick={checkForUpdates}>{t("history.checkUpdates")}</button>
-              <button data-menu-item role="menuitem" onclick={() => void openSettingsView("about")}>{t("history.about")}</button>
-              <div class="menu-separator" role="separator"></div>
-              <button data-menu-item role="menuitem" class="danger" onclick={() => void quitApp()}>{t("history.quit")}</button>
-            </div>
-          {/if}
+          </DropdownMenu.Trigger>
+          <DropdownMenu.ContentStatic class="menu app-menu" aria-label={t("history.appMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); appMenuButton?.focus(); }}>
+            <DropdownMenu.Item onclick={() => void openSettingsView()}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></DropdownMenu.Item>
+            <DropdownMenu.Item onclick={checkForUpdates}>{t("history.checkUpdates")}</DropdownMenu.Item>
+            <DropdownMenu.Item onclick={() => void openSettingsView("about")}>{t("history.about")}</DropdownMenu.Item>
+            <DropdownMenu.Separator class="menu-separator" />
+            <DropdownMenu.Item class="danger" onclick={() => void quitApp()}>{t("history.quit")}</DropdownMenu.Item>
+          </DropdownMenu.ContentStatic>
         </div>
+        </DropdownMenu.Root>
       </div>
     {:else}
       <span class="settings-title">{t("settings.title")}</span>
@@ -732,40 +642,42 @@
     oninert={() => enterBrowse()}
   />
 
+  <AlertDialog.Root open={deletePending} onOpenChange={(open) => { deletePending = open; if (!open) mode = "browse"; }}>
   <footer class="actions">
     {#if deletePending}
-      <div class="confirmation" role="alertdialog" tabindex="-1" aria-modal="true" aria-label={t("history.confirmDeleteLabel")} onkeydown={onConfirmationKeydown}>
+      <AlertDialog.Content class="confirmation" aria-label={t("history.confirmDeleteLabel")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmActionButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); focusConfirmationInvoker(); }}>
         <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
-        <button bind:this={cancelActionButton} class="ghost" onclick={cancelDelete}>{t("common.cancel")} <kbd>Esc</kbd></button>
-        <button bind:this={confirmActionButton} class="destructive" onclick={confirmDelete}>{t("history.delete")}</button>
-      </div>
+        <AlertDialog.Cancel class="ghost" onclick={cancelDelete}>{t("common.cancel")} <kbd>Esc</kbd></AlertDialog.Cancel>
+        <AlertDialog.Action bind:ref={confirmActionButton} class="destructive" onclick={confirmDelete}>{t("history.delete")}</AlertDialog.Action>
+      </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       {#if copied}<span class="message">{copied}</span>{#if showAutoPasteHelp}<button class="ghost" onclick={() => { copied = ""; showAutoPasteHelp = false; openOnboarding("auto_paste"); }}>{t("settings.autoPaste")}</button>{/if}{/if}
-      <div bind:this={menuWrap} class="menu-wrap">
-        <button bind:this={menuButton} class:expanded={menuOpen} class="ghost action-menu-trigger" aria-haspopup="menu" aria-expanded={menuOpen} onclick={() => void openMenu()} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</button>
-        {#if menuOpen}
-          <div class="menu action-menu" role="menu" tabindex="-1" aria-label={t("history.actionMenu")} onkeydown={onMenuKeydown}>
-            <button data-menu-item role="menuitem" onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></button>
+      <DropdownMenu.Root open={menuOpen} onOpenChange={(open) => { menuOpen = open; mode = open ? "menu" : "browse"; if (open) appMenuOpen = false; }}>
+      <div class="menu-wrap">
+        <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger${menuOpen ? " expanded" : ""}`} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</DropdownMenu.Trigger>
+          <DropdownMenu.ContentStatic class="menu action-menu" aria-label={t("history.actionMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); enterBrowse(); }}>
+            <DropdownMenu.Item onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></DropdownMenu.Item>
             {#if session.detail?.content_type === "link"}
-              <button data-menu-item role="menuitem" onclick={() => void openSelectedLink()}><span>{t("history.openLink")}</span></button>
+              <DropdownMenu.Item onclick={() => void openSelectedLink()}><span>{t("history.openLink")}</span></DropdownMenu.Item>
             {/if}
-            <div class="menu-separator" role="separator"></div>
+            <DropdownMenu.Separator class="menu-separator" />
             {#if session.detail?.plain_text != null}
-              <button data-menu-item role="menuitem" onclick={() => void pastePlainSelected()}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></button>
+              <DropdownMenu.Item onclick={() => void pastePlainSelected()}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></DropdownMenu.Item>
             {/if}
-            <button data-menu-item role="menuitem" onclick={() => void copyOnly()}><span>{t("history.copy")}</span></button>
+            <DropdownMenu.Item onclick={() => void copyOnly()}><span>{t("history.copy")}</span></DropdownMenu.Item>
             {#if session.detail?.plain_text != null}
-              <button data-menu-item role="menuitem" onclick={() => void copyOnly(true)}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></button>
+              <DropdownMenu.Item onclick={() => void copyOnly(true)}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></DropdownMenu.Item>
             {/if}
-            <div class="menu-separator" role="separator"></div>
-            <button data-menu-item role="menuitem" class="danger" onclick={() => void requestDelete()}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></button>
-          </div>
-        {/if}
+            <DropdownMenu.Separator class="menu-separator" />
+            <DropdownMenu.Item class="danger" onclick={() => void requestDelete()}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></DropdownMenu.Item>
+          </DropdownMenu.ContentStatic>
       </div>
+      </DropdownMenu.Root>
       <button class="copy" onclick={() => pasteSelected()} disabled={!session.selectedId}><kbd>⏎</kbd> {t("history.paste")}</button>
     {/if}
   </footer>
+  </AlertDialog.Root>
   {:else}
     <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={() => void openOnboarding("quick_start")} />
   {/if}
@@ -779,39 +691,39 @@
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }
   .app-menu-wrap { position:relative; }
-  .app-menu-trigger { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
-  .app-menu-trigger:hover { background:var(--bg-hover); }
+  :global(.app-menu-trigger) { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
+  :global(.app-menu-trigger:hover) { background:var(--bg-hover); }
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
   .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
   kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .copy, .ghost, .destructive { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
+  .copy, :global(.ghost), :global(.destructive) { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
   .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
   .copy:hover { background:var(--action-hover); }
   .copy:active { filter:brightness(.92); }
   .copy kbd { color:inherit; border-color:currentColor; opacity:.9; }
-  .ghost:hover, .ghost.expanded { color:var(--text-1); background:var(--bg-hover); }
-  .ghost:active, .ghost.expanded:active { background:var(--bg-selected); }
-  .action-menu-trigger.expanded kbd { color:inherit; border-color:currentColor; }
-  .destructive { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
+  :global(.ghost:hover), :global(.ghost.expanded) { color:var(--text-1); background:var(--bg-hover); }
+  :global(.ghost:active), :global(.ghost.expanded:active) { background:var(--bg-selected); }
+  :global(.action-menu-trigger.expanded) kbd { color:inherit; border-color:currentColor; }
+  :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
-  .menu { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
-  .action-menu { width:260px; }
-  .app-menu { top:30px; bottom:auto; left:0; right:auto; width:180px; }
-  .menu button { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
-  .menu button > span { min-width:0; }
-  .menu button > kbd { flex:none; align-self:center; }
-  .menu button:hover { background:var(--bg-hover); }
-  .menu-separator { height:1px; margin:5px 6px; background:var(--hairline); }
-  .menu .danger { color:var(--danger); }
-  .menu .danger kbd { color:currentColor; border-color:currentColor; }
+  :global(.menu) { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  :global(.action-menu) { width:260px; }
+  :global(.app-menu) { top:30px; bottom:auto; left:0; right:auto; width:180px; }
+  :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
+  :global(.menu [role="menuitem"] > span) { min-width:0; }
+  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; }
+  :global(.menu [role="menuitem"]:hover), :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
+  :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
+  :global(.menu .danger) { color:var(--danger); }
+  :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
-  .confirmation { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  .confirmation button { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
-  .confirmation > span { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
-  .confirmation small { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
+  :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+  :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
+  :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
+  :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }
   @media (prefers-reduced-motion:no-preference) { .panel { animation:enter 120ms ease-out; } @keyframes enter { from { opacity:0; transform:scale(.98); } } }
