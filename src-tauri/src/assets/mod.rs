@@ -173,7 +173,6 @@ mod tests {
                 content_hash: "icon-contract".into(),
                 created_at: Utc::now(),
             })
-            .unwrap()
             .unwrap();
         assert!(assets.source_app_icon(&id).unwrap().data_url.is_none());
     }
@@ -196,7 +195,6 @@ mod tests {
                 content_hash: "malformed-file-metadata".into(),
                 created_at: Utc::now(),
             })
-            .unwrap()
             .unwrap();
 
         assert!(assets.asset(&id).unwrap().data_url.is_none());

@@ -47,16 +47,38 @@ impl Database {
             .map_err(|_| AppError::Storage("database lock was poisoned".into()))
     }
 
-    pub fn insert_clip(&self, clip: &NewClip) -> AppResult<String> {
+    pub fn capture_clip(&self, clip: &NewClip) -> AppResult<String> {
         let mut connection = self.connection()?;
         let transaction = connection.transaction()?;
+        let captured_at = timestamp(clip.created_at);
+        let existing_id = transaction
+            .query_row(
+                "SELECT id FROM clips WHERE content_hash = ?1 ORDER BY created_at DESC LIMIT 1",
+                [&clip.content_hash],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if let Some(id) = existing_id {
+            let source_id = clip.source_app.as_ref().map(|source| source.id.as_str());
+            let source_name = clip.source_app.as_ref().map(|source| source.name.as_str());
+            transaction.execute(
+                "UPDATE clips SET last_used_at = ?1, sort_at = ?1, source_id = ?2, source_name = ?3 WHERE id = ?4",
+                params![captured_at, source_id, source_name, id],
+            )?;
+            transaction.execute(
+                "UPDATE clips_fts SET source_name = ?1 WHERE clip_id = ?2",
+                params![source_name, id],
+            )?;
+            transaction.commit()?;
+            return Ok(id);
+        }
         let id = Uuid::now_v7().to_string();
         let byte_size: usize = clip.flavors.iter().map(|flavor| flavor.payload.len()).sum();
         let source_id = clip.source_app.as_ref().map(|source| source.id.as_str());
         let source_name = clip.source_app.as_ref().map(|source| source.name.as_str());
         transaction.execute(
-            "INSERT INTO clips (id, content_type, plain_text, preview, source_id, source_name, created_at, last_used_at, content_hash, byte_size, metadata_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10)",
+            "INSERT INTO clips (id, content_type, plain_text, preview, source_id, source_name, created_at, last_used_at, sort_at, content_hash, byte_size, metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7, ?8, ?9, ?10)",
             params![
                 id,
                 clip.content_type.to_string(),
@@ -64,7 +86,7 @@ impl Database {
                 clip.preview,
                 source_id,
                 source_name,
-                timestamp(clip.created_at),
+                captured_at,
                 clip.content_hash,
                 byte_size as i64,
                 serde_json::to_string(&clip.metadata)?,
@@ -82,18 +104,6 @@ impl Database {
         )?;
         transaction.commit()?;
         Ok(id)
-    }
-
-    pub fn exists_recent_hash(&self, hash: &str, since: DateTime<Utc>) -> AppResult<bool> {
-        Ok(self
-            .connection()?
-            .query_row(
-                "SELECT 1 FROM clips WHERE content_hash = ?1 AND created_at >= ?2 LIMIT 1",
-                params![hash, timestamp(since)],
-                |_| Ok(()),
-            )
-            .optional()?
-            .is_some())
     }
 
     pub fn query_history(&self, request: &HistoryQuery) -> AppResult<HistoryPage> {
@@ -136,7 +146,7 @@ impl Database {
         let sql = format!(
             "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json, c.last_used_at
              FROM clips c{where_clause}
-             ORDER BY c.last_used_at DESC, c.id DESC LIMIT ? OFFSET ?"
+             ORDER BY c.sort_at DESC, c.id DESC LIMIT ? OFFSET ?"
         );
         let mut statement = connection.prepare(&sql)?;
         let items = statement
@@ -196,10 +206,11 @@ impl Database {
         Ok(flavors)
     }
 
-    pub fn touch_clip(&self, id: &str) -> AppResult<bool> {
+    pub fn touch_clip(&self, id: &str, promote: bool) -> AppResult<bool> {
+        let used_at = timestamp(Utc::now());
         Ok(self.connection()?.execute(
-            "UPDATE clips SET last_used_at = ?1 WHERE id = ?2",
-            params![timestamp(Utc::now()), id],
+            "UPDATE clips SET last_used_at = ?1, sort_at = CASE WHEN ?3 THEN ?1 ELSE sort_at END WHERE id = ?2",
+            params![used_at, id, promote],
         )? > 0)
     }
 
@@ -219,7 +230,7 @@ impl Database {
         }
         if let Some(limit) = limit {
             let mut statement = connection.prepare(
-                "SELECT id FROM clips ORDER BY last_used_at DESC, id DESC LIMIT -1 OFFSET ?1",
+                "SELECT id FROM clips ORDER BY sort_at DESC, id DESC LIMIT -1 OFFSET ?1",
             )?;
             for id in statement.query_map([limit], |row| row.get::<_, String>(0))? {
                 ids.insert(id?);
@@ -348,9 +359,11 @@ mod tests {
     fn creates_inserts_searches_and_reads_details() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
-        let first_id = database.insert_clip(&sample("alpha command", now)).unwrap();
+        let first_id = database
+            .capture_clip(&sample("alpha command", now))
+            .unwrap();
         database
-            .insert_clip(&sample("beta paragraph", now - Duration::seconds(1)))
+            .capture_clip(&sample("beta paragraph", now - Duration::seconds(1)))
             .unwrap();
 
         let page = database
@@ -372,9 +385,9 @@ mod tests {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
         database
-            .insert_clip(&sample("older", now - Duration::minutes(1)))
+            .capture_clip(&sample("older", now - Duration::minutes(1)))
             .unwrap();
-        let newer = database.insert_clip(&sample("newer", now)).unwrap();
+        let newer = database.capture_clip(&sample("newer", now)).unwrap();
 
         let page = database.query_history(&HistoryQuery::default()).unwrap();
         assert_eq!(page.items[0].id, newer);
@@ -393,11 +406,11 @@ mod tests {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
         let older = database
-            .insert_clip(&sample("older", now - Duration::minutes(1)))
+            .capture_clip(&sample("older", now - Duration::minutes(1)))
             .unwrap();
-        database.insert_clip(&sample("newer", now)).unwrap();
+        database.capture_clip(&sample("newer", now)).unwrap();
 
-        assert!(database.touch_clip(&older).unwrap());
+        assert!(database.touch_clip(&older, true).unwrap());
         assert_eq!(
             database
                 .query_history(&HistoryQuery::default())
@@ -414,16 +427,31 @@ mod tests {
     }
 
     #[test]
+    fn touching_without_promotion_updates_use_time_but_preserves_order() {
+        let database = Database::in_memory().unwrap();
+        let now = Utc::now();
+        let older = database
+            .capture_clip(&sample("older", now - Duration::minutes(1)))
+            .unwrap();
+        let newer = database.capture_clip(&sample("newer", now)).unwrap();
+
+        assert!(database.touch_clip(&older, false).unwrap());
+        let page = database.query_history(&HistoryQuery::default()).unwrap();
+        assert_eq!(page.items[0].id, newer);
+        assert!(database.get_clip(&older).unwrap().summary.last_used_at > now);
+    }
+
+    #[test]
     fn cleanup_candidates_combine_time_and_count_without_duplicates() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
         let oldest = database
-            .insert_clip(&sample("oldest", now - Duration::days(10)))
+            .capture_clip(&sample("oldest", now - Duration::days(10)))
             .unwrap();
         let middle = database
-            .insert_clip(&sample("middle", now - Duration::days(2)))
+            .capture_clip(&sample("middle", now - Duration::days(2)))
             .unwrap();
-        database.insert_clip(&sample("newest", now)).unwrap();
+        database.capture_clip(&sample("newest", now)).unwrap();
 
         let ids = database
             .cleanup_candidate_ids(Some(now - Duration::days(7)), Some(1))
@@ -446,16 +474,35 @@ mod tests {
     }
 
     #[test]
-    fn detects_recent_duplicates_and_persists_settings() {
+    fn exact_capture_promotes_the_canonical_row_and_persists_settings() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
-        database.insert_clip(&sample("same", now)).unwrap();
-        assert!(database
-            .exists_recent_hash("hash-same", now - Duration::seconds(30))
-            .unwrap());
-        assert!(!database
-            .exists_recent_hash("hash-same", now + Duration::seconds(1))
-            .unwrap());
+        let original = database.capture_clip(&sample("same", now)).unwrap();
+        let mut repeated = sample("same", now + Duration::minutes(5));
+        repeated.source_app = Some(SourceApp {
+            id: "com.example.new".into(),
+            name: "New Source".into(),
+        });
+        assert_eq!(database.capture_clip(&repeated).unwrap(), original);
+        let page = database.query_history(&HistoryQuery::default()).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.items[0].created_at, now);
+        assert_eq!(page.items[0].last_used_at, repeated.created_at);
+        assert_eq!(
+            page.items[0].source_app.as_ref().unwrap().name,
+            "New Source"
+        );
+        let distinct = database
+            .capture_clip(&sample("same ", repeated.created_at + Duration::seconds(1)))
+            .unwrap();
+        assert_ne!(distinct, original);
+        assert_eq!(
+            database
+                .query_history(&HistoryQuery::default())
+                .unwrap()
+                .total,
+            2
+        );
 
         database.set_setting("retention_days", &30_u32).unwrap();
         assert_eq!(
@@ -498,11 +545,16 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         let old_schema = SCHEMA
             .lines()
-            .filter(|line| line.trim() != "last_used_at TEXT NOT NULL,")
+            .filter(|line| {
+                !matches!(
+                    line.trim(),
+                    "last_used_at TEXT NOT NULL," | "sort_at TEXT NOT NULL,"
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n")
             .replace(
-                "ON clips(last_used_at DESC, id DESC)",
+                "ON clips(sort_at DESC, id DESC)",
                 "ON clips(created_at DESC, id DESC)",
             );
         connection.execute_batch(&old_schema).unwrap();
@@ -514,11 +566,45 @@ mod tests {
         ).unwrap();
 
         let database = Database::from_connection(connection).unwrap();
+        let stored: (String, String, String) = database
+            .connection()
+            .unwrap()
+            .query_row(
+                "SELECT created_at, last_used_at, sort_at FROM clips WHERE id = 'old'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(stored.0, stored.1);
+        assert_eq!(stored.1, stored.2);
+    }
+
+    #[test]
+    fn migrates_v5_order_time_to_v6_sort_time() {
+        let connection = Connection::open_in_memory().unwrap();
+        let old_schema = SCHEMA
+            .lines()
+            .filter(|line| line.trim() != "sort_at TEXT NOT NULL,")
+            .collect::<Vec<_>>()
+            .join("\n")
+            .replace(
+                "ON clips(sort_at DESC, id DESC)",
+                "ON clips(last_used_at DESC, id DESC)",
+            );
+        connection.execute_batch(&old_schema).unwrap();
+        connection.pragma_update(None, "user_version", 5).unwrap();
+        connection.execute(
+            "INSERT INTO clips (id, content_type, preview, created_at, last_used_at, content_hash, byte_size, metadata_json)
+             VALUES ('old', 'text', 'old', '2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z', 'hash', 0, '{}')",
+            [],
+        ).unwrap();
+
+        let database = Database::from_connection(connection).unwrap();
         let stored: (String, String) = database
             .connection()
             .unwrap()
             .query_row(
-                "SELECT created_at, last_used_at FROM clips WHERE id = 'old'",
+                "SELECT last_used_at, sort_at FROM clips WHERE id = 'old'",
                 [],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )

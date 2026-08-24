@@ -65,14 +65,19 @@ impl ExternalPreviewService {
         }
     }
 
-    pub fn open_link(&self, app: &AppHandle, id: &str) -> AppResult<()> {
+    pub fn open_link(&self, app: &AppHandle, id: &str, origin_only: bool) -> AppResult<()> {
         let detail = self.history.get_full(id)?;
         if detail.summary.content_type != ContentType::Link {
             return Err(AppError::Validation("clip is not a link record".into()));
         }
         let parsed = web_url(&detail.plain_text.unwrap_or(detail.summary.preview))?;
+        let target = if origin_only {
+            parsed.origin().ascii_serialization()
+        } else {
+            parsed.as_str().to_owned()
+        };
         app.opener()
-            .open_url(parsed.as_str(), None::<&str>)
+            .open_url(target, None::<&str>)
             .map_err(|error| AppError::Platform(error.to_string()))
     }
 
@@ -278,6 +283,15 @@ mod tests {
         assert!(web_url("file:///tmp/private").is_err());
         assert!(web_url("javascript:alert(1)").is_err());
     }
+
+    #[test]
+    fn browser_link_origins_drop_credentials_paths_queries_and_fragments() {
+        let parsed = web_url("https://user:secret@example.com:8443/path?q=1#part").unwrap();
+        assert_eq!(
+            parsed.origin().ascii_serialization(),
+            "https://example.com:8443"
+        );
+    }
     use chrono::Utc;
     use std::sync::Arc;
 
@@ -322,7 +336,6 @@ mod tests {
                     content_hash: format!("race-{clear}"),
                     created_at: Utc::now(),
                 })
-                .unwrap()
                 .unwrap();
             let temp = tempfile::tempdir().unwrap();
             let path = temp.path().join(format!("{id}.txt"));

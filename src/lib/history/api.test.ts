@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { getSourceAppIcon, previewClip } from "./api";
+import { getSourceAppIcon, openClipLink, previewClip } from "./api";
 
 describe("history host contracts", () => {
   beforeEach(() => invoke.mockReset());
@@ -18,5 +18,13 @@ describe("history host contracts", () => {
     invoke.mockResolvedValue("fallback_opened");
     await expect(previewClip("clip-1", 2)).resolves.toBe("fallback_opened");
     expect(invoke).toHaveBeenCalledWith("preview_clip", { id: "clip-1", index: 2 });
+  });
+
+  it("asks Rust to open either the full stored link or its origin", async () => {
+    invoke.mockResolvedValue(undefined);
+    await openClipLink("clip-1");
+    expect(invoke).toHaveBeenLastCalledWith("open_clip_link", { id: "clip-1", originOnly: false });
+    await openClipLink("clip-1", true);
+    expect(invoke).toHaveBeenLastCalledWith("open_clip_link", { id: "clip-1", originOnly: true });
   });
 });

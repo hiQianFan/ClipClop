@@ -25,10 +25,8 @@ pub fn paste_clip(
         plain_text_only,
         settings.trim_whitespace,
     )?;
-    if settings.move_used_to_top {
-        if let Err(error) = history.mark_used(id) {
-            log::warn!("clipboard write succeeded but history promotion failed: {error}");
-        }
+    if let Err(error) = history.mark_used(id, settings.move_used_to_top) {
+        log::warn!("clipboard write succeeded but history usage update failed: {error}");
     }
     if let Err(error) = window::hide_panel(app, HideReason::Paste) {
         log::warn!("failed to hide panel before paste: {error}");

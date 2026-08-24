@@ -199,8 +199,7 @@
       const moved = await copyClip(session.selectedId, plainText);
       window.clearTimeout(copiedTimer);
       copied = plainText ? t("history.copiedPlain") : t("history.copied");
-      showAutoPasteHelp = false;
-      if (moved) await refresh(1, true);
+      await refresh(moved ? 1 : session.page.page, moved);
       copiedTimer = window.setTimeout(() => {
         copied = "";
         showAutoPasteHelp = false;
@@ -270,10 +269,10 @@
     menuOpen = false;
   }
 
-  async function openSelectedLink() {
+  async function openSelectedLink(originOnly = false) {
     if (!session.selectedId || session.detail?.content_type !== "link") return;
     try {
-      await openClipLink(session.selectedId);
+      await openClipLink(session.selectedId, originOnly);
     } catch (reason) {
       error = localizedError(reason);
     }
@@ -639,6 +638,7 @@
     onfile={(index) => void selectFile(index)}
     onfilekeydown={onFileNavigatorKeydown}
     onfilefocus={() => mode = "file-tablist"}
+    onopenorigin={() => void openSelectedLink(true)}
     oninert={() => enterBrowse()}
   />
 

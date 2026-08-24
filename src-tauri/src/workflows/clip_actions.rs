@@ -55,16 +55,12 @@ pub fn copy_clip(
         plain_text_only,
         settings.trim_whitespace,
     )?;
-    if settings.move_used_to_top {
-        match history.mark_used(id) {
-            Ok(moved) => Ok(moved),
-            Err(error) => {
-                log::warn!("clipboard copy succeeded but history promotion failed: {error}");
-                Ok(false)
-            }
+    match history.mark_used(id, settings.move_used_to_top) {
+        Ok(updated) => Ok(updated && settings.move_used_to_top),
+        Err(error) => {
+            log::warn!("clipboard copy succeeded but history usage update failed: {error}");
+            Ok(false)
         }
-    } else {
-        Ok(false)
     }
 }
 

@@ -34,6 +34,8 @@ use crate::{
 };
 
 const RECENT_SOURCE_MAX_AGE: Duration = Duration::from_secs(2);
+#[cfg(target_os = "macos")]
+pub(crate) const REMOTE_CLIPBOARD_FORMAT: &str = "com.apple.is-remote-clipboard";
 
 #[derive(Clone)]
 struct RecentSource {
@@ -44,6 +46,12 @@ struct RecentSource {
 static RECENT_SOURCE: OnceLock<Mutex<Option<RecentSource>>> = OnceLock::new();
 
 pub(crate) fn source_app(clipboard: &ClipboardContext) -> Option<SourceApp> {
+    #[cfg(target_os = "macos")]
+    if let Ok(formats) = clipboard.available_formats() {
+        if let Some(source) = remote_clipboard_source(&formats) {
+            return Some(source);
+        }
+    }
     resolve_source(
         [
             declared_source_app(clipboard),
@@ -52,6 +60,17 @@ pub(crate) fn source_app(clipboard: &ClipboardContext) -> Option<SourceApp> {
         ],
         recent_source_app(),
     )
+}
+
+#[cfg(target_os = "macos")]
+fn remote_clipboard_source(formats: &[String]) -> Option<SourceApp> {
+    formats
+        .iter()
+        .any(|format| format == REMOTE_CLIPBOARD_FORMAT)
+        .then(|| SourceApp {
+            id: REMOTE_CLIPBOARD_FORMAT.into(),
+            name: "Universal Clipboard".into(),
+        })
 }
 
 fn resolve_source(
@@ -270,6 +289,17 @@ fn platform_source_app(_: &ClipboardContext) -> Option<SourceApp> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn recognizes_the_exact_remote_clipboard_marker() {
+        let source = remote_clipboard_source(&[
+            "public.utf8-plain-text".into(),
+            REMOTE_CLIPBOARD_FORMAT.into(),
+        ]);
+        assert_eq!(source.unwrap().name, "Universal Clipboard");
+        assert!(remote_clipboard_source(&["com.apple.remote-clipboard".into()]).is_none());
+    }
 
     #[cfg(target_os = "macos")]
     #[test]

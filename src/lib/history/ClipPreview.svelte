@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { File } from "@lucide/svelte";
+  import { File, MonitorSmartphone } from "@lucide/svelte";
   import { Tabs } from "bits-ui";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
   import { clipPreview, detailText, fileName, filePaths, metadataFacts } from "./presentation";
@@ -22,6 +22,7 @@
     onfile,
     onfilekeydown,
     onfilefocus,
+    onopenorigin,
     oninert,
   }: {
     detail: ClipDetail | null;
@@ -40,6 +41,7 @@
     onfile: (index: number) => void;
     onfilekeydown: (event: KeyboardEvent) => void;
     onfilefocus: () => void;
+    onopenorigin: () => void;
     oninert: () => void;
   } = $props();
 </script>
@@ -86,7 +88,8 @@
       <div class="meta-summary">
         <div class="meta-source">
           {#if detail.source_app}
-            {#if sourceIconUrl}<img class="app-icon" src={sourceIconUrl} alt="" />
+            {#if detail.source_app.id === "com.apple.is-remote-clipboard"}<span class="app-device" aria-hidden="true"><MonitorSmartphone size={18} /></span>
+            {:else if sourceIconUrl}<img class="app-icon" src={sourceIconUrl} alt="" />
             {:else}<span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>{/if}
             <div class="source-details"><span>{detail.source_app.name}</span><time datetime={detail.created_at}>{t("meta.firstCopied")} {formatDateTime(detail.created_at)}</time><time datetime={detail.last_used_at}>{t("meta.lastUsed")} {formatDateTime(detail.last_used_at)}</time></div>
           {:else}
@@ -95,7 +98,7 @@
         </div>
         <dl class="meta-facts">
           {#each metadataFacts(detail, fileIndex, fileByteSizes, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), files: t("meta.files"), hostname: t("meta.hostname"), type: t("meta.type"), characters: t("meta.characters") }, formatNumber) as fact}
-            <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
+            <div><dt>{fact.label}</dt><dd>{#if fact.action === "open-origin"}<button class="domain" title={fact.value} aria-label={t("history.openDomain", { domain: fact.value })} onclick={onopenorigin}>{fact.value}</button>{:else}{fact.value}{/if}</dd></div>
           {/each}
         </dl>
       </div>
@@ -116,19 +119,23 @@
   pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:var(--fs-body)/var(--lh-relaxed) var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
   .preview-meta { height:64px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
   .preview.file-preview .preview-meta { height:96px; display:grid; grid-template-rows:minmax(0, 1fr) auto; gap:7px; padding-block:10px; }
-  .meta-summary { min-width:0; width:100%; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .meta-summary { min-width:0; width:100%; display:grid; grid-template-columns:minmax(0, 1fr) 200px; align-items:center; gap:20px; }
   .meta-source { min-width:0; display:flex; align-items:center; gap:8px; }
   .source-details { min-width:0; display:flex; flex-direction:column; gap:2px; color:var(--text-2); font:var(--fs-ui)/var(--lh-tight) var(--mono); }
   .source-details span, .meta-file > span, .meta-file code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .source-details time { color:var(--text-3); font-size:var(--fs-caption); }
   .meta-file { min-width:0; width:100%; display:flex; flex-direction:column; gap:3px; color:var(--text-2); font:var(--fs-meta)/var(--lh-snug) var(--mono); }
-  .meta-facts { display:flex; gap:16px; margin:0; }
-  .meta-facts div { display:flex; flex-direction:column; align-items:flex-end; gap:2px; white-space:nowrap; }
+  .meta-facts { min-width:0; width:200px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:0; }
+  .meta-facts div { min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; white-space:nowrap; }
   .meta-facts dt { color:var(--text-3); font:var(--fs-caption)/var(--lh-flush) var(--mono); }
-  .meta-facts dd { margin:0; color:var(--text-2); font:var(--fs-meta)/var(--lh-tight) var(--mono); }
-  .app-icon, .app-fallback { width:22px; height:22px; flex:none; border-radius:var(--radius-sm); }
+  .meta-facts dt, .meta-facts dd { max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+  .meta-facts dd { margin:0; color:var(--text-2); font:var(--fs-meta)/var(--lh-tight) var(--mono); font-variant-numeric:tabular-nums; }
+  .domain { display:block; max-width:100%; margin:0; padding:0; overflow:hidden; color:inherit; background:transparent; font:inherit; text-overflow:ellipsis; white-space:nowrap; }
+  .domain:hover, .domain:focus-visible { color:var(--text-1); text-decoration:underline; }
+  .app-icon, .app-fallback, .app-device { width:22px; height:22px; flex:none; border-radius:var(--radius-sm); }
   .app-icon { object-fit:contain; }
   .app-fallback { display:grid; place-items:center; color:var(--bg-shell); background:var(--text-2); font:600 var(--fs-meta) var(--mono); }
+  .app-device { display:grid; place-items:center; color:var(--text-2); }
   .color-preview { display:flex; align-items:center; gap:14px; }
   .color-preview span { width:72px; height:72px; border:1px solid var(--hairline); border-radius:var(--radius-lg); }
   .asset-frame { width:100%; height:100%; min-height:180px; display:flex; align-items:center; justify-content:center; }

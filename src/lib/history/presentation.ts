@@ -10,6 +10,7 @@ type MetadataLabels = {
   type: string;
   characters: string;
 };
+export type MetadataFact = { label: string; value: string; action?: "open-origin" };
 
 export function formatBytes(bytes: number, formatNumber: NumberFormatter = (value) => String(value)) {
   if (bytes < 1024) return `${formatNumber(bytes)} B`;
@@ -28,7 +29,7 @@ export function metadataFacts(
   labels: MetadataLabels,
   formatNumber: NumberFormatter,
 ) {
-  const facts: Array<{ label: string; value: string }> = [];
+  const facts: MetadataFact[] = [];
   if (detail.content_type === "image") {
     if (detail.metadata.width && detail.metadata.height) {
       facts.push({ label: labels.dimensions, value: `${formatNumber(detail.metadata.width)} × ${formatNumber(detail.metadata.height)}` });
@@ -57,7 +58,7 @@ export function metadataFacts(
     if (detail.content_type === "link") {
       try {
         const url = new URL(detail.plain_text ?? detail.preview);
-        if (["http:", "https:"].includes(url.protocol) && url.hostname) facts.push({ label: labels.hostname, value: url.hostname });
+        if (["http:", "https:"].includes(url.protocol) && url.host) facts.push({ label: labels.hostname, value: url.host, action: "open-origin" });
       } catch { /* Invalid links simply omit the hostname fact. */ }
     }
     facts.push({ label: labels.characters, value: formatNumber(count) });

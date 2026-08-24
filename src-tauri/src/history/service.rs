@@ -21,15 +21,9 @@ impl HistoryService {
         }
     }
 
-    pub fn capture(&self, clip: &NewClip) -> AppResult<Option<String>> {
-        let deduplication_start = Utc::now() - Duration::seconds(2);
-        if self
-            .database
-            .exists_recent_hash(&clip.content_hash, deduplication_start)?
-        {
-            return Ok(None);
-        }
-        self.database.insert_clip(clip).map(Some)
+    pub fn capture(&self, clip: &NewClip) -> AppResult<String> {
+        let _guard = self.lock_lifecycle()?;
+        self.database.capture_clip(clip)
     }
 
     pub fn query(&self, request: &HistoryQuery) -> AppResult<HistoryPage> {
@@ -56,9 +50,9 @@ impl HistoryService {
         Ok(self.get_full(id)?.summary.content_type)
     }
 
-    pub fn mark_used(&self, id: &str) -> AppResult<bool> {
+    pub fn mark_used(&self, id: &str, promote: bool) -> AppResult<bool> {
         let _guard = self.lock_lifecycle()?;
-        self.database.touch_clip(id)
+        self.database.touch_clip(id, promote)
     }
 
     pub fn lock_lifecycle(&self) -> AppResult<MutexGuard<'_, ()>> {
@@ -118,7 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn capture_deduplicates_for_two_seconds_and_prunes_by_retention() {
+    fn capture_deduplicates_at_any_interval_and_prunes_by_retention() {
         let temp = tempfile::tempdir().unwrap();
         let history = HistoryService::new(Arc::new(
             Database::open(&temp.path().join("history.db")).unwrap(),
@@ -136,12 +130,14 @@ mod tests {
             content_hash: "same-hash".into(),
             created_at: Utc::now(),
         };
-        assert!(history.capture(&clip).unwrap().is_some());
-        assert!(history.capture(&clip).unwrap().is_none());
+        let first_id = history.capture(&clip).unwrap();
+        let mut repeated = clip.clone();
+        repeated.created_at += Duration::minutes(5);
+        assert_eq!(history.capture(&repeated).unwrap(), first_id);
         let mut old = clip.clone();
         old.content_hash = "old-hash".into();
         old.created_at = Utc::now() - Duration::days(8);
-        assert!(history.capture(&old).unwrap().is_some());
+        assert_ne!(history.capture(&old).unwrap(), first_id);
         let expired = history.cleanup_candidates(Some(7), None).unwrap();
         assert_eq!(history.delete_ids(&expired).unwrap(), 1);
         assert_eq!(history.query(&HistoryQuery::default()).unwrap().total, 1);

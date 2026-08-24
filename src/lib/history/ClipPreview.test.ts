@@ -28,7 +28,7 @@ describe("ClipPreview file tabs", () => {
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
       previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile,
-      onfilekeydown, onfilefocus() {}, oninert() {},
+      onfilekeydown, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
 
     const first = screen.getByRole("tab", { name: /one\.txt/ });
@@ -50,10 +50,39 @@ describe("ClipPreview file tabs", () => {
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
       previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
-      onfilekeydown() {}, onfilefocus() {}, oninert() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
 
     expect(container.textContent).toContain("First copied");
     expect(container.textContent).toContain("Last used");
+  });
+
+  it("renders a keyboard-accessible domain action and neutral remote source icon", async () => {
+    const onopenorigin = vi.fn();
+    const link: ClipDetail = {
+      ...detail,
+      id: "link",
+      content_type: "link",
+      preview: "https://docs.example.com/path",
+      plain_text: "https://docs.example.com/path",
+      source_app: { id: "com.apple.is-remote-clipboard", name: "Universal Clipboard" },
+      metadata: { char_count: 29 },
+    };
+    const { container } = render(ClipPreview, { props: {
+      detail: link, selectedId: link.id, page: { ...page, items: [link] }, pending: false, assetUrl: null,
+      fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [],
+      fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin, oninert() {},
+    } });
+
+    const domain = container.querySelector<HTMLButtonElement>("button.domain");
+    expect(domain?.textContent).toBe("docs.example.com");
+    expect(domain?.getAttribute("aria-label")).toBe("Open docs.example.com");
+    domain?.focus();
+    expect(document.activeElement).toBe(domain);
+    await fireEvent.click(domain!);
+    expect(onopenorigin).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".app-device")).toBeTruthy();
   });
 });
