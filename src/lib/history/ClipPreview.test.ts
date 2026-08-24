@@ -11,6 +11,7 @@ const detail: ClipDetail = {
   plain_text: null,
   source_app: null,
   created_at: "2026-01-01T00:00:00Z",
+  last_used_at: "2026-01-02T00:00:00Z",
   byte_size: 2,
   metadata: { files: ["/tmp/one.txt", "/tmp/two.txt"] },
   flavors: [],
@@ -41,5 +42,18 @@ describe("ClipPreview file tabs", () => {
 
     await fireEvent.keyDown(first, { key: "Escape" });
     expect(onfilekeydown).toHaveBeenCalledWith(expect.objectContaining({ key: "Escape" }));
+  });
+
+  it("keeps first-copy and last-used times visible", () => {
+    const { container } = render(ClipPreview, { props: {
+      detail, selectedId: detail.id, page, pending: false, assetUrl: null,
+      fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
+      fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, oninert() {},
+    } });
+
+    expect(container.textContent).toContain("First copied");
+    expect(container.textContent).toContain("Last used");
   });
 });

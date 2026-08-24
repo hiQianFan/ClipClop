@@ -12,6 +12,7 @@ describe("HistoryList semantics", () => {
         preview: "text",
         source_app: null,
         created_at: "2026-01-01T00:00:00Z",
+        last_used_at: "2026-01-01T00:00:00Z",
         byte_size: 4,
         metadata: {},
       }],

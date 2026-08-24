@@ -22,6 +22,7 @@ export type ClipSummary = {
   preview: string;
   source_app: SourceApp | null;
   created_at: string;
+  last_used_at: string;
   byte_size: number;
   metadata: ClipMetadata;
 };

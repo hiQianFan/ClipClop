@@ -88,13 +88,13 @@
           {#if detail.source_app}
             {#if sourceIconUrl}<img class="app-icon" src={sourceIconUrl} alt="" />
             {:else}<span class="app-fallback" aria-hidden="true">{detail.source_app.name.slice(0, 1)}</span>{/if}
-            <div class="source-details"><span>{detail.source_app.name}</span><time>{formatDateTime(detail.created_at)}</time></div>
+            <div class="source-details"><span>{detail.source_app.name}</span><time datetime={detail.created_at}>{t("meta.firstCopied")} {formatDateTime(detail.created_at)}</time><time datetime={detail.last_used_at}>{t("meta.lastUsed")} {formatDateTime(detail.last_used_at)}</time></div>
           {:else}
-            <div class="source-details"><time>{formatDateTime(detail.created_at)}</time></div>
+            <div class="source-details"><time datetime={detail.created_at}>{t("meta.firstCopied")} {formatDateTime(detail.created_at)}</time><time datetime={detail.last_used_at}>{t("meta.lastUsed")} {formatDateTime(detail.last_used_at)}</time></div>
           {/if}
         </div>
         <dl class="meta-facts">
-          {#each metadataFacts(detail, fileIndex, fileByteSizes, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), characters: t("meta.characters") }, formatNumber) as fact}
+          {#each metadataFacts(detail, fileIndex, fileByteSizes, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), files: t("meta.files"), hostname: t("meta.hostname"), type: t("meta.type"), characters: t("meta.characters") }, formatNumber) as fact}
             <div><dt>{fact.label}</dt><dd>{fact.value}</dd></div>
           {/each}
         </dl>

@@ -134,7 +134,7 @@ impl Database {
         page_values.push(Value::Integer(request.page_size.into()));
         page_values.push(Value::Integer(offset.into()));
         let sql = format!(
-            "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json
+            "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json, c.last_used_at
              FROM clips c{where_clause}
              ORDER BY c.last_used_at DESC, c.id DESC LIMIT ? OFFSET ?"
         );
@@ -155,10 +155,10 @@ impl Database {
         let connection = self.connection()?;
         let (summary, plain_text) = connection
             .query_row(
-                "SELECT id, content_type, preview, source_id, source_name, created_at, byte_size, metadata_json, plain_text
+                "SELECT id, content_type, preview, source_id, source_name, created_at, byte_size, metadata_json, last_used_at, plain_text
                  FROM clips WHERE id = ?1",
                 [id],
-                |row| Ok((summary_from_row(row)?, row.get(8)?)),
+                |row| Ok((summary_from_row(row)?, row.get(9)?)),
             )
             .optional()?
             .ok_or(AppError::NotFound)?;
@@ -288,6 +288,7 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<ClipSummary> {
     let source_name: Option<String> = row.get(4)?;
     let content_type_text: String = row.get(1)?;
     let created_at_text: String = row.get(5)?;
+    let last_used_at_text: String = row.get(8)?;
     let metadata_text: String = row.get(7)?;
     Ok(ClipSummary {
         id: row.get(0)?,
@@ -298,6 +299,9 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<ClipSummary> {
             source.is_meaningful().then_some(source)
         }),
         created_at: DateTime::parse_from_rfc3339(&created_at_text)
+            .map_err(conversion_error)?
+            .with_timezone(&Utc),
+        last_used_at: DateTime::parse_from_rfc3339(&last_used_at_text)
             .map_err(conversion_error)?
             .with_timezone(&Utc),
         byte_size: row.get(6)?,
@@ -406,6 +410,7 @@ mod tests {
             timestamp(database.get_clip(&older).unwrap().summary.created_at),
             timestamp(now - Duration::minutes(1))
         );
+        assert!(database.get_clip(&older).unwrap().summary.last_used_at > now);
     }
 
     #[test]

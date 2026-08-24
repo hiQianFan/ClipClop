@@ -102,6 +102,7 @@ pub struct ClipSummary {
     pub preview: String,
     pub source_app: Option<SourceApp>,
     pub created_at: DateTime<Utc>,
+    pub last_used_at: DateTime<Utc>,
     pub byte_size: u64,
     pub metadata: ClipMetadata,
 }
@@ -173,6 +174,7 @@ mod tests {
                     name: "Example".into(),
                 }),
                 created_at: "2026-08-06T00:00:00Z".parse().unwrap(),
+                last_used_at: "2026-08-07T00:00:00Z".parse().unwrap(),
                 byte_size: 12,
                 metadata: ClipMetadata {
                     files: vec!["/tmp/example.txt".into()],
@@ -195,6 +197,7 @@ mod tests {
                 "preview": "example.txt",
                 "source_app": { "id": "com.example.app", "name": "Example" },
                 "created_at": "2026-08-06T00:00:00Z",
+                "last_used_at": "2026-08-07T00:00:00Z",
                 "byte_size": 12,
                 "metadata": {
                     "files": ["/tmp/example.txt"],

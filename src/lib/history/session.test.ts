@@ -8,6 +8,7 @@ const item = (id: string): ClipSummary => ({
   preview: id,
   source_app: null,
   created_at: "2026-01-01T00:00:00Z",
+  last_used_at: "2026-01-01T00:00:00Z",
   byte_size: 1,
   metadata: {},
 });
@@ -36,6 +37,20 @@ describe("HistorySession", () => {
     await session.select("b");
     await session.refresh();
     expect(session.selectedId).toBe("b");
+  });
+
+  it("reloads cached detail when its last-used timestamp changes", async () => {
+    let lastUsed = "2026-01-01T00:00:00Z";
+    let detailRequests = 0;
+    const session = new HistorySession(api({
+      queryHistory: async () => ({ ...page(["a"]), items: [{ ...item("a"), last_used_at: lastUsed }] }),
+      getClip: async (id) => ({ ...detail(id), last_used_at: lastUsed, plain_text: `${++detailRequests}` }),
+    }));
+    await session.refresh();
+    lastUsed = "2026-01-02T00:00:00Z";
+    await session.refresh();
+    expect(session.detail?.last_used_at).toBe(lastUsed);
+    expect(detailRequests).toBe(2);
   });
 
   it("ignores stale detail responses", async () => {

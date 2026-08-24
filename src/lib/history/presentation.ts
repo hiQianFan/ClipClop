@@ -5,6 +5,9 @@ type MetadataLabels = {
   dimensions: string;
   size: string;
   file: string;
+  files: string;
+  hostname: string;
+  type: string;
   characters: string;
 };
 
@@ -33,15 +36,34 @@ export function metadataFacts(
     facts.push({ label: labels.size, value: formatBytes(detail.byte_size, formatNumber) });
   } else if (detail.content_type === "file") {
     const files = filePaths(detail);
-    facts.push({ label: labels.file, value: `${formatNumber(fileIndex + 1)}/${formatNumber(files.length || 1)}` });
-    const size = fileByteSizes[fileIndex] ?? detail.metadata.file_sizes?.[fileIndex];
-    if (typeof size === "number") facts.push({ label: labels.size, value: formatBytes(size, formatNumber) });
+    const sizes = files.map((_, index) => fileByteSizes[index] ?? detail.metadata.file_sizes?.[index]);
+    if (files.length > 1) {
+      facts.push({ label: labels.files, value: formatNumber(files.length) });
+      if (sizes.every((size): size is number => typeof size === "number")) {
+        facts.push({ label: labels.size, value: formatBytes(sizes.reduce((total, size) => total + size, 0), formatNumber) });
+      } else if (typeof sizes[fileIndex] === "number") {
+        facts.push({ label: labels.size, value: formatBytes(sizes[fileIndex], formatNumber) });
+      }
+    } else {
+      const name = fileName(files[0] ?? detail.preview);
+      const extension = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
+      facts.push({ label: labels.type, value: extension ? extension.toUpperCase() : labels.file });
+      if (typeof sizes[0] === "number") facts.push({ label: labels.size, value: formatBytes(sizes[0], formatNumber) });
+    }
+  } else if (detail.content_type === "color") {
+    facts.push({ label: labels.type, value: "HEX" });
   } else {
-    const count = detail.metadata.char_count ?? detail.plain_text?.length ?? 0;
-    if (count) facts.push({ label: labels.characters, value: formatNumber(count) });
-    facts.push({ label: labels.size, value: formatBytes(detail.byte_size, formatNumber) });
+    const count = detail.metadata.char_count ?? Array.from(detail.plain_text ?? "").length;
+    if (detail.content_type === "link") {
+      try {
+        const url = new URL(detail.plain_text ?? detail.preview);
+        if (["http:", "https:"].includes(url.protocol) && url.hostname) facts.push({ label: labels.hostname, value: url.hostname });
+      } catch { /* Invalid links simply omit the hostname fact. */ }
+    }
+    facts.push({ label: labels.characters, value: formatNumber(count) });
+    if (detail.content_type !== "link") facts.push({ label: labels.size, value: formatBytes(detail.byte_size, formatNumber) });
   }
-  return facts;
+  return facts.slice(0, 2);
 }
 
 export function groupedFiles(item: ClipSummary) {

@@ -24,6 +24,7 @@ const detail = (content_type: ClipDetail["content_type"]): ClipDetail => ({
   preview: "preview",
   source_app: { id: "app-1", name: "App" },
   created_at: "2026-08-06T00:00:00Z",
+  last_used_at: "2026-08-06T00:00:00Z",
   byte_size: 4,
   metadata: content_type === "file" ? { files: ["/tmp/a"] } : {},
   plain_text: null,
@@ -115,6 +116,7 @@ describe("PreviewSession", () => {
       preview: "preview",
       source_app: null,
       created_at: "2026-08-06T00:00:00Z",
+      last_used_at: "2026-08-06T00:00:00Z",
       byte_size: 4,
       metadata: {},
     }];

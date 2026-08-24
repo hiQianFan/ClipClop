@@ -56,6 +56,10 @@ export class HistorySession {
       const nextId = !selectLatest && nextPage.items.some(({ id }) => id === this.selectedId)
         ? this.selectedId
         : nextPage.items[0]?.id ?? null;
+      const nextSummary = nextPage.items.find(({ id }) => id === nextId);
+      if (nextSummary && this.#details.get(nextSummary.id)?.last_used_at !== nextSummary.last_used_at) {
+        this.#details.delete(nextSummary.id);
+      }
       await this.select(nextId);
     } catch (reason) {
       if (version !== this.#refreshVersion) return false;
