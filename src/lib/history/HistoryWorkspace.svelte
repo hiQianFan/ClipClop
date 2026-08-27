@@ -49,6 +49,7 @@
   let searchTimer: number | undefined;
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
+  const quitShortcut = isMac ? "⌘Q" : "Ctrl+Q";
   const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
   const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
   const actionMenuShortcut = isMac ? "⌘K" : "Ctrl K";
@@ -596,7 +597,7 @@
             <DropdownMenu.Item onclick={checkForUpdates}>{t("history.checkUpdates")}</DropdownMenu.Item>
             <DropdownMenu.Item onclick={() => void openSettingsView("about")}>{t("history.about")}</DropdownMenu.Item>
             <DropdownMenu.Separator class="menu-separator" />
-            <DropdownMenu.Item class="danger" onclick={() => void quitApp()}>{t("history.quit")}</DropdownMenu.Item>
+            <DropdownMenu.Item class="danger" onclick={() => void quitApp()}><span>{t("history.quit")}</span><kbd>{quitShortcut}</kbd></DropdownMenu.Item>
           </DropdownMenu.ContentStatic>
         </div>
         </DropdownMenu.Root>
@@ -722,7 +723,7 @@
   :global(.app-menu) { top:30px; bottom:auto; left:0; right:auto; width:180px; }
   :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
   :global(.menu [role="menuitem"] > span) { min-width:0; }
-  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; }
+  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
   :global(.menu [role="menuitem"]:hover), :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
   :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
   :global(.menu .danger) { color:var(--danger); }
