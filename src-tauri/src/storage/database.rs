@@ -486,8 +486,11 @@ mod tests {
         assert_eq!(database.capture_clip(&repeated).unwrap(), original);
         let page = database.query_history(&HistoryQuery::default()).unwrap();
         assert_eq!(page.total, 1);
-        assert_eq!(page.items[0].created_at, now);
-        assert_eq!(page.items[0].last_used_at, repeated.created_at);
+        assert_eq!(timestamp(page.items[0].created_at), timestamp(now));
+        assert_eq!(
+            timestamp(page.items[0].last_used_at),
+            timestamp(repeated.created_at)
+        );
         assert_eq!(
             page.items[0].source_app.as_ref().unwrap().name,
             "New Source"
