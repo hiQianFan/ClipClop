@@ -151,7 +151,7 @@
   nav button{width:100%;height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-radius:var(--radius-md);color:var(--text-1);background:transparent;text-align:left;font-size:var(--fs-ui);font-weight:500}
   nav button:hover,nav button:focus-visible{background:var(--bg-hover)}
   nav button.danger,nav button.danger kbd{color:var(--danger)}
-  nav kbd{color:var(--text-3);font:var(--fs-caption)/1 var(--mono)}
+  nav kbd{color:var(--text-2);font-family:inherit;font-size:var(--fs-body);font-weight:500;line-height:1}
   .separator{display:block;height:1px;margin:5px 6px;background:var(--hairline)}
   @media(prefers-reduced-motion:no-preference){.quick-panel{animation:appear var(--dur-fast) var(--ease-out)}}
   @keyframes appear{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
