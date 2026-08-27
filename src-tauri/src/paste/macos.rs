@@ -47,11 +47,6 @@ pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
         "automatic paste restoring target: target_pid={pid}, frontmost_pid={:?}",
         frontmost_pid()
     );
-    if !unsafe { CGPreflightPostEventAccess() } {
-        log::warn!("automatic paste event access denied: target_pid={pid}");
-        return PasteOutcome::CopiedPermissionRequired;
-    }
-
     let app: *mut Object = unsafe {
         msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid]
     };
@@ -88,6 +83,11 @@ pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
             frontmost_pid()
         );
         return PasteOutcome::CopiedFocusFailed;
+    }
+
+    if !unsafe { CGPreflightPostEventAccess() } {
+        log::warn!("automatic paste event access denied: target_pid={pid}");
+        return PasteOutcome::CopiedPermissionRequired;
     }
 
     if send_command_v() {

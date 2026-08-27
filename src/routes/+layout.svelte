@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import "../app.css";
   import { scheduleAutomaticUpdateCheck } from "$lib/updater/api";
   import { applyTheme, getSettings } from "$lib/settings/api";
@@ -22,7 +23,7 @@
     }).then(() => {
       window.clearTimeout(timeout);
       ready = true;
-      cancelUpdate = scheduleAutomaticUpdateCheck();
+      if (getCurrentWindow().label === "main") cancelUpdate = scheduleAutomaticUpdateCheck();
     });
     return () => {
       window.clearTimeout(timeout);

@@ -23,7 +23,8 @@ use commands::{
     open_auto_paste_settings, open_clip_link, open_file_preview_settings, open_log_dir,
     open_release_page, paste_clip, perform_pager_haptic, preview_clip, preview_onboarding_example,
     query_history, quit_app, record_update_check, save_onboarding_state, set_language_preference,
-    skip_update_version, start_update_download, update_settings,
+    set_quick_selection, show_full_panel, skip_update_version, start_update_download,
+    update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -150,6 +151,7 @@ pub fn run() {
             app_state.onboarding.initialize(database_existed)?;
             app.manage(app_state);
             app.manage(window::PanelLifecycleState::default());
+            app.manage(window::QuickSelectionState::default());
             app.manage(window::PreviewState::default());
             app.manage(commands::UpdaterDownloadState::default());
             if let Err(error) = workflows::settings_update::reconcile_autostart(
@@ -187,16 +189,19 @@ pub fn run() {
                 }
             }
 
-            if let Some(window) = app.get_webview_window("main") {
+            for label in [window::MAIN_LABEL, window::QUICK_LABEL] {
+                let Some(panel_window) = app.get_webview_window(label) else {
+                    continue;
+                };
                 #[cfg(target_os = "macos")]
                 {
                     use tauri_nspanel::{StyleMask, WebviewWindowExt};
-                    let panel = window.to_panel::<ClipboardPanel>()?;
+                    let panel = panel_window.to_panel::<ClipboardPanel>()?;
                     panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
                 }
-                let panel = window.clone();
+                let panel = panel_window.clone();
                 let app = app.handle().clone();
-                window.on_window_event(move |event| {
+                panel_window.on_window_event(move |event| {
                     if let WindowEvent::Focused(focused) = event {
                         window::handle_focus_event(&app, &panel, *focused);
                     }
@@ -226,6 +231,8 @@ pub fn run() {
             preview_onboarding_example,
             get_source_app_icon,
             hide_panel,
+            show_full_panel,
+            set_quick_selection,
             delete_clip,
             clear_history,
             copy_clip,

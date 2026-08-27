@@ -1,11 +1,11 @@
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::{
     error::AppResult,
     history::{ClipDetail, HistoryPage, HistoryQuery},
     paste::PasteOutcome,
     state::AppState,
-    window::{self, HideReason},
+    window::{self, HideReason, QuickSelectionState},
     workflows::{clip_actions, paste_clip as paste_workflow},
 };
 
@@ -46,6 +46,7 @@ pub fn copy_clip(
 #[tauri::command]
 pub async fn paste_clip(
     app: AppHandle,
+    window: WebviewWindow,
     state: State<'_, AppState>,
     id: String,
     plain_text: Option<bool>,
@@ -53,12 +54,14 @@ pub async fn paste_clip(
     let history = state.history.clone();
     let paste = state.paste.clone();
     let settings = state.settings.clone();
+    let window_label = window.label().to_string();
     tauri::async_runtime::spawn_blocking(move || {
         paste_workflow::paste_clip(
             &app,
             &history,
             &paste,
             &settings,
+            &window_label,
             &id,
             plain_text.unwrap_or(false),
         )
@@ -68,7 +71,17 @@ pub async fn paste_clip(
 }
 
 #[tauri::command]
-pub fn hide_panel(app: AppHandle) -> AppResult<()> {
-    window::hide_panel(&app, HideReason::Escape)
+pub fn hide_panel(app: AppHandle, panel: WebviewWindow) -> AppResult<()> {
+    window::hide_panel(&app, panel.label(), HideReason::Escape)
         .map_err(|error| crate::error::AppError::Platform(error.to_string()))
+}
+
+#[tauri::command]
+pub fn show_full_panel(app: AppHandle, selected_id: Option<String>, settings: Option<bool>) {
+    window::open_full_panel(&app, selected_id, settings.unwrap_or(false));
+}
+
+#[tauri::command]
+pub fn set_quick_selection(state: State<'_, QuickSelectionState>, id: Option<String>) {
+    state.set(id);
 }

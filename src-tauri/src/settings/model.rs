@@ -25,6 +25,8 @@ pub struct Settings {
     pub hotkey: String,
     pub theme: Theme,
     pub language: LanguagePreference,
+    #[serde(default)]
+    pub tray_click_action: TrayClickAction,
     pub check_updates: bool,
     pub last_update_check: Option<String>,
     #[serde(default)]
@@ -46,6 +48,7 @@ impl Default for Settings {
             hotkey: DEFAULT_HOTKEY.into(),
             theme: Theme::System,
             language: LanguagePreference::System,
+            tray_click_action: TrayClickAction::Recent,
             check_updates: true,
             last_update_check: None,
             skipped_update_version: None,
@@ -86,6 +89,14 @@ pub enum Theme {
     System,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TrayClickAction {
+    #[default]
+    Recent,
+    History,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +135,7 @@ mod tests {
         assert!(!settings.restore_browse_position);
         assert!(!settings.trim_whitespace);
         assert!(!settings.file_preview_enabled);
+        assert_eq!(settings.tray_click_action, TrayClickAction::Recent);
 
         let unlimited = Settings {
             retention_days: None,
@@ -150,6 +162,7 @@ mod tests {
                 "hotkey": DEFAULT_HOTKEY,
                 "theme": "system",
                 "language": "system",
+                "tray_click_action": "recent",
                 "check_updates": true,
                 "last_update_check": null,
                 "skipped_update_version": null

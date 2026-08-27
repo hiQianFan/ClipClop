@@ -6,19 +6,28 @@ mod macos;
 mod windows;
 
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
 
-use tauri::{Emitter, LogicalSize, Manager, WebviewWindow};
+use serde::Serialize;
+use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use crate::state::AppState;
 
 pub(crate) use lifecycle::PanelLifecycleState;
 
+pub(crate) const MAIN_LABEL: &str = "main";
+pub(crate) const QUICK_LABEL: &str = "quick";
+
 const SHADOW_INSET: f64 = 20.0;
 const PANEL_CONTENT_WIDTH: f64 = 800.0;
 const PANEL_CONTENT_HEIGHT: f64 = 600.0;
+const QUICK_WINDOW_WIDTH: f64 = 360.0;
+const QUICK_WINDOW_HEIGHT: f64 = 604.0;
 const BLUR_HIDE_DELAY: Duration = Duration::from_millis(180);
 
 #[derive(Default)]
@@ -42,6 +51,29 @@ pub(crate) enum HideReason {
     Escape,
     Paste,
     Shortcut,
+}
+
+#[derive(Default)]
+pub struct QuickSelectionState(Mutex<Option<String>>);
+
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MainPanelRequest {
+    selected_id: Option<String>,
+    settings: bool,
+}
+
+impl QuickSelectionState {
+    pub(crate) fn set(&self, id: Option<String>) {
+        *self.0.lock().unwrap_or_else(|state| state.into_inner()) = id;
+    }
+
+    pub(crate) fn get(&self) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap_or_else(|state| state.into_inner())
+            .clone()
+    }
 }
 
 fn panel_content_size(work_area_width: f64, work_area_height: f64) -> (f64, f64) {
@@ -80,35 +112,91 @@ fn resize_panel(window: &WebviewWindow, work_area_width: f64, work_area_height: 
 }
 
 pub(crate) fn show_panel(app: &tauri::AppHandle) {
-    app.state::<AppState>().paste.capture_target();
-    let Some(window) = app.get_webview_window("main") else {
-        log::warn!("show_panel: main window is unavailable");
+    show_full_panel(app);
+}
+
+pub(crate) fn show_full_panel(app: &tauri::AppHandle) {
+    show(app, MAIN_LABEL, None);
+    emit_main_request(app, MainPanelRequest::default());
+}
+
+pub(crate) fn open_full_panel(app: &tauri::AppHandle, selected_id: Option<String>, settings: bool) {
+    if app.state::<PanelLifecycleState>().is_shown(QUICK_LABEL) {
+        let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
+    }
+    show(app, MAIN_LABEL, None);
+    emit_main_request(
+        app,
+        MainPanelRequest {
+            selected_id,
+            settings,
+        },
+    );
+}
+
+pub(crate) fn toggle_quick_panel(app: &tauri::AppHandle, anchor: PhysicalPosition<f64>) {
+    toggle_from_tray(app, QUICK_LABEL, Some(anchor));
+}
+
+pub(crate) fn toggle_full_panel(app: &tauri::AppHandle) {
+    toggle_from_tray(app, MAIN_LABEL, None);
+}
+
+fn toggle_from_tray(
+    app: &tauri::AppHandle,
+    label: &'static str,
+    anchor: Option<PhysicalPosition<f64>>,
+) {
+    if app.state::<PanelLifecycleState>().is_shown(label) {
+        if let Err(error) = hide_panel(app, label, HideReason::Shortcut) {
+            log::warn!("failed to hide panel from tray: {error}");
+        }
+    } else {
+        if label == MAIN_LABEL {
+            show_full_panel(app);
+        } else {
+            show(app, label, anchor);
+        }
+    }
+}
+
+fn show(app: &tauri::AppHandle, label: &'static str, anchor: Option<PhysicalPosition<f64>>) {
+    let lifecycle = app.state::<PanelLifecycleState>();
+    if !lifecycle.is_shown(MAIN_LABEL) && !lifecycle.is_shown(QUICK_LABEL) {
+        app.state::<AppState>().paste.capture_target();
+    }
+    let Some(window) = app.get_webview_window(label) else {
+        log::warn!("show_panel: {label} window is unavailable");
         return;
     };
 
-    let lifecycle = app.state::<PanelLifecycleState>();
-    lifecycle.begin_show(window.is_focused().unwrap_or(false));
+    lifecycle.begin_show(label, window.is_focused().unwrap_or(false));
 
-    #[cfg(target_os = "macos")]
-    if let Some((width, height)) = macos::cursor_screen_work_area() {
-        resize_panel(&window, width, height);
+    if label == QUICK_LABEL {
+        resize_quick_panel(&window);
+        if let Some(anchor) = anchor {
+            position_quick_panel(&window, anchor);
+        }
     } else {
+        #[cfg(target_os = "macos")]
+        if let Some((width, height)) = macos::cursor_screen_work_area() {
+            resize_panel(&window, width, height);
+        } else {
+            resize_panel_for_monitor(&window);
+        }
+        #[cfg(not(target_os = "macos"))]
         resize_panel_for_monitor(&window);
+        let _ = window.center();
     }
-    #[cfg(not(target_os = "macos"))]
-    resize_panel_for_monitor(&window);
-
-    let _ = window.center();
 
     #[cfg(target_os = "macos")]
-    if macos::show_as_panel(app) {
-        lifecycle.mark_focused();
-        emit_panel_shown(app);
+    if macos::show_as_panel(app, label) {
+        lifecycle.mark_focused(label);
         return;
     }
 
     if let Err(error) = window.show() {
-        lifecycle.mark_hidden();
+        lifecycle.mark_hidden(label);
         log::error!("show_panel: failed to show window: {error}");
         return;
     }
@@ -117,7 +205,7 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
     {
         let outcome = windows::focus_foreground(&window);
         if outcome.has_focus() {
-            lifecycle.mark_focused();
+            lifecycle.mark_focused(label);
             log::info!("show_panel: foreground acquired ({outcome:?})");
         } else {
             log::warn!("show_panel: foreground request did not succeed ({outcome:?})");
@@ -126,13 +214,75 @@ pub(crate) fn show_panel(app: &tauri::AppHandle) {
 
     #[cfg(not(target_os = "windows"))]
     match window.set_focus() {
-        Ok(()) => lifecycle.mark_focused(),
+        Ok(()) => lifecycle.mark_focused(label),
         Err(error) => log::warn!("show_panel: focus request failed: {error}"),
     }
+}
 
-    // The frontend resets its browsing session only after the native window has been shown
-    // and activation has been attempted, so DOM focus cannot race ahead of native focus.
-    emit_panel_shown(app);
+fn emit_main_request(app: &tauri::AppHandle, request: MainPanelRequest) {
+    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
+        let _ = window.emit("main_panel_shown", request);
+    }
+}
+
+fn resize_quick_panel(window: &WebviewWindow) {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let available_height = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| monitor.work_area().size.to_logical::<f64>(scale).height)
+        .unwrap_or(QUICK_WINDOW_HEIGHT);
+    let _ = window.set_size(LogicalSize::new(
+        QUICK_WINDOW_WIDTH,
+        QUICK_WINDOW_HEIGHT.min((available_height - 12.0).max(164.0)),
+    ));
+}
+
+fn position_quick_panel(window: &WebviewWindow, anchor: PhysicalPosition<f64>) {
+    let Ok(monitors) = window.available_monitors() else {
+        return;
+    };
+    let Some(monitor) = monitors.iter().find(|monitor| {
+        let area = monitor.work_area();
+        let contains_x = anchor.x >= area.position.x as f64
+            && anchor.x < (area.position.x + area.size.width as i32) as f64;
+        #[cfg(target_os = "macos")]
+        let contains = contains_x;
+        #[cfg(not(target_os = "macos"))]
+        let contains = contains_x
+            && anchor.y >= area.position.y as f64
+            && anchor.y < (area.position.y + area.size.height as i32) as f64;
+        contains
+    }) else {
+        return;
+    };
+    let area = monitor.work_area();
+    let scale = monitor.scale_factor();
+    let size = PhysicalSize::new(
+        (QUICK_WINDOW_WIDTH * scale).round() as u32,
+        (QUICK_WINDOW_HEIGHT.min(area.size.height as f64 / scale - 12.0) * scale).round() as u32,
+    );
+    let x = (anchor.x.round() as i32 - size.width as i32 / 2).clamp(
+        area.position.x,
+        area.position.x + area.size.width as i32 - size.width as i32,
+    );
+    #[cfg(target_os = "macos")]
+    let y = area.position.y;
+    #[cfg(not(target_os = "macos"))]
+    let y = {
+        let below = anchor.y < area.position.y as f64 + area.size.height as f64 / 2.0;
+        if below {
+            anchor.y.round() as i32 + 6
+        } else {
+            anchor.y.round() as i32 - size.height as i32 - 6
+        }
+        .clamp(
+            area.position.y,
+            area.position.y + area.size.height as i32 - size.height as i32,
+        )
+    };
+    let _ = window.set_position(PhysicalPosition::new(x, y));
 }
 
 pub(crate) fn show_panel_on_main_thread(app: &tauri::AppHandle) {
@@ -142,21 +292,12 @@ pub(crate) fn show_panel_on_main_thread(app: &tauri::AppHandle) {
     }
 }
 
-pub(crate) fn show_settings(app: &tauri::AppHandle) {
-    show_panel(app);
-    if let Err(error) = app.emit("open_settings", ()) {
-        log::warn!("show_settings: failed to emit open_settings: {error}");
-    }
-}
-
-fn emit_panel_shown(app: &tauri::AppHandle) {
-    if let Err(error) = app.emit("panel_shown", ()) {
-        log::warn!("show_panel: failed to emit panel_shown: {error}");
-    }
-}
-
-pub(crate) fn hide_panel(app: &tauri::AppHandle, reason: HideReason) -> Result<(), tauri::Error> {
-    let Some(window) = app.get_webview_window("main") else {
+pub(crate) fn hide_panel(
+    app: &tauri::AppHandle,
+    label: &str,
+    reason: HideReason,
+) -> Result<(), tauri::Error> {
+    let Some(window) = app.get_webview_window(label) else {
         return Ok(());
     };
 
@@ -164,15 +305,20 @@ pub(crate) fn hide_panel(app: &tauri::AppHandle, reason: HideReason) -> Result<(
     macos::hide_preview(app);
 
     window.hide()?;
-    app.state::<PanelLifecycleState>().mark_hidden();
+    app.state::<PanelLifecycleState>().mark_hidden(label);
     app.state::<PreviewState>().set_active(false);
-    log::info!("panel hidden ({reason:?})");
+    log::info!("{label} panel hidden ({reason:?})");
     Ok(())
 }
 
 pub(crate) fn toggle_panel(app: &tauri::AppHandle) {
-    if app.state::<PanelLifecycleState>().is_shown() {
-        if let Err(error) = hide_panel(app, HideReason::Shortcut) {
+    let lifecycle = app.state::<PanelLifecycleState>();
+    if lifecycle.is_shown(QUICK_LABEL) {
+        let selected_id = app.state::<QuickSelectionState>().get();
+        let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
+        open_full_panel(app, selected_id, false);
+    } else if lifecycle.is_shown(MAIN_LABEL) {
+        if let Err(error) = hide_panel(app, MAIN_LABEL, HideReason::Shortcut) {
             log::warn!("failed to hide panel from shortcut: {error}");
         }
     } else {
@@ -182,14 +328,15 @@ pub(crate) fn toggle_panel(app: &tauri::AppHandle) {
 
 pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, focused: bool) {
     let lifecycle = app.state::<PanelLifecycleState>();
+    let label = panel.label().to_string();
     if focused {
         app.state::<PreviewState>().set_active(false);
-        lifecycle.mark_focused();
+        lifecycle.mark_focused(&label);
         log::debug!("panel focus acquired");
         return;
     }
 
-    let Some(token) = lifecycle.begin_blur() else {
+    let Some(token) = lifecycle.begin_blur(&label) else {
         log::debug!("ignoring blur before panel acquired focus");
         return;
     };
@@ -201,16 +348,18 @@ pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, 
         let app_for_main = app.clone();
         let _ = app.run_on_main_thread(move || {
             let lifecycle = app_for_main.state::<PanelLifecycleState>();
-            if !lifecycle.can_hide(token) || app_for_main.state::<PreviewState>().is_active() {
+            if !lifecycle.can_hide(&label, token)
+                || app_for_main.state::<PreviewState>().is_active()
+            {
                 return;
             }
             if panel.is_focused().unwrap_or(false) {
-                lifecycle.mark_focused();
+                lifecycle.mark_focused(&label);
                 return;
             }
             if panel.is_visible().unwrap_or(false) {
                 log::info!("panel remained unfocused after debounce");
-                if let Err(error) = hide_panel(&app_for_main, HideReason::Blur) {
+                if let Err(error) = hide_panel(&app_for_main, &label, HideReason::Blur) {
                     log::warn!("failed to hide unfocused panel: {error}");
                 }
             }

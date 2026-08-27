@@ -21,11 +21,11 @@ pub(super) fn cursor_screen_work_area() -> Option<(f64, f64)> {
     })
 }
 
-pub(super) fn show_as_panel(app: &tauri::AppHandle) -> bool {
+pub(super) fn show_as_panel(app: &tauri::AppHandle, label: &str) -> bool {
     use objc::{class, msg_send};
     use tauri_nspanel::{CollectionBehavior, ManagerExt};
 
-    let Ok(panel) = app.get_webview_panel("main") else {
+    let Ok(panel) = app.get_webview_panel(label) else {
         return false;
     };
     panel.set_collection_behavior(

@@ -4,7 +4,8 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
-  import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, updateSettings, type Settings } from "./api";
+  import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, updateSettings, type LanguagePreference, type Settings, type Theme, type TrayClickAction } from "./api";
+  import AppSelect from "$lib/components/AppSelect.svelte";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION, listReleaseNotes, openLatestRelease, type ReleaseNote } from "$lib/updater/api";
   import { updateStore } from "$lib/updater/store.svelte";
@@ -73,6 +74,29 @@
   let releasesError = $state("");
   let releaseList = $state<HTMLDivElement>();
   const platform: ShortcutPlatform = currentPlatform();
+  const trayItems = $derived([
+    { value: "recent", label: t("settings.trayClickRecent") },
+    { value: "history", label: t("settings.trayClickHistory") },
+  ]);
+  const retentionItems = $derived([
+    ...[1, 7, 30, 90].map((count) => ({ value: String(count), label: t("settings.days", { count: formatNumber(count) }) })),
+    { value: "365", label: t("settings.year") },
+    { value: "none", label: t("settings.forever") },
+  ]);
+  const historyLimitItems = $derived([
+    ...[100, 500, 1000, 5000].map((count) => ({ value: String(count), label: t("settings.items", { count: formatNumber(count) }) })),
+    { value: "none", label: t("settings.unlimited") },
+  ]);
+  const themeItems = $derived([
+    { value: "system", label: t("settings.followSystem") },
+    { value: "light", label: t("settings.light") },
+    { value: "dark", label: t("settings.dark") },
+  ]);
+  const languageItems = $derived([
+    { value: "system", label: t("settings.languageSystem") },
+    { value: "zh-CN", label: t("settings.languageChinese") },
+    { value: "en", label: t("settings.languageEnglish") },
+  ]);
 
   const panelShortcuts: ShortcutRow[] = [
     { name: "shortcut.search", description: "shortcut.searchDesc", keys: [[platform === "macos" ? "Command" : "Ctrl", "F"], ["/"]] },
@@ -347,6 +371,16 @@
     if (!settings) return;
     setLanguagePreference(settings.language);
   }
+  function changeTheme(value: string) {
+    if (!settings) return;
+    settings.theme = value as Theme;
+    applyTheme(settings.theme);
+  }
+  function changeLanguage(value: string) {
+    if (!settings) return;
+    settings.language = value as LanguagePreference;
+    previewLanguage();
+  }
   function displayVersion(version: string) {
     if (version === DEVELOPMENT_VERSION) return t("update.devVersion");
     return version === "__clipclop_unknown__" ? t("common.unknown") : version;
@@ -388,13 +422,14 @@
         {#if tab === "general"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.general")}</h1>
           <div class="row setting-row"><span><strong id="launch-label">{t("settings.launch")}</strong><small id="launch-help">{t("settings.launchHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="launch-label" aria-describedby="launch-help" bind:checked={settings.launch_at_login} /><span class="switch-track"></span></label></div>
+          <div class="row"><span><strong>{t("settings.trayClick")}</strong><small>{t("settings.trayClickHelp")}</small></span><AppSelect value={settings.tray_click_action} items={trayItems} ariaLabel={t("settings.trayClick")} onchange={(value) => settings!.tray_click_action = value as TrayClickAction} /></div>
           <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small></span><button onclick={() => void openAutoPasteSystemSettings()}>{t("settings.manage")}</button></div>{/if}
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelp")}</small></span><button onclick={() => void openFilePreviewSystemSettings()}>{t("settings.manage")}</button></div>{/if}
         {:else if tab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
-          <label><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><select bind:value={settings.retention_days}><option value={1}>{t("settings.days", { count: formatNumber(1) })}</option><option value={7}>{t("settings.days", { count: formatNumber(7) })}</option><option value={30}>{t("settings.days", { count: formatNumber(30) })}</option><option value={90}>{t("settings.days", { count: formatNumber(90) })}</option><option value={365}>{t("settings.year")}</option><option value={null}>{t("settings.forever")}</option></select></label>
-          <label><span><strong>{t("settings.historyLimit")}</strong><small>{t("settings.historyLimitHelp")}</small></span><select bind:value={settings.history_limit}><option value={100}>{t("settings.items", { count: formatNumber(100) })}</option><option value={500}>{t("settings.items", { count: formatNumber(500) })}</option><option value={1000}>{t("settings.items", { count: formatNumber(1000) })}</option><option value={5000}>{t("settings.items", { count: formatNumber(5000) })}</option><option value={null}>{t("settings.unlimited")}</option></select></label>
+          <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>
+          <div class="row"><span><strong>{t("settings.historyLimit")}</strong><small>{t("settings.historyLimitHelp")}</small></span><AppSelect value={settings.history_limit === null ? "none" : String(settings.history_limit)} items={historyLimitItems} ariaLabel={t("settings.historyLimit")} onchange={(value) => settings!.history_limit = value === "none" ? null : Number(value) as Settings["history_limit"]} /></div>
           <div class="row setting-row"><span><strong id="move-used-label">{t("settings.moveUsedToTop")}</strong><small id="move-used-help">{t("settings.moveUsedToTopHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="move-used-label" aria-describedby="move-used-help" bind:checked={settings.move_used_to_top} /><span class="switch-track"></span></label></div>
           <div class="row setting-row"><span><strong id="restore-pos-label">{t("settings.restoreBrowsePosition")}</strong><small id="restore-pos-help">{t("settings.restoreBrowsePositionHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="restore-pos-label" aria-describedby="restore-pos-help" bind:checked={settings.restore_browse_position} /><span class="switch-track"></span></label></div>
           <div class="row setting-row"><span><strong id="trim-whitespace-label">{t("settings.trimWhitespace")}</strong><small id="trim-whitespace-help">{t("settings.trimWhitespaceHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="trim-whitespace-label" aria-describedby="trim-whitespace-help" bind:checked={settings.trim_whitespace} /><span class="switch-track"></span></label></div>
@@ -402,8 +437,8 @@
           <div class="row"><span><strong>{t("settings.data")}</strong><small>{t("settings.dataHelp")}</small></span><button bind:this={clearTrigger} class="danger" onclick={requestClear}>{t("settings.clearAll")}</button></div>
         {:else if tab === "appearance"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.appearance")}</h1>
-          <label><span><strong>{t("settings.theme")}</strong><small>{t("settings.appearanceHelp")}</small></span><select bind:value={settings.theme} onchange={() => applyTheme(settings!.theme)}><option value="system">{t("settings.followSystem")}</option><option value="light">{t("settings.light")}</option><option value="dark">{t("settings.dark")}</option></select></label>
-          <label><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><select bind:value={settings.language} onchange={previewLanguage}><option value="system">{t("settings.languageSystem")}</option><option value="zh-CN">{t("settings.languageChinese")}</option><option value="en">{t("settings.languageEnglish")}</option></select></label>
+          <div class="row"><span><strong>{t("settings.theme")}</strong><small>{t("settings.appearanceHelp")}</small></span><AppSelect value={settings.theme} items={themeItems} ariaLabel={t("settings.theme")} onchange={changeTheme} /></div>
+          <div class="row"><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><AppSelect value={settings.language} items={languageItems} ariaLabel={t("settings.language")} onchange={changeLanguage} /></div>
         {:else if tab === "shortcuts"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.shortcuts")}</h1>
           <p class="section-intro">{t("settings.shortcutIntro")}</p>

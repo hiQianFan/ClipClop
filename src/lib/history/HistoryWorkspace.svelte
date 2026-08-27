@@ -32,7 +32,6 @@
   let error = $state("");
   let copied = $state("");
   let copiedTimer: number | undefined;
-  let showAutoPasteHelp = $state(false);
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
@@ -53,6 +52,7 @@
   const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
   const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
   const actionMenuShortcut = isMac ? "⌘K" : "Ctrl K";
+  type MainPanelRequest = { selectedId: string | null; settings: boolean };
 
   $effect(() => {
     effectiveLocale();
@@ -66,13 +66,11 @@
     motionQuery.addEventListener("change", updateReducedMotion);
     void initializeView();
     const unlistenClips = listen("history_changed", () => refresh(session.page.page));
-    const unlistenPanel = listen("panel_shown", () => void onPanelShown());
-    const unlistenSettings = listen("open_settings", () => void openSettingsView());
+    const unlistenPanel = listen<MainPanelRequest>("main_panel_shown", ({ payload }) => void onPanelShown(payload));
     return () => {
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
       unlistenPanel.then((fn) => fn());
-      unlistenSettings.then((fn) => fn());
     };
   });
 
@@ -181,7 +179,6 @@
       if (outcome !== "pasted") {
         window.clearTimeout(copiedTimer);
         copied = pasteMessage(outcome);
-        showAutoPasteHelp = outcome === "copied_permission_required";
       }
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
@@ -202,7 +199,6 @@
       await refresh(moved ? 1 : session.page.page, moved);
       copiedTimer = window.setTimeout(() => {
         copied = "";
-        showAutoPasteHelp = false;
       }, 1800);
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
@@ -325,11 +321,9 @@
     void updateStore.check();
   }
 
-  function openOnboarding(mode: "quick_start" | "auto_paste") {
-    onboardingMode = mode;
-    onboarding = mode === "quick_start"
-      ? { completed_revision: 1, current_step: "overview", visited_steps: ["overview"], selected_example: "image" }
-      : { completed_revision: 1, current_step: "auto_paste", visited_steps: ["auto_paste"], selected_example: null };
+  function openQuickStart() {
+    onboardingMode = "quick_start";
+    onboarding = { completed_revision: 1, current_step: "overview", visited_steps: ["overview"], selected_example: "image" };
     view = "onboarding";
   }
 
@@ -367,7 +361,15 @@
   // the history_changed listener and is current when the user exits. Within history,
   // the default is a fresh browsing session (jump to latest); restore_browse_position
   // instead resumes the page, selection and search the user left off at.
-  async function onPanelShown() {
+  async function onPanelShown(request: MainPanelRequest) {
+    if (request.settings) {
+      await openSettingsView();
+      return;
+    }
+    if (request.selectedId) {
+      await focusHistoryItem(request.selectedId);
+      return;
+    }
     if (view !== "history") return;
     if (restoreBrowsePosition) await resumeBrowse();
     else await resetToLatest();
@@ -384,6 +386,13 @@
     listbox?.focus();
     await refresh(1, true);
     enterBrowse();
+  }
+
+  async function focusHistoryItem(id: string) {
+    view = "history";
+    session.query = "";
+    session.selectedId = id;
+    await refreshAndFocus(1);
   }
 
   // Keep page, selection and search; just refresh the current page for freshness and
@@ -652,7 +661,7 @@
       </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
-      {#if copied}<span class="message">{copied}</span>{#if showAutoPasteHelp}<button class="ghost" onclick={() => { copied = ""; showAutoPasteHelp = false; openOnboarding("auto_paste"); }}>{t("settings.autoPaste")}</button>{/if}{/if}
+      {#if copied}<span class="message">{copied}</span>{/if}
       <DropdownMenu.Root open={menuOpen} onOpenChange={(open) => { menuOpen = open; mode = open ? "menu" : "browse"; if (open) appMenuOpen = false; }}>
       <div class="menu-wrap">
         <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger${menuOpen ? " expanded" : ""}`} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</DropdownMenu.Trigger>
@@ -679,7 +688,7 @@
   </footer>
   </AlertDialog.Root>
   {:else}
-    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={() => void openOnboarding("quick_start")} />
+    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} />
   {/if}
   {/if}
 </main>

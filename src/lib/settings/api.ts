@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type Theme = "light" | "dark" | "system";
 export type LanguagePreference = "system" | "zh-CN" | "en";
+export type TrayClickAction = "recent" | "history";
 
 export type Settings = {
   retention_days: 1 | 7 | 30 | 90 | 365 | null;
@@ -14,6 +15,7 @@ export type Settings = {
   hotkey: string;
   theme: Theme;
   language: LanguagePreference;
+  tray_click_action: TrayClickAction;
   check_updates: boolean;
   last_update_check: string | null;
   skipped_update_version: string | null;

@@ -13,11 +13,26 @@
     "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
         "title": "ClipClop",
         "width": 840,
         "height": 640,
         "resizable": false,
         "center": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
+      },
+      {
+        "label": "quick",
+        "url": "/quick",
+        "title": "ClipClop",
+        "width": 360,
+        "height": 604,
+        "resizable": false,
         "decorations": false,
         "transparent": true,
         "shadow": false,

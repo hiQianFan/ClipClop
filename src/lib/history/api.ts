@@ -45,6 +45,14 @@ export function hidePanel(): Promise<void> {
   return invoke("hide_panel");
 }
 
+export function showFullPanel(selectedId: string | null = null, settings = false): Promise<void> {
+  return invoke("show_full_panel", { selectedId, settings });
+}
+
+export function setQuickSelection(id: string | null): Promise<void> {
+  return invoke("set_quick_selection", { id });
+}
+
 export function performPagerHaptic(): Promise<void> {
   return invoke("perform_pager_haptic");
 }

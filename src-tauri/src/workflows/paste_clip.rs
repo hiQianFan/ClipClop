@@ -13,6 +13,7 @@ pub fn paste_clip(
     history: &HistoryService,
     paste: &PasteController,
     settings: &crate::settings::SettingsService,
+    window_label: &str,
     id: &str,
     plain_text_only: bool,
 ) -> AppResult<PasteOutcome> {
@@ -28,7 +29,7 @@ pub fn paste_clip(
     if let Err(error) = history.mark_used(id, settings.move_used_to_top) {
         log::warn!("clipboard write succeeded but history usage update failed: {error}");
     }
-    if let Err(error) = window::hide_panel(app, HideReason::Paste) {
+    if let Err(error) = window::hide_panel(app, window_label, HideReason::Paste) {
         log::warn!("failed to hide panel before paste: {error}");
         return Ok(PasteOutcome::CopiedFocusFailed);
     }
