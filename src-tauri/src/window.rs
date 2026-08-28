@@ -173,9 +173,8 @@ fn show(app: &tauri::AppHandle, label: &'static str, anchor: Option<PhysicalPosi
     lifecycle.begin_show(label, window.is_focused().unwrap_or(false));
 
     if label == QUICK_LABEL {
-        resize_quick_panel(&window);
         if let Some(anchor) = anchor {
-            position_quick_panel(&window, anchor);
+            layout_quick_panel(&window, anchor);
         }
     } else {
         #[cfg(target_os = "macos")]
@@ -225,64 +224,60 @@ fn emit_main_request(app: &tauri::AppHandle, request: MainPanelRequest) {
     }
 }
 
-fn resize_quick_panel(window: &WebviewWindow) {
-    let scale = window.scale_factor().unwrap_or(1.0);
-    let available_height = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|monitor| monitor.work_area().size.to_logical::<f64>(scale).height)
-        .unwrap_or(QUICK_WINDOW_HEIGHT);
-    let _ = window.set_size(LogicalSize::new(
-        QUICK_WINDOW_WIDTH,
-        QUICK_WINDOW_HEIGHT.min((available_height - 12.0).max(164.0)),
-    ));
-}
-
-fn position_quick_panel(window: &WebviewWindow, anchor: PhysicalPosition<f64>) {
+fn layout_quick_panel(window: &WebviewWindow, anchor: PhysicalPosition<f64>) {
     let Ok(monitors) = window.available_monitors() else {
         return;
     };
-    let Some(monitor) = monitors.iter().find(|monitor| {
-        let area = monitor.work_area();
-        let contains_x = anchor.x >= area.position.x as f64
-            && anchor.x < (area.position.x + area.size.width as i32) as f64;
-        #[cfg(target_os = "macos")]
-        let contains = contains_x;
-        #[cfg(not(target_os = "macos"))]
-        let contains = contains_x
-            && anchor.y >= area.position.y as f64
-            && anchor.y < (area.position.y + area.size.height as i32) as f64;
-        contains
-    }) else {
+    let Some(monitor) = monitors
+        .iter()
+        .find(|monitor| monitor_contains_point(monitor.position(), monitor.size(), anchor))
+    else {
         return;
     };
     let area = monitor.work_area();
     let scale = monitor.scale_factor();
+    let logical_width = QUICK_WINDOW_WIDTH.min((area.size.width as f64 / scale - 12.0).max(164.0));
+    let logical_height =
+        QUICK_WINDOW_HEIGHT.min((area.size.height as f64 / scale - 12.0).max(164.0));
     let size = PhysicalSize::new(
-        (QUICK_WINDOW_WIDTH * scale).round() as u32,
-        (QUICK_WINDOW_HEIGHT.min(area.size.height as f64 / scale - 12.0) * scale).round() as u32,
+        (logical_width * scale).round() as u32,
+        (logical_height * scale).round() as u32,
     );
-    let x = (anchor.x.round() as i32 - size.width as i32 / 2).clamp(
-        area.position.x,
-        area.position.x + area.size.width as i32 - size.width as i32,
-    );
-    #[cfg(target_os = "macos")]
-    let y = area.position.y;
-    #[cfg(not(target_os = "macos"))]
-    let y = {
-        let below = anchor.y < area.position.y as f64 + area.size.height as f64 / 2.0;
-        if below {
-            anchor.y.round() as i32 + 6
-        } else {
-            anchor.y.round() as i32 - size.height as i32 - 6
-        }
-        .clamp(
-            area.position.y,
-            area.position.y + area.size.height as i32 - size.height as i32,
-        )
+    let area_right = area.position.x + area.size.width as i32;
+    let area_bottom = area.position.y + area.size.height as i32;
+    let anchor_x = anchor.x.round() as i32;
+    let anchor_y = anchor.y.round() as i32;
+    let mut x = anchor_x - size.width as i32 / 2;
+    let mut y = if anchor_y < area.position.y {
+        anchor_y + 6
+    } else if anchor_y >= area_bottom {
+        anchor_y - size.height as i32 - 6
+    } else if anchor_x < area.position.x {
+        x = anchor_x + 6;
+        anchor_y - size.height as i32 / 2
+    } else if anchor_x >= area_right {
+        x = anchor_x - size.width as i32 - 6;
+        anchor_y - size.height as i32 / 2
+    } else if anchor_y < area.position.y + area.size.height as i32 / 2 {
+        anchor_y + 6
+    } else {
+        anchor_y - size.height as i32 - 6
     };
+    x = x.clamp(area.position.x, area_right - size.width as i32);
+    y = y.clamp(area.position.y, area_bottom - size.height as i32);
     let _ = window.set_position(PhysicalPosition::new(x, y));
+    let _ = window.set_size(size);
+}
+
+fn monitor_contains_point(
+    position: &PhysicalPosition<i32>,
+    size: &PhysicalSize<u32>,
+    point: PhysicalPosition<f64>,
+) -> bool {
+    point.x >= position.x as f64
+        && point.x < (position.x + size.width as i32) as f64
+        && point.y >= position.y as f64
+        && point.y < (position.y + size.height as i32) as f64
 }
 
 pub(crate) fn show_panel_on_main_thread(app: &tauri::AppHandle) {
@@ -372,7 +367,8 @@ pub(crate) use macos::install_quicklook_key_handler;
 
 #[cfg(test)]
 mod tests {
-    use super::panel_content_size;
+    use super::{monitor_contains_point, panel_content_size};
+    use tauri::{PhysicalPosition, PhysicalSize};
 
     #[test]
     fn panel_keeps_one_size_on_normal_displays() {
@@ -384,5 +380,14 @@ mod tests {
     #[test]
     fn panel_never_exceeds_the_monitor_work_area() {
         assert_eq!(panel_content_size(800.0, 560.0), (760.0, 520.0));
+    }
+
+    #[test]
+    fn taskbar_anchor_belongs_to_the_full_monitor_bounds() {
+        assert!(monitor_contains_point(
+            &PhysicalPosition::new(0, 0),
+            &PhysicalSize::new(1920, 1080),
+            PhysicalPosition::new(1800.0, 1060.0),
+        ));
     }
 }

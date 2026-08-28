@@ -21,6 +21,7 @@ pub(crate) fn install(app: &tauri::App, _: &Settings) -> tauri::Result<()> {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 
             let TrayIconEvent::Click {
+                rect,
                 position,
                 button,
                 button_state: MouseButtonState::Up,
@@ -41,7 +42,18 @@ pub(crate) fn install(app: &tauri::App, _: &Settings) -> tauri::Result<()> {
                 .map(|settings| settings.tray_click_action)
                 .unwrap_or(TrayClickAction::Recent);
             match action {
-                TrayClickAction::Recent => crate::window::toggle_quick_panel(app, position),
+                TrayClickAction::Recent => {
+                    let anchor = match (rect.position, rect.size) {
+                        (tauri::Position::Physical(position), tauri::Size::Physical(size)) => {
+                            tauri::PhysicalPosition::new(
+                                f64::from(position.x) + f64::from(size.width) / 2.0,
+                                f64::from(position.y) + f64::from(size.height) / 2.0,
+                            )
+                        }
+                        _ => position,
+                    };
+                    crate::window::toggle_quick_panel(app, anchor);
+                }
                 TrayClickAction::History => crate::window::toggle_full_panel(app),
             }
         });
