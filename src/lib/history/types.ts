@@ -2,11 +2,22 @@ export type ContentType =
   | "text"
   | "link"
   | "color"
-  | "code"
   | "image"
   | "file";
 
 export type SourceApp = { id: string; name: string };
+export type HistorySourceOption = SourceApp & { available: boolean };
+export type HistoryFacets = {
+  type_total: number;
+  type_counts: Partial<Record<ContentType, number>>;
+  sources: HistorySourceOption[];
+};
+
+export type HistoryFilters = {
+  content_type: ContentType | null;
+  source_id: string | null;
+  time_range: "any" | "day" | "week" | "month";
+};
 
 export type ClipMetadata = {
   char_count?: number;

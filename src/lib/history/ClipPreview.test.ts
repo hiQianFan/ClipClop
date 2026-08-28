@@ -20,11 +20,23 @@ const detail: ClipDetail = {
 const page: HistoryPage = { items: [detail], page: 1, page_size: 10, total: 1, total_pages: 1 };
 
 describe("ClipPreview file tabs", () => {
+  it("uses the thumbnail while the full image preview is pending", () => {
+    const image = { ...detail, id: "image", content_type: "image" as const, metadata: { width: 10, height: 10 } };
+    const { container } = render(ClipPreview, { props: {
+      detail: image, selectedId: image.id, page: { ...page, items: [image] }, noMatches: false, pending: false,
+      assetUrl: null, thumbnailUrl: "thumbnail", fileAccessDenied: false, sourceIconUrl: null,
+      fileThumbnailUrls: [], fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
+    } });
+    expect(container.querySelector("img.asset.thumbnail")?.getAttribute("src")).toBe("thumbnail");
+  });
+
   it("activates adjacent files once, does not loop, and forwards Escape", async () => {
     const onfile = vi.fn();
     const onfilekeydown = vi.fn();
     render(ClipPreview, { props: {
-      detail, selectedId: detail.id, page, pending: false, assetUrl: null,
+      detail, selectedId: detail.id, page, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
       previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile,
@@ -46,7 +58,7 @@ describe("ClipPreview file tabs", () => {
 
   it("keeps first-copy and last-used times visible", () => {
     const { container } = render(ClipPreview, { props: {
-      detail, selectedId: detail.id, page, pending: false, assetUrl: null,
+      detail, selectedId: detail.id, page, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
       previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
@@ -69,7 +81,7 @@ describe("ClipPreview file tabs", () => {
       metadata: { char_count: 29 },
     };
     const { container } = render(ClipPreview, { props: {
-      detail: link, selectedId: link.id, page: { ...page, items: [link] }, pending: false, assetUrl: null,
+      detail: link, selectedId: link.id, page: { ...page, items: [link] }, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [],
       fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
       previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},

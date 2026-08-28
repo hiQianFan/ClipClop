@@ -9,8 +9,10 @@
     detail,
     selectedId,
     page,
+    noMatches,
     pending,
     assetUrl,
+    thumbnailUrl,
     fileAccessDenied,
     sourceIconUrl,
     fileThumbnailUrls,
@@ -28,8 +30,10 @@
     detail: ClipDetail | null;
     selectedId: string | null;
     page: HistoryPage;
+    noMatches: boolean;
     pending: boolean;
     assetUrl: string | null;
+    thumbnailUrl: string | null;
     fileAccessDenied: boolean;
     sourceIconUrl: string | null;
     fileThumbnailUrls: Array<string | null>;
@@ -55,7 +59,7 @@
         {#if assetUrl}<img class="asset" src={assetUrl} alt={t("history.fileThumbnail")} />
         {:else}<div class="file-preview-placeholder">{t(fileAccessDenied ? "history.fileAccessDenied" : "history.systemPreviewHint")}</div>{/if}
       {:else if detail.content_type === "image"}
-        {#if assetUrl}<div class="asset-frame"><img class="asset" src={assetUrl} alt={t("history.imagePreview")} /></div>
+        {#if assetUrl || thumbnailUrl}<div class="asset-frame"><img class:thumbnail={!assetUrl} class="asset" src={assetUrl ?? thumbnailUrl ?? undefined} decoding="async" alt={t("history.imagePreview")} /></div>
         {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}
       {:else}
         <pre>{detailText(detail, trimWhitespace)}</pre>
@@ -106,7 +110,7 @@
   {:else if selectedId}
     <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!, t("meta.file")) : ""}</pre></div>
   {:else}
-    <div class="empty">{t("history.select")}</div>
+    <div class="empty">{t(page.items.length === 0 ? (noMatches ? "history.noMatchesPreview" : "history.emptyPreview") : "history.select")}</div>
   {/if}
 </section>
 
@@ -140,6 +144,7 @@
   .color-preview span { width:72px; height:72px; border:1px solid var(--hairline); border-radius:var(--radius-lg); }
   .asset-frame { width:100%; height:100%; min-height:180px; display:flex; align-items:center; justify-content:center; }
   .asset { display:block; max-width:100%; max-height:100%; border-radius:var(--radius-lg); object-fit:contain; }
+  .asset.thumbnail { image-rendering:auto; filter:blur(5px); transform:scale(1.02); }
   .image-placeholder, .empty { flex:1; display:grid; place-items:center; color:var(--text-3); }
   .file-preview-placeholder { color:var(--text-3); font-size:var(--fs-ui); }
   .file-nav { height:58px; flex:none; display:flex; align-items:center; gap:8px; padding:6px 20px; border-top:1px solid var(--hairline); }

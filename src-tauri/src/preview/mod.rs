@@ -50,7 +50,7 @@ impl ExternalPreviewService {
                 self.publish_preview(id, &path, &png.payload)?;
                 open_path(app, path)
             }
-            ContentType::Text | ContentType::Color | ContentType::Code | ContentType::Link => {
+            ContentType::Text | ContentType::Color | ContentType::Link => {
                 let path = preview_path(app, id, "txt")?;
                 self.publish_preview(
                     id,
@@ -190,7 +190,7 @@ impl ExternalPreviewService {
                 self.publish_preview(id, &path, &png.payload)?;
                 Ok(path)
             }
-            ContentType::Text | ContentType::Color | ContentType::Code | ContentType::Link => {
+            ContentType::Text | ContentType::Color | ContentType::Link => {
                 let path = preview_path(app, id, "txt")?;
                 self.publish_preview(
                     id,

@@ -111,6 +111,7 @@ mod tests {
         assert_eq!(settings.history_limit, Some(500));
         assert!(settings.move_used_to_top);
         assert!(!settings.restore_browse_position);
+        assert!(!settings.preserve_search_conditions);
         assert!(!settings.file_preview_enabled);
         assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.language, LanguagePreference::System);

@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::history::{
-    ClipDetail, ClipSummary, ContentType, Flavor, FlavorInfo, HistoryPage, HistoryQuery, NewClip,
-    SourceApp,
+    ClipDetail, ClipSummary, ContentType, Flavor, FlavorInfo, HistoryFacets, HistoryPage,
+    HistoryQuery, HistorySourceOption, NewClip, SourceApp,
 };
 
 #[cfg(test)]
@@ -119,18 +119,8 @@ impl Database {
             ));
         }
 
-        let mut conditions = Vec::new();
-        let mut values = Vec::<Value>::new();
-        let query = request.query.trim();
-        if !query.is_empty() {
-            conditions.push("c.id IN (SELECT clip_id FROM clips_fts WHERE clips_fts MATCH ?)");
-            values.push(Value::Text(fts_query(query)));
-        }
-        let where_clause = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!(" WHERE {}", conditions.join(" AND "))
-        };
+        let (conditions, values) = query_conditions(request, true, true);
+        let where_clause = where_clause(&conditions);
         let connection = self.connection()?;
         let total: u64 = connection.query_row(
             &format!("SELECT COUNT(*) FROM clips c{where_clause}"),
@@ -158,6 +148,64 @@ impl Database {
             page_size: request.page_size,
             total,
             total_pages: total.div_ceil(request.page_size as u64) as u32,
+        })
+    }
+
+    pub fn history_facets(
+        &self,
+        request: &HistoryQuery,
+        source_query: &str,
+    ) -> AppResult<HistoryFacets> {
+        let connection = self.connection()?;
+        let (type_conditions, type_values) = query_conditions(request, false, true);
+        let type_where = where_clause(&type_conditions);
+        let mut type_statement = connection.prepare(&format!(
+            "SELECT content_type, COUNT(*) FROM clips c{type_where} GROUP BY content_type"
+        ))?;
+        let type_counts = type_statement
+            .query_map(params_from_iter(type_values), |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, u64>(1)?))
+            })?
+            .collect::<Result<std::collections::BTreeMap<_, _>, _>>()?;
+        let type_total = type_counts.values().sum();
+
+        let mut statement = connection.prepare(
+            "SELECT source_id, source_name FROM clips
+             WHERE source_id IS NOT NULL AND source_name IS NOT NULL
+               AND (source_name LIKE ?1 ESCAPE '\\' OR source_id LIKE ?1 ESCAPE '\\')
+             GROUP BY source_id, source_name ORDER BY MAX(last_used_at) DESC LIMIT 20",
+        )?;
+        let pattern = format!("%{}%", like_pattern(source_query.trim()));
+        let source_apps = statement
+            .query_map([pattern], |row| {
+                Ok(SourceApp {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let (availability_conditions, availability_values) = query_conditions(request, true, false);
+        // ponytail: at most 20 tiny COUNT queries; replace with one conditional aggregate if profiling shows it matters.
+        let mut sources = Vec::with_capacity(source_apps.len());
+        for source in source_apps {
+            let mut conditions = availability_conditions.clone();
+            conditions.push("c.source_id = ?");
+            let mut values = availability_values.clone();
+            values.push(Value::Text(source.id.clone()));
+            let count: u64 = connection.query_row(
+                &format!("SELECT COUNT(*) FROM clips c{}", where_clause(&conditions)),
+                params_from_iter(values),
+                |row| row.get(0),
+            )?;
+            sources.push(HistorySourceOption {
+                source,
+                available: count > 0,
+            });
+        }
+        Ok(HistoryFacets {
+            type_total,
+            type_counts,
+            sources,
         })
     }
 
@@ -282,12 +330,63 @@ impl Database {
     }
 }
 
-fn fts_query(query: &str) -> String {
-    query
-        .split_whitespace()
-        .map(|term| format!("\"{}\"*", term.replace('"', "\"\"")))
-        .collect::<Vec<_>>()
-        .join(" AND ")
+fn query_conditions(
+    request: &HistoryQuery,
+    include_content_type: bool,
+    include_source: bool,
+) -> (Vec<&'static str>, Vec<Value>) {
+    let mut conditions = Vec::new();
+    let mut values = Vec::new();
+    for term in request.query.split_whitespace() {
+        if term.chars().count() >= 3 {
+            conditions.push("c.id IN (SELECT clip_id FROM clips_fts WHERE clips_fts MATCH ?)");
+            values.push(Value::Text(format!("\"{}\"", term.replace('"', "\"\""))));
+        } else {
+            conditions.push("c.id IN (SELECT clip_id FROM clips_fts WHERE plain_text LIKE ? ESCAPE '\\' OR preview LIKE ? ESCAPE '\\' OR source_name LIKE ? ESCAPE '\\')");
+            let pattern = format!("%{}%", like_pattern(term));
+            values.extend([
+                Value::Text(pattern.clone()),
+                Value::Text(pattern.clone()),
+                Value::Text(pattern),
+            ]);
+        }
+    }
+    if include_content_type {
+        if let Some(content_type) = request.content_type {
+            conditions.push("c.content_type = ?");
+            values.push(Value::Text(content_type.to_string()));
+        }
+    }
+    if include_source {
+        if let Some(source_id) = request
+            .source_id
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            conditions.push("c.source_id = ?");
+            values.push(Value::Text(source_id.into()));
+        }
+    }
+    if let Some(since) = request.since {
+        conditions.push("c.last_used_at >= ?");
+        values.push(Value::Text(timestamp(since)));
+    }
+    (conditions, values)
+}
+
+fn where_clause(conditions: &[&str]) -> String {
+    if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
+    }
+}
+
+fn like_pattern(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 pub(super) fn timestamp(value: DateTime<Utc>) -> String {
@@ -378,6 +477,70 @@ mod tests {
         let detail = database.get_clip(&first_id).unwrap();
         assert_eq!(detail.plain_text.as_deref(), Some("alpha command"));
         assert_eq!(detail.flavors[0].format, "text/plain");
+    }
+
+    #[test]
+    fn searches_substrings_and_combines_structured_filters() {
+        let database = Database::in_memory().unwrap();
+        let now = Utc::now();
+        let mut wanted = sample("这是一个搜索功能测试", now);
+        wanted.content_type = ContentType::Image;
+        wanted.source_app = Some(SourceApp {
+            id: "editor".into(),
+            name: "Editor".into(),
+        });
+        database.capture_clip(&wanted).unwrap();
+        let mut other = sample("搜索功能", now - Duration::days(10));
+        other.source_app = Some(SourceApp {
+            id: "browser".into(),
+            name: "Browser".into(),
+        });
+        database.capture_clip(&other).unwrap();
+
+        for query in ["搜索", "索功能"] {
+            let page = database
+                .query_history(&HistoryQuery {
+                    query: query.into(),
+                    ..Default::default()
+                })
+                .unwrap();
+            assert!(!page.items.is_empty());
+        }
+        let page = database
+            .query_history(&HistoryQuery {
+                content_type: Some(ContentType::Image),
+                source_id: Some("editor".into()),
+                since: Some(now - Duration::days(1)),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(page.total, 1);
+        let facets = database
+            .history_facets(
+                &HistoryQuery {
+                    content_type: Some(ContentType::Image),
+                    source_id: Some("editor".into()),
+                    ..Default::default()
+                },
+                "",
+            )
+            .unwrap();
+        assert_eq!(facets.type_total, 1);
+        assert_eq!(facets.type_counts["image"], 1);
+        assert!(facets
+            .sources
+            .iter()
+            .find(|source| source.source.id == "browser")
+            .is_some_and(|source| !source.available));
+        assert_eq!(
+            database
+                .history_facets(&HistoryQuery::default(), "Brows")
+                .unwrap()
+                .sources[0]
+                .source
+                .id,
+            "browser"
+        );
     }
 
     #[test]

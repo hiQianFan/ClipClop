@@ -2,7 +2,7 @@ use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::{
     error::AppResult,
-    history::{ClipDetail, HistoryPage, HistoryQuery},
+    history::{ClipDetail, HistoryFacets, HistoryPage, HistoryQuery},
     paste::PasteOutcome,
     state::AppState,
     window::{self, HideReason, QuickSelectionState},
@@ -12,6 +12,17 @@ use crate::{
 #[tauri::command]
 pub fn query_history(state: State<'_, AppState>, request: HistoryQuery) -> AppResult<HistoryPage> {
     state.history.query(&request)
+}
+
+#[tauri::command]
+pub fn get_history_facets(
+    state: State<'_, AppState>,
+    request: HistoryQuery,
+    source_query: Option<String>,
+) -> AppResult<HistoryFacets> {
+    state
+        .history
+        .facets(&request, source_query.as_deref().unwrap_or(""))
 }
 
 #[tauri::command]

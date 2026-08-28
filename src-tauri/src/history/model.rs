@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -11,7 +12,6 @@ pub enum ContentType {
     Text,
     Link,
     Color,
-    Code,
     Image,
     File,
 }
@@ -22,7 +22,6 @@ impl Display for ContentType {
             Self::Text => "text",
             Self::Link => "link",
             Self::Color => "color",
-            Self::Code => "code",
             Self::Image => "image",
             Self::File => "file",
         })
@@ -37,7 +36,6 @@ impl FromStr for ContentType {
             "text" => Ok(Self::Text),
             "link" => Ok(Self::Link),
             "color" => Ok(Self::Color),
-            "code" => Ok(Self::Code),
             "image" => Ok(Self::Image),
             "file" => Ok(Self::File),
             _ => Err(AppError::Storage(format!("unknown content type: {value}"))),
@@ -49,6 +47,20 @@ impl FromStr for ContentType {
 pub struct SourceApp {
     pub id: String,
     pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HistorySourceOption {
+    #[serde(flatten)]
+    pub source: SourceApp,
+    pub available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HistoryFacets {
+    pub type_total: u64,
+    pub type_counts: BTreeMap<String, u64>,
+    pub sources: Vec<HistorySourceOption>,
 }
 
 impl SourceApp {
@@ -129,6 +141,12 @@ pub struct HistoryQuery {
     pub page: u32,
     #[serde(default = "default_page_size")]
     pub page_size: u32,
+    #[serde(default)]
+    pub content_type: Option<ContentType>,
+    #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub since: Option<DateTime<Utc>>,
 }
 
 impl Default for HistoryQuery {
@@ -137,6 +155,9 @@ impl Default for HistoryQuery {
             query: String::new(),
             page: default_page(),
             page_size: default_page_size(),
+            content_type: None,
+            source_id: None,
+            since: None,
         }
     }
 }

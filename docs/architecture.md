@@ -29,7 +29,7 @@ The main window behaves like a transient command panel rather than a regular app
 
 Do not emit `panel_shown` before native show and activation have been attempted. Otherwise the webview can focus an element while its native window is still in the background.
 
-On `panel_shown` the frontend does not blindly reset. Settings and onboarding are deliberate modes and are preserved across a summon (the history session underneath stays live via `history_changed`, so it is current on exit). Within history, the default is a fresh browsing session — jump to page 1, select the newest item, clear search — because the core loop is summon-and-paste. The `restore_browse_position` setting (off by default) instead resumes the last page, selection and search.
+On `panel_shown` the frontend does not blindly reset. Settings and onboarding are deliberate modes and are preserved across a summon (the history session underneath stays live via `history_changed`, so it is current on exit). Within history, `restore_browse_position` independently preserves the last page and selection, while `preserve_search_conditions` preserves the search text and filters. Both are off by default.
 
 ### State model
 

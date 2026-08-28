@@ -29,7 +29,7 @@ Rust 宿主保持具体服务，不为单一 SQLite 或单一平台实现增加 
 
 不得在原生显示和激活尝试之前发送 `panel_shown`，否则 WebView 中的元素可能已经获得 DOM 焦点，而原生窗口仍处于后台。
 
-收到 `panel_shown` 时前端不会无条件重置。Settings 与引导页是刻意进入的模式，呼出时予以保留（底层历史会话通过 `history_changed` 保持实时，退出时即为最新）。在历史视图内，默认开启新的浏览会话——回到第 1 页、选中最新项、清空搜索——因为核心循环是「呼出即粘贴」。`restore_browse_position` 设置（默认关闭）则改为保留上次的页码、选中项和搜索。
+收到 `panel_shown` 时前端不会无条件重置。Settings 与引导页是刻意进入的模式，呼出时予以保留（底层历史会话通过 `history_changed` 保持实时，退出时即为最新）。在历史视图内，`restore_browse_position` 独立保留上次的页码和选中项，`preserve_search_conditions` 独立保留搜索词和筛选条件；两项默认均关闭。
 
 ### 状态模型
 

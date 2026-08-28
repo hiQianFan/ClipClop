@@ -18,8 +18,8 @@ pub mod workflows;
 
 use commands::{
     cancel_update_download, clear_history, copy_clip, delete_clip, discard_downloaded_update,
-    get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_onboarding_state,
-    get_settings, get_source_app_icon, hide_panel, install_downloaded_update,
+    get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_history_facets,
+    get_onboarding_state, get_settings, get_source_app_icon, hide_panel, install_downloaded_update,
     open_auto_paste_settings, open_clip_link, open_file_preview_settings, open_log_dir,
     open_release_page, paste_clip, perform_pager_haptic, preview_clip, preview_onboarding_example,
     query_history, quit_app, record_update_check, save_onboarding_state, set_language_preference,
@@ -222,6 +222,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             query_history,
+            get_history_facets,
             get_clip,
             get_clip_asset,
             get_clip_file_asset,

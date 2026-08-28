@@ -2,11 +2,12 @@
   import { onMount, tick } from "svelte";
   import { AlertDialog, DropdownMenu } from "bits-ui";
   import { listen } from "@tauri-apps/api/event";
-  import { copyClip, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
+  import { copyClip, getHistoryFacets, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
+  import type { ContentType, HistorySourceOption } from "$lib/history/types";
   import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
   import { PreviewSession } from "$lib/history/preview-session.svelte";
-  import { routeWindowKey } from "$lib/history/keyboard";
+  import { exitsSearch, routeWindowKey } from "$lib/history/keyboard";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
   import { getSettings, quitApp } from "$lib/settings/api";
@@ -28,6 +29,7 @@
   let fileIndex = $state(0);
   let trimWhitespace = $state(false);
   let restoreBrowsePosition = $state(false);
+  let preserveSearchConditions = $state(false);
   let expandedId = $state<string | null>(null);
   let error = $state("");
   let copied = $state("");
@@ -47,6 +49,12 @@
   let confirmActionButton = $state<HTMLButtonElement | null>(null);
   let pageNavigationPending = false;
   let searchTimer: number | undefined;
+  let sourceSearchTimer: number | undefined;
+  let sources = $state<HistorySourceOption[]>([]);
+  let typeTotal = $state(0);
+  let typeCounts = $state<Partial<Record<ContentType, number>>>({});
+  let activeSourceQuery = "";
+  let facetsVersion = 0;
   const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
   const settingsShortcut = isMac ? "⌘," : "Ctrl,";
   const quitShortcut = isMac ? "⌘Q" : "Ctrl+Q";
@@ -66,9 +74,10 @@
     updateReducedMotion();
     motionQuery.addEventListener("change", updateReducedMotion);
     void initializeView();
-    const unlistenClips = listen("history_changed", () => refresh(session.page.page));
+    const unlistenClips = listen("history_changed", () => { void refresh(session.page.page); void syncFacets(); });
     const unlistenPanel = listen<MainPanelRequest>("main_panel_shown", ({ payload }) => void onPanelShown(payload));
     return () => {
+      if (sourceSearchTimer !== undefined) window.clearTimeout(sourceSearchTimer);
       motionQuery.removeEventListener("change", updateReducedMotion);
       unlistenClips.then((fn) => fn());
       unlistenPanel.then((fn) => fn());
@@ -89,6 +98,7 @@
       initializationError = localizedError(reason);
     }
     view = "history";
+    await syncFacets();
     await refreshAndFocus(1);
     if (initializationError && !error) error = initializationError;
   }
@@ -97,10 +107,35 @@
     try {
       const settings = await getSettings();
       restoreBrowsePosition = settings.restore_browse_position;
+      preserveSearchConditions = settings.preserve_search_conditions;
       trimWhitespace = settings.trim_whitespace;
     } catch (reason) {
       error = localizedError(reason);
     }
+  }
+
+  async function syncFacets(sourceQuery = activeSourceQuery) {
+    try {
+      const version = ++facetsVersion;
+      activeSourceQuery = sourceQuery;
+      const selected = sources.find(({ id }) => id === session.filters.source_id);
+      const facets = await getHistoryFacets(session.query, session.filters, sourceQuery);
+      if (version !== facetsVersion) return;
+      typeTotal = facets.type_total;
+      typeCounts = facets.type_counts;
+      sources = selected && !facets.sources.some(({ id }) => id === selected.id)
+        ? [selected, ...facets.sources].slice(0, 20)
+        : facets.sources;
+    }
+    catch { /* Search remains usable without source suggestions. */ }
+  }
+
+  function onSourceQuery(query: string) {
+    if (sourceSearchTimer !== undefined) window.clearTimeout(sourceSearchTimer);
+    sourceSearchTimer = window.setTimeout(() => {
+      sourceSearchTimer = undefined;
+      void syncFacets(query);
+    }, 120);
   }
 
   async function refresh(targetPage = session.page.page, selectLatest = false) {
@@ -134,7 +169,7 @@
   }
 
   function onSearchKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
+    if (!exitsSearch(event.key)) return;
     event.preventDefault();
     event.stopPropagation();
     enterBrowse();
@@ -167,6 +202,7 @@
     const readOriginalFile = readSelectedFile && next.content_type === "file";
     try {
       await preview.loadSelection(id, next, readOriginalFile);
+      if (next.content_type === "image") void preview.prefetchAdjacentImages(session.page.items, id);
     } catch (reason) {
       error = localizedError(reason);
     }
@@ -282,7 +318,20 @@
     searchTimer = window.setTimeout(() => {
       searchTimer = undefined;
       void refresh(1);
+      void syncFacets();
     }, 120);
+  }
+
+  function onFiltersChange() {
+    void refresh(1);
+    void syncFacets();
+  }
+
+  function clearSearchConditions() {
+    session.query = "";
+    session.clearFilters();
+    void refresh(1);
+    void syncFacets();
   }
 
   function openMenu() {
@@ -360,9 +409,9 @@
   // A hotkey summon fires panel_shown. Settings and onboarding are deliberate modes,
   // so a summon must not discard them — the history session underneath stays live via
   // the history_changed listener and is current when the user exits. Within history,
-  // the default is a fresh browsing session (jump to latest); restore_browse_position
-  // instead resumes the page, selection and search the user left off at.
+  // Browse position and search conditions are independent saved-session choices.
   async function onPanelShown(request: MainPanelRequest) {
+    listbox?.closeFilters();
     if (request.settings) {
       await openSettingsView();
       return;
@@ -372,8 +421,14 @@
       return;
     }
     if (view !== "history") return;
+    if (!preserveSearchConditions) {
+      session.query = "";
+      session.clearFilters();
+      activeSourceQuery = "";
+    }
     if (restoreBrowsePosition) await resumeBrowse();
     else await resetToLatest();
+    await syncFacets();
   }
 
   async function resetToLatest() {
@@ -381,8 +436,6 @@
     appMenuOpen = false;
     view = "history";
     mode = "browse";
-    session.query = "";
-    clearContentCaches();
     await tick();
     listbox?.focus();
     await refresh(1, true);
@@ -392,6 +445,7 @@
   async function focusHistoryItem(id: string) {
     view = "history";
     session.query = "";
+    session.clearFilters();
     session.selectedId = id;
     await refreshAndFocus(1);
   }
@@ -611,6 +665,10 @@
   <HistoryList
     bind:this={listbox}
     bind:query={session.query}
+    filters={session.filters}
+    {sources}
+    {typeTotal}
+    {typeCounts}
     page={session.page}
     selectedId={session.selectedId}
     {expandedId}
@@ -623,6 +681,9 @@
     onsearch={onSearch}
     onsearchfocus={() => mode = "search"}
     onsearchkeydown={onSearchKeydown}
+    onfilterschange={onFiltersChange}
+    onsourcequery={onSourceQuery}
+    onclearsearch={clearSearchConditions}
     onlistfocus={() => mode = "browse"}
     onselect={selectFromList}
     onpaste={() => void pasteSelected()}
@@ -635,8 +696,10 @@
     detail={session.detail}
     selectedId={session.selectedId}
     page={session.page}
+    noMatches={Boolean(session.query || session.filters.content_type || session.filters.source_id || session.filters.time_range !== "any")}
     pending={session.detailPending}
     assetUrl={preview.assetUrl}
+    thumbnailUrl={session.selectedId ? preview.thumbnailUrls[session.selectedId] ?? null : null}
     fileAccessDenied={preview.fileAccessDenied}
     sourceIconUrl={preview.sourceIconUrl}
     fileThumbnailUrls={preview.fileThumbnailUrls}

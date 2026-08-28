@@ -127,4 +127,38 @@ describe("PreviewSession", () => {
     await pending;
     expect(preview.thumbnailUrls).toEqual({});
   });
+
+  it("loads current-page thumbnails concurrently", async () => {
+    const resolves: Array<(value: PreviewResource) => void> = [];
+    const getClipThumbnail = vi.fn(() => new Promise<PreviewResource>((resolve) => resolves.push(resolve)));
+    const preview = new PreviewSession(api({ getClipThumbnail }));
+    const items: ClipSummary[] = ["clip-1", "clip-2"].map((id) => ({
+      id, content_type: "image", preview: id, source_app: null,
+      created_at: "2026-08-06T00:00:00Z", last_used_at: "2026-08-06T00:00:00Z",
+      byte_size: 4, metadata: {},
+    }));
+
+    const pending = preview.loadPageThumbnails(items);
+    await Promise.resolve();
+    expect(getClipThumbnail).toHaveBeenCalledTimes(2);
+    resolves.forEach((resolve, index) => resolve(resource(`thumbnail-${index}`)));
+    await pending;
+    expect(Object.keys(preview.thumbnailUrls)).toHaveLength(2);
+  });
+
+  it("prefetches and reuses adjacent image previews", async () => {
+    const getClipAsset = vi.fn(async (id: string) => resource(`asset-${id}`));
+    const preview = new PreviewSession(api({ getClipAsset }));
+    const items: ClipSummary[] = ["clip-1", "clip-2", "clip-3"].map((id) => ({
+      id, content_type: "image", preview: id, source_app: null,
+      created_at: "2026-08-06T00:00:00Z", last_used_at: "2026-08-06T00:00:00Z",
+      byte_size: 4, metadata: {},
+    }));
+
+    await preview.prefetchAdjacentImages(items, "clip-2");
+    expect(getClipAsset.mock.calls.map(([id]) => id)).toEqual(["clip-1", "clip-3"]);
+    await preview.loadSelection("clip-1", detail("image"), false);
+    expect(preview.assetUrl).toBe("asset-clip-1");
+    expect(getClipAsset).toHaveBeenCalledTimes(2);
+  });
 });

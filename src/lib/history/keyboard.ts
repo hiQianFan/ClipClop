@@ -8,6 +8,10 @@ export type WindowKeyContext = {
 
 export type WindowKeyAction = "dismiss-panel" | "cancel-delete" | "close-menu" | "close-app-menu" | "return-to-browse";
 
+export function exitsSearch(key: string) {
+  return key === "Escape" || key === "ArrowDown" || key === "ArrowUp";
+}
+
 export function routeWindowKey(
   event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "defaultPrevented">,
   context: WindowKeyContext,

@@ -64,9 +64,6 @@ describe("clip view helpers", () => {
     expect(metadataFacts(detail("text", { char_count: 5 }, "hello"), 0, [], labels, String)).toEqual([
       { label: "Characters", value: "5" }, { label: "Size", value: "12 B" },
     ]);
-    expect(metadataFacts(detail("code", {}, "let x = 1"), 0, [], labels, String)).toEqual([
-      { label: "Characters", value: "9" }, { label: "Size", value: "12 B" },
-    ]);
     expect(metadataFacts(detail("text", {}, "😀"), 0, [], labels, String)[0]).toEqual({ label: "Characters", value: "1" });
     expect(metadataFacts(detail("link", {}, "https://docs.example.com/path"), 0, [], labels, String)).toEqual([
       { label: "Domain", value: "docs.example.com", action: "open-origin" }, { label: "Characters", value: "29" },

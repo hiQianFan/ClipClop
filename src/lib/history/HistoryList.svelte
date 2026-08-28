@@ -3,16 +3,22 @@
   import { flip } from "svelte/animate";
   import { cubicOut } from "svelte/easing";
   import { fade } from "svelte/transition";
-  import { ArrowLeft, ArrowRight, ChevronRight, File, Image, Search } from "@lucide/svelte";
+  import { Popover } from "bits-ui";
+  import { ArrowLeft, ArrowRight, ChevronRight, File, Image, Search, SlidersHorizontal } from "@lucide/svelte";
   import { formatNumber, t } from "$lib/i18n/index.svelte";
+  import type { StaticMessageKey } from "$lib/i18n/index.svelte";
   import { performPagerHaptic } from "./api";
   import { draggedPage, PAGE_DRAG_STEP, visiblePageTicks } from "./pager";
   import { canExpand, clipPreview, fileName, groupedFiles } from "./presentation";
-  import type { HistoryPage } from "./types";
+  import type { ContentType, HistoryFilters, HistoryPage, HistorySourceOption } from "./types";
 
   let {
     page,
     query = $bindable(),
+    filters,
+    sources,
+    typeTotal,
+    typeCounts,
     selectedId,
     expandedId,
     fileIndex,
@@ -24,6 +30,9 @@
     onsearch,
     onsearchfocus,
     onsearchkeydown,
+    onfilterschange,
+    onsourcequery,
+    onclearsearch,
     onlistfocus,
     onselect,
     onpaste,
@@ -33,6 +42,10 @@
   }: {
     page: HistoryPage;
     query: string;
+    filters: HistoryFilters;
+    sources: HistorySourceOption[];
+    typeTotal: number;
+    typeCounts: Partial<Record<ContentType, number>>;
     selectedId: string | null;
     expandedId: string | null;
     fileIndex: number;
@@ -44,6 +57,9 @@
     onsearch: () => void;
     onsearchfocus: () => void;
     onsearchkeydown: (event: KeyboardEvent) => void;
+    onfilterschange: () => void;
+    onsourcequery: (query: string) => void;
+    onclearsearch: () => void;
     onlistfocus: () => void;
     onselect: (id: string) => void;
     onpaste: () => void;
@@ -52,10 +68,29 @@
     onpage: (page: number) => void;
   } = $props();
 
+  const contentTypes: Array<{ value: ContentType | null; label: StaticMessageKey }> = [
+    { value: null, label: "filter.all" }, { value: "text", label: "filter.text" },
+    { value: "link", label: "filter.link" },
+    { value: "image", label: "filter.image" }, { value: "file", label: "filter.file" },
+    { value: "color", label: "filter.color" },
+  ];
+  const timeRanges: Array<{ value: HistoryFilters["time_range"]; label: StaticMessageKey }> = [
+    { value: "any", label: "filter.anyTime" }, { value: "day", label: "filter.today" },
+    { value: "week", label: "filter.week" }, { value: "month", label: "filter.month" },
+  ];
+  const activeFilterCount = $derived(Number(filters.content_type !== null) + Number(filters.source_id !== null) + Number(filters.time_range !== "any"));
+
+  function applyFilter(change: Partial<HistoryFilters>) {
+    Object.assign(filters, change);
+    onfilterschange();
+  }
+
   let listbox: HTMLDivElement;
   let searchInput: HTMLInputElement;
   let emptyAnchor = $state<HTMLDivElement>();
   let retryButton = $state<HTMLButtonElement>();
+  let sourceQuery = $state("");
+  let filterOpen = $state(false);
   let draggingPage = $state(false);
   let dragPointer = 0;
   let dragStartX = 0;
@@ -219,6 +254,7 @@
   }
   export function hasFocus() { return document.activeElement === listbox; }
   export function focusSearch() { searchInput?.focus(); }
+  export function closeFilters() { filterOpen = false; sourceQuery = ""; }
 
   onDestroy(() => {
     if (typeof window === "undefined") return;
@@ -234,7 +270,32 @@
   <form class="search" onsubmit={(event) => { event.preventDefault(); onsearch(); }}>
     <span aria-hidden="true"><Search size={15} /></span>
     <input bind:this={searchInput} bind:value={query} oninput={onsearch} onfocus={onsearchfocus} onkeydown={onsearchkeydown} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
-    <kbd>/</kbd>
+    <Popover.Root bind:open={filterOpen}>
+      <Popover.Trigger class={`filter-trigger${activeFilterCount ? " active" : ""}`} aria-label={activeFilterCount ? t("filter.active", { count: activeFilterCount }) : t("filter.open")}>
+        <SlidersHorizontal size={14} aria-hidden="true" />
+        {#if activeFilterCount}<span>{activeFilterCount}</span>{:else}<kbd>/</kbd>{/if}
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content class="filter-popover" align="end" sideOffset={6}>
+          <section><h2>{t("filter.type")}</h2><div class="filter-options type-options">
+            {#each contentTypes as option}
+              {@const count = option.value === null ? typeTotal : typeCounts[option.value] ?? 0}
+              <button type="button" disabled={count === 0 && option.value !== null} aria-pressed={filters.content_type === option.value} onclick={() => applyFilter({ content_type: option.value })}>{t(option.label)}<span class="facet-count">{formatNumber(count)}</span></button>
+            {/each}
+          </div></section>
+          <section><h2>{t("filter.source")}</h2>
+            <input class="source-search" value={sourceQuery} oninput={(event) => { sourceQuery = event.currentTarget.value; onsourcequery(sourceQuery); }} aria-label={t("filter.searchSources")} placeholder={t("filter.searchSources")} />
+            <div class="filter-options sources">
+            <button type="button" aria-pressed={filters.source_id === null} onclick={() => applyFilter({ source_id: null })}>{t("filter.all")}</button>
+            {#each sources as source}<button type="button" disabled={!source.available} aria-pressed={filters.source_id === source.id} onclick={() => applyFilter({ source_id: source.id })}>{source.name}</button>{/each}
+          </div></section>
+          <section><h2>{t("filter.time")}</h2><div class="filter-options">
+            {#each timeRanges as option}<button type="button" aria-pressed={filters.time_range === option.value} onclick={() => applyFilter({ time_range: option.value })}>{t(option.label)}</button>{/each}
+          </div></section>
+          {#if activeFilterCount}<button type="button" class="clear-filters" onclick={() => applyFilter({ content_type: null, source_id: null, time_range: "any" })}>{t("filter.clear")}</button>{/if}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   </form>
   <div bind:this={listbox} class:full={page.items.length > 0} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onpointerdown={() => listbox.focus()} onfocus={onlistfocus} onkeydown={onkeydown}>
     {#if loading && page.items.length === 0}
@@ -242,14 +303,23 @@
     {:else if error && page.items.length === 0}
       <button bind:this={retryButton} class="empty retry" onclick={() => onpage(1)}>{t("history.retry")}</button>
     {:else if page.items.length === 0}
-      <div bind:this={emptyAnchor} class="empty" tabindex="-1">{query ? t("history.noMatches") : t("history.empty")}</div>
+      <div bind:this={emptyAnchor} class="empty-state" tabindex="-1">
+        {#if query || activeFilterCount}
+          <strong>{t("history.noMatchesTitle")}</strong>
+          <span>{t("history.noMatchesHelp")}</span>
+          <button type="button" onclick={onclearsearch}>{t("history.clearSearchConditions")}</button>
+        {:else}
+          <strong>{t("history.emptyTitle")}</strong>
+          <span>{t("history.emptyHelp")}</span>
+        {/if}
+      </div>
     {:else}
       {#each page.items as item, index (item.id)}
         <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
           <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="option" tabindex="-1" aria-selected={item.id === selectedId} aria-posinset={(page.page - 1) * page.page_size + index + 1} aria-setsize={page.total} ondblclick={onpaste} onclick={() => onselect(item.id)} onkeydown={onkeydown}>
             <span class="num">{formatNumber(index === 9 ? 0 : index + 1)}</span>
             <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
-              {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} alt="" />
+              {#if thumbnailUrls[item.id]}<img src={thumbnailUrls[item.id]} decoding="async" alt="" />
               {:else if item.content_type === "image"}<span aria-hidden="true"><Image size={16} /></span>
               {:else if item.content_type === "file"}<File size={16} aria-hidden="true" />{/if}
             </span>
@@ -289,9 +359,37 @@
   .search { height:42px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; color:var(--text-3); border-bottom:1px solid var(--hairline); }
   .search input { min-width:0; flex:1; border:0; outline:0; padding:0; color:var(--text-1); background:transparent; font-size:var(--fs-body); }
   .search input::placeholder { color:var(--text-2); }
+  :global(.filter-trigger) { min-width:30px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 5px; border-radius:var(--radius-sm); color:var(--text-2); background:transparent; font:var(--fs-caption)/1 var(--mono); }
+  :global(.filter-trigger:hover),:global(.filter-trigger.active) { color:var(--text-1); background:var(--bg-hover); }
+  :global(.filter-trigger:focus-visible) { outline:2px solid var(--text-1); outline-offset:2px; }
+  :global(.filter-trigger kbd) { pointer-events:none; }
+  :global(.filter-popover) { z-index:var(--z-menu); width:280px; padding:10px; border:1px solid var(--hairline); border-radius:var(--radius-lg); color:var(--text-1); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  :global(.filter-popover section+section) { margin-top:12px; }
+  :global(.filter-popover h2) { margin:0 0 6px; color:var(--text-2); font:600 var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  :global(.filter-options) { display:flex; flex-wrap:wrap; gap:4px; }
+  :global(.type-options) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  :global(.type-options button) { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:4px; }
+  :global(.filter-options.sources) { max-height:116px; overflow:auto; }
+  :global(.source-search) { width:100%; height:30px; margin-bottom:6px; padding:0 8px; border:1px solid var(--hairline); border-radius:var(--radius-md); outline:0; color:var(--text-1); background:var(--bg-shell); font:var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  :global(.source-search::placeholder) { color:var(--text-2); }
+  :global(.source-search:focus-visible) { outline:2px solid var(--text-1); outline-offset:1px; }
+  :global(.filter-options button),:global(.clear-filters) { min-height:28px; padding:4px 8px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font:600 var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  :global(.filter-options button:hover),:global(.clear-filters:hover) { color:var(--text-1); background:var(--bg-hover); }
+  :global(.filter-options button[aria-pressed="true"]) { color:var(--text-1); background:var(--bg-selected); }
+  :global(.filter-options button:disabled) { color:var(--text-3); opacity:.45; cursor:not-allowed; }
+  :global(.facet-count) { min-width:2.2ch; flex:none; padding:1px 4px; border-radius:var(--radius-pill); color:var(--text-3); background:var(--bg-shell); font:var(--fs-caption)/var(--lh-tight) var(--mono); font-variant-numeric:tabular-nums; text-align:center; white-space:nowrap; }
+  :global(.filter-options button[aria-pressed="true"] .facet-count) { color:var(--text-2); background:var(--bg-raised); }
+  :global(.filter-options button:focus-visible),:global(.clear-filters:focus-visible) { outline:2px solid var(--text-1); outline-offset:1px; }
+  :global(.clear-filters) { width:100%; margin-top:10px; border-top:1px solid var(--hairline); border-radius:0 0 var(--radius-md) var(--radius-md); }
   kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; overflow-y:auto; }
   .list:focus-visible { outline:none; }
+  .empty-state { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:24px; color:var(--text-2); text-align:center; }
+  .empty-state strong { color:var(--text-1); font:600 var(--fs-body)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .empty-state span { max-width:28ch; font:var(--fs-ui)/var(--lh-normal) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .empty-state button { min-height:30px; margin-top:4px; padding:0 10px; border-radius:var(--radius-md); color:var(--text-1); background:var(--bg-hover); font:600 var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  .empty-state button:hover { background:var(--bg-selected); }
+  .empty-state button:focus-visible { outline:2px solid var(--text-1); outline-offset:2px; }
   .clip-item { width:100%; }
   .list.full .clip-item:not(.expanded), .list-slot { flex:1 0 44px; }
   .list.full .clip-item:not(.expanded) .row { height:100%; }

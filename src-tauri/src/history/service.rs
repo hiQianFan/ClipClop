@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use crate::error::AppResult;
 use crate::storage::Database;
 
-use super::{ClipDetail, ContentType, Flavor, HistoryPage, HistoryQuery, NewClip};
+use super::{ClipDetail, ContentType, Flavor, HistoryFacets, HistoryPage, HistoryQuery, NewClip};
 
 #[derive(Clone)]
 pub struct HistoryService {
@@ -28,6 +28,10 @@ impl HistoryService {
 
     pub fn query(&self, request: &HistoryQuery) -> AppResult<HistoryPage> {
         self.database.query_history(request)
+    }
+
+    pub fn facets(&self, request: &HistoryQuery, source_query: &str) -> AppResult<HistoryFacets> {
+        self.database.history_facets(request, source_query)
     }
 
     pub fn get(&self, id: &str) -> AppResult<ClipDetail> {

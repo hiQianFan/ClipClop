@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeWindowKey, type WindowKeyContext } from "./keyboard";
+import { exitsSearch, routeWindowKey, type WindowKeyContext } from "./keyboard";
 
 const browse: WindowKeyContext = { view: "history", mode: "browse", deletePending: false, menuOpen: false, appMenuOpen: false };
 const key = (value: string, extra = {}) => ({ key: value, ctrlKey: false, metaKey: false, defaultPrevented: false, ...extra });
@@ -20,5 +20,14 @@ describe("window keyboard priority", () => {
     expect(routeWindowKey(key("Escape", { defaultPrevented: true }), browse)).toBeNull();
     expect(routeWindowKey(key("Escape"), { ...browse, view: "settings" })).toBeNull();
     expect(routeWindowKey(key("ArrowDown"), browse)).toBeNull();
+  });
+});
+
+describe("search keyboard routing", () => {
+  it("enters result navigation with vertical arrows without stealing text editing keys", () => {
+    expect(exitsSearch("ArrowDown")).toBe(true);
+    expect(exitsSearch("ArrowUp")).toBe(true);
+    expect(exitsSearch("ArrowLeft")).toBe(false);
+    expect(exitsSearch("ArrowRight")).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE clips (
   id TEXT PRIMARY KEY,
-  content_type TEXT NOT NULL CHECK (content_type IN ('text', 'link', 'color', 'code', 'image', 'file')),
+  content_type TEXT NOT NULL CHECK (content_type IN ('text', 'link', 'color', 'image', 'file')),
   plain_text TEXT,
   preview TEXT NOT NULL,
   source_id TEXT,
@@ -35,7 +35,7 @@ CREATE VIRTUAL TABLE clips_fts USING fts5(
   plain_text,
   preview,
   source_name,
-  tokenize = 'unicode61'
+  tokenize = 'trigram'
 );
 
 CREATE TABLE settings (

@@ -1,8 +1,8 @@
 import { deleteClip, getClip, queryHistory } from "./api";
-import type { ClipDetail, HistoryPage } from "./types";
+import type { ClipDetail, HistoryFilters, HistoryPage } from "./types";
 
 export type HistorySessionApi = {
-  queryHistory(query: string, page: number): Promise<HistoryPage>;
+  queryHistory(query: string, page: number, filters: HistoryFilters): Promise<HistoryPage>;
   getClip(id: string): Promise<ClipDetail>;
   deleteClip(id: string): Promise<void>;
 };
@@ -19,6 +19,7 @@ const emptyPage = (page = 1): HistoryPage => ({
 export class HistorySession {
   page = $state<HistoryPage>(emptyPage());
   query = $state("");
+  filters = $state<HistoryFilters>({ content_type: null, source_id: null, time_range: "any" });
   selectedId = $state<string | null>(null);
   detail = $state<ClipDetail | null>(null);
   loading = $state(true);
@@ -39,7 +40,7 @@ export class HistorySession {
     this.loading = true;
     this.errorReason = null;
     try {
-      let nextPage = await this.#api.queryHistory(this.query, targetPage);
+      let nextPage = await this.#api.queryHistory(this.query, targetPage, this.filters);
       if (version !== this.#refreshVersion) return false;
       if (
         nextPage.items.length === 0
@@ -47,8 +48,7 @@ export class HistorySession {
         && nextPage.total_pages < targetPage
       ) {
         nextPage = await this.#api.queryHistory(
-          this.query,
-          Math.max(1, nextPage.total_pages),
+          this.query, Math.max(1, nextPage.total_pages), this.filters,
         );
         if (version !== this.#refreshVersion) return false;
       }
@@ -109,6 +109,12 @@ export class HistorySession {
 
   clearCaches() {
     this.#details.clear();
+  }
+
+  clearFilters() {
+    this.filters.content_type = null;
+    this.filters.source_id = null;
+    this.filters.time_range = "any";
   }
 
   evict(id: string) {

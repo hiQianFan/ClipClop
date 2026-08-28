@@ -82,9 +82,9 @@ export class PreviewSession {
   async loadPageThumbnails(items: ClipSummary[]) {
     const version = this.#pageVersion;
     this.#applyCachedThumbnails(items);
-    for (const item of items) {
+    await Promise.all(items.map(async (item) => {
       if (version !== this.#pageVersion) return;
-      if (item.content_type !== "image" || this.#thumbnails.has(item.id)) continue;
+      if (item.content_type !== "image" || this.#thumbnails.has(item.id)) return;
       try {
         const thumbnail = await this.#api.getClipThumbnail(item.id);
         if (version !== this.#pageVersion) return;
@@ -93,7 +93,22 @@ export class PreviewSession {
         // A neutral media icon is the intentional fallback.
       }
       if (version === this.#pageVersion) this.#applyCachedThumbnails(items);
-    }
+    }));
+  }
+
+  async prefetchAdjacentImages(items: ClipSummary[], selectedId: string) {
+    const index = items.findIndex((item) => item.id === selectedId);
+    if (index < 0) return;
+    await Promise.all([items[index - 1], items[index + 1]].map(async (item) => {
+      if (!item || item.content_type !== "image") return;
+      const key = `${item.id}:image`;
+      if (this.#assets.has(key)) return;
+      try {
+        cacheSet(this.#assets, key, await this.#api.getClipAsset(item.id));
+      } catch {
+        // Prefetch is optional; selection loading remains the fallback.
+      }
+    }));
   }
 
   evict(id: string) {

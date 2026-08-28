@@ -287,14 +287,6 @@ fn classify_text(text: &str) -> ContentType {
         ContentType::Link
     } else if is_color(trimmed) {
         ContentType::Color
-    } else if trimmed.contains('\n')
-        && [
-            "const ", "let ", "fn ", "def ", "class ", "import ", "SELECT ",
-        ]
-        .iter()
-        .any(|marker| trimmed.contains(marker))
-    {
-        ContentType::Code
     } else {
         ContentType::Text
     }
@@ -337,7 +329,7 @@ mod tests {
         assert_eq!(classify_text("#1a2B3c"), ContentType::Color);
         assert_eq!(
             classify_text("const x = 1;\nconsole.log(x)"),
-            ContentType::Code
+            ContentType::Text
         );
         assert_eq!(classify_text("ordinary text"), ContentType::Text);
     }

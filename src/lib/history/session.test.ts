@@ -39,6 +39,17 @@ describe("HistorySession", () => {
     expect(session.selectedId).toBe("b");
   });
 
+  it("passes active filters to the paged backend query", async () => {
+    let received;
+    const session = new HistorySession(api({
+      queryHistory: async (_query, _page, filters) => { received = filters; return page(["a"]); },
+    }));
+    session.filters.content_type = "image";
+    session.filters.time_range = "week";
+    await session.refresh();
+    expect(received).toEqual({ content_type: "image", source_id: null, time_range: "week" });
+  });
+
   it("reloads cached detail when its last-used timestamp changes", async () => {
     let lastUsed = "2026-01-01T00:00:00Z";
     let detailRequests = 0;
