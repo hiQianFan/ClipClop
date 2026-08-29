@@ -14,7 +14,9 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+#[cfg(not(target_os = "macos"))]
+use tauri::PhysicalSize;
+use tauri::{Emitter, LogicalSize, Manager, PhysicalPosition, WebviewWindow};
 
 use crate::state::AppState;
 
@@ -160,7 +162,7 @@ fn toggle_from_tray(
     }
 }
 
-fn show(app: &tauri::AppHandle, label: &'static str, anchor: Option<PhysicalPosition<f64>>) {
+fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPosition<f64>>) {
     let lifecycle = app.state::<PanelLifecycleState>();
     if !lifecycle.is_shown(MAIN_LABEL) && !lifecycle.is_shown(QUICK_LABEL) {
         app.state::<AppState>().paste.capture_target();
@@ -173,7 +175,12 @@ fn show(app: &tauri::AppHandle, label: &'static str, anchor: Option<PhysicalPosi
     lifecycle.begin_show(label, window.is_focused().unwrap_or(false));
 
     if label == QUICK_LABEL {
-        if let Some(anchor) = anchor {
+        #[cfg(target_os = "macos")]
+        if !macos::layout_quick_panel(app, label) {
+            log::warn!("show_panel: keeping the previous quick panel frame");
+        }
+        #[cfg(not(target_os = "macos"))]
+        if let Some(anchor) = _anchor {
             layout_quick_panel(&window, anchor);
         }
     } else {
@@ -224,6 +231,7 @@ fn emit_main_request(app: &tauri::AppHandle, request: MainPanelRequest) {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn layout_quick_panel(window: &WebviewWindow, anchor: PhysicalPosition<f64>) {
     let Ok(monitors) = window.available_monitors() else {
         return;
@@ -269,6 +277,7 @@ fn layout_quick_panel(window: &WebviewWindow, anchor: PhysicalPosition<f64>) {
     let _ = window.set_size(size);
 }
 
+#[cfg(not(target_os = "macos"))]
 fn monitor_contains_point(
     position: &PhysicalPosition<i32>,
     size: &PhysicalSize<u32>,
@@ -367,8 +376,7 @@ pub(crate) use macos::install_quicklook_key_handler;
 
 #[cfg(test)]
 mod tests {
-    use super::{monitor_contains_point, panel_content_size};
-    use tauri::{PhysicalPosition, PhysicalSize};
+    use super::panel_content_size;
 
     #[test]
     fn panel_keeps_one_size_on_normal_displays() {
@@ -382,8 +390,12 @@ mod tests {
         assert_eq!(panel_content_size(800.0, 560.0), (760.0, 520.0));
     }
 
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn taskbar_anchor_belongs_to_the_full_monitor_bounds() {
+        use super::monitor_contains_point;
+        use tauri::{PhysicalPosition, PhysicalSize};
+
         assert!(monitor_contains_point(
             &PhysicalPosition::new(0, 0),
             &PhysicalSize::new(1920, 1080),
