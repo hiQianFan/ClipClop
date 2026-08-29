@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "clipclop"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "active-win-pos-rs",
  "appkit-nsworkspace-bindings",
