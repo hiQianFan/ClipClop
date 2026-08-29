@@ -185,14 +185,16 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
         }
     } else {
         #[cfg(target_os = "macos")]
-        if let Some((width, height)) = macos::cursor_screen_work_area() {
-            resize_panel(&window, width, height);
-        } else {
+        if !macos::layout_main_panel(app, label) {
+            log::warn!("show_panel: falling back to the current main panel layout");
             resize_panel_for_monitor(&window);
+            let _ = window.center();
         }
         #[cfg(not(target_os = "macos"))]
-        resize_panel_for_monitor(&window);
-        let _ = window.center();
+        {
+            resize_panel_for_monitor(&window);
+            let _ = window.center();
+        }
     }
 
     #[cfg(target_os = "macos")]

@@ -1,4 +1,9 @@
 use objc::{sel, sel_impl};
+use tauri_nspanel::{
+    objc2::{rc::Retained, MainThreadMarker},
+    objc2_app_kit::{NSEvent, NSScreen},
+    objc2_foundation::NSPoint,
+};
 
 const QUICK_MARGIN: f64 = 6.0;
 
@@ -33,18 +38,16 @@ fn quick_frame(
     })
 }
 
-pub(super) fn layout_quick_panel(app: &tauri::AppHandle, label: &str) -> bool {
-    use tauri_nspanel::{
-        objc2::MainThreadMarker,
-        objc2_app_kit::{NSEvent, NSScreen},
-        objc2_foundation::{NSPoint, NSRect, NSSize},
-        ManagerExt,
-    };
+fn centered_frame(visible: Rect, size: (f64, f64)) -> Rect {
+    Rect {
+        x: visible.x + (visible.width - size.0) / 2.0,
+        y: visible.y + (visible.height - size.1) / 2.0,
+        width: size.0,
+        height: size.1,
+    }
+}
 
-    let Some(mtm) = MainThreadMarker::new() else {
-        log::warn!("layout_quick_panel: not running on the main thread");
-        return false;
-    };
+fn cursor_screen(mtm: MainThreadMarker) -> Option<(Retained<NSScreen>, NSPoint)> {
     let mouse = NSEvent::mouseLocation();
     let screens = NSScreen::screens(mtm);
     let screen = screens
@@ -57,8 +60,21 @@ pub(super) fn layout_quick_panel(app: &tauri::AppHandle, label: &str) -> bool {
                 && mouse.y < frame.origin.y + frame.size.height
         })
         .or_else(|| NSScreen::mainScreen(mtm))
-        .or_else(|| screens.iter().next());
-    let Some(screen) = screen else {
+        .or_else(|| screens.iter().next())?;
+    Some((screen, mouse))
+}
+
+pub(super) fn layout_quick_panel(app: &tauri::AppHandle, label: &str) -> bool {
+    use tauri_nspanel::{
+        objc2_foundation::{NSRect, NSSize},
+        ManagerExt,
+    };
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::warn!("layout_quick_panel: not running on the main thread");
+        return false;
+    };
+    let Some((screen, mouse)) = cursor_screen(mtm) else {
         log::warn!("layout_quick_panel: no screen is available");
         return false;
     };
@@ -100,25 +116,52 @@ pub(super) fn layout_quick_panel(app: &tauri::AppHandle, label: &str) -> bool {
     true
 }
 
-pub(super) fn cursor_screen_work_area() -> Option<(f64, f64)> {
+pub(super) fn layout_main_panel(app: &tauri::AppHandle, label: &str) -> bool {
     use tauri_nspanel::{
-        objc2::MainThreadMarker,
-        objc2_app_kit::{NSEvent, NSScreen},
+        objc2_foundation::{NSRect, NSSize},
+        ManagerExt,
     };
 
-    let mtm = MainThreadMarker::new()?;
-    let mouse = NSEvent::mouseLocation();
-    NSScreen::screens(mtm).iter().find_map(|screen| {
-        let frame = screen.frame();
-        let contains_mouse = mouse.x >= frame.origin.x
-            && mouse.x < frame.origin.x + frame.size.width
-            && mouse.y >= frame.origin.y
-            && mouse.y < frame.origin.y + frame.size.height;
-        contains_mouse.then(|| {
-            let visible = screen.visibleFrame();
-            (visible.size.width, visible.size.height)
-        })
-    })
+    let Some(mtm) = MainThreadMarker::new() else {
+        log::warn!("layout_main_panel: not running on the main thread");
+        return false;
+    };
+    let Some((screen, _)) = cursor_screen(mtm) else {
+        log::warn!("layout_main_panel: no screen is available");
+        return false;
+    };
+    let Ok(panel) = app.get_webview_panel(label) else {
+        log::warn!("layout_main_panel: {label} panel is unavailable");
+        return false;
+    };
+    let visible = screen.visibleFrame();
+    let (content_width, content_height) =
+        super::panel_content_size(visible.size.width, visible.size.height);
+    let content_rect = NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(
+            content_width + super::SHADOW_INSET * 2.0,
+            content_height + super::SHADOW_INSET * 2.0,
+        ),
+    );
+    let frame = panel.as_panel().frameRectForContentRect(content_rect);
+    let target = centered_frame(
+        Rect {
+            x: visible.origin.x,
+            y: visible.origin.y,
+            width: visible.size.width,
+            height: visible.size.height,
+        },
+        (frame.size.width, frame.size.height),
+    );
+    panel.as_panel().setFrame_display(
+        NSRect::new(
+            NSPoint::new(target.x, target.y),
+            NSSize::new(target.width, target.height),
+        ),
+        false,
+    );
+    true
 }
 
 pub(super) fn show_as_panel(app: &tauri::AppHandle, label: &str) -> bool {
@@ -204,7 +247,7 @@ pub(crate) fn install_quicklook_key_handler() {
 
 #[cfg(test)]
 mod tests {
-    use super::{quick_frame, Rect};
+    use super::{centered_frame, quick_frame, Rect};
 
     #[test]
     fn quick_frame_uses_preferred_size_and_clamps_x() {
@@ -263,6 +306,27 @@ mod tests {
                 (0.0, 0.0),
             ),
             None
+        );
+    }
+
+    #[test]
+    fn main_frame_centers_inside_nonzero_visible_frame() {
+        assert_eq!(
+            centered_frame(
+                Rect {
+                    x: 1440.0,
+                    y: 24.0,
+                    width: 1920.0,
+                    height: 1056.0,
+                },
+                (840.0, 640.0),
+            ),
+            Rect {
+                x: 1980.0,
+                y: 232.0,
+                width: 840.0,
+                height: 640.0,
+            }
         );
     }
 }
