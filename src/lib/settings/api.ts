@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 
 export type Theme = "light" | "dark" | "system";
 export type LanguagePreference = "system" | "zh-CN" | "en";
@@ -30,7 +31,18 @@ export const openLogDir = () => invoke<void>("open_log_dir");
 export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
 export const quitApp = () => invoke<void>("quit_app");
 
+export const THEME_PREVIEW_EVENT = "theme_preview";
+
 export function applyTheme(theme: Theme) {
   if (theme === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
+}
+
+/**
+ * Applies a theme locally and mirrors it to every other loaded WebView.
+ * Broadcast failures are swallowed so preview and saving keep working.
+ */
+export function previewTheme(theme: Theme) {
+  applyTheme(theme);
+  void emit(THEME_PREVIEW_EVENT, { theme }).catch(() => {});
 }

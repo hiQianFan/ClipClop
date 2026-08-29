@@ -4,7 +4,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
-  import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, updateSettings, type LanguagePreference, type Settings, type Theme, type TrayClickAction } from "./api";
+  import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme, type TrayClickAction } from "./api";
   import AppSelect from "$lib/components/AppSelect.svelte";
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION, listReleaseNotes, openLatestRelease, type ReleaseNote } from "$lib/updater/api";
@@ -144,8 +144,8 @@
   });
   onDestroy(() => {
     destroyed = true;
-    if (savedSettings) {
-      applyTheme(savedSettings.theme);
+    if (!saving && savedSettings) {
+      previewTheme(savedSettings.theme);
       setLanguagePreference(savedSettings.language);
     }
   });
@@ -293,7 +293,7 @@
     } catch (reason) {
       if (savedSettings) {
         settings = { ...savedSettings };
-        applyTheme(savedSettings.theme);
+        previewTheme(savedSettings.theme);
         setLanguagePreference(savedSettings.language);
       }
       status = t("settings.saveFailed", { error: localizedError(reason) });
@@ -374,7 +374,7 @@
   function changeTheme(value: string) {
     if (!settings) return;
     settings.theme = value as Theme;
-    applyTheme(settings.theme);
+    previewTheme(settings.theme);
   }
   function changeLanguage(value: string) {
     if (!settings) return;
