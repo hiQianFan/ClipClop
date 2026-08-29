@@ -1,4 +1,6 @@
-use tauri::{image::Image, tray::TrayIconBuilder, Manager};
+#[cfg(target_os = "macos")]
+use tauri::Manager;
+use tauri::{image::Image, tray::TrayIconBuilder};
 
 use crate::settings::{Settings, TrayClickAction};
 #[cfg(target_os = "macos")]
