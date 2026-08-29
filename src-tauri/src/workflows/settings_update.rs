@@ -145,6 +145,12 @@ pub fn update(
     if removed > 0 {
         let _ = app.emit("history_changed", serde_json::json!({ "latest_id": null }));
     }
+    if let Err(error) = app.emit(
+        "settings_changed",
+        serde_json::json!({ "theme": saved.theme, "language": saved.language }),
+    ) {
+        log::warn!("settings saved but UI preference broadcast failed: {error}");
+    }
     Ok(saved)
 }
 

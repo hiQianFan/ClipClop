@@ -1,16 +1,26 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import "../app.css";
   import { scheduleAutomaticUpdateCheck } from "$lib/updater/api";
-  import { applyTheme, getSettings } from "$lib/settings/api";
+  import { applyTheme, getSettings, type LanguagePreference, type Theme } from "$lib/settings/api";
   import { setLanguagePreference } from "$lib/i18n/index.svelte";
   let { children } = $props();
   let ready = $state(false);
 
   onMount(() => {
     let cancelUpdate = () => {};
+    let cancelSettings = () => {};
+    let destroyed = false;
     let timeout = 0;
+    void listen<{ theme: Theme; language: LanguagePreference }>("settings_changed", ({ payload }) => {
+      applyTheme(payload.theme);
+      setLanguagePreference(payload.language);
+    }).then((unlisten) => {
+      if (destroyed) unlisten();
+      else cancelSettings = unlisten;
+    });
     const timeoutFailure = new Promise<never>((_, reject) => {
       timeout = window.setTimeout(() => reject(new Error("settings bootstrap timed out")), 3_000);
     });
@@ -26,7 +36,9 @@
       if (getCurrentWindow().label === "main") cancelUpdate = scheduleAutomaticUpdateCheck();
     });
     return () => {
+      destroyed = true;
       window.clearTimeout(timeout);
+      cancelSettings();
       cancelUpdate();
     };
   });
