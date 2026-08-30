@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { AlertDialog, DropdownMenu } from "bits-ui";
   import { listen } from "@tauri-apps/api/event";
   import { canPreviewClip, copyClip, getHistoryFacets, getPreviewCapability, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability } from "$lib/history/api";
   import type { ContentType, HistorySourceOption } from "$lib/history/types";
@@ -10,6 +9,8 @@
   import { exitsSearch, routeWindowKey } from "$lib/history/keyboard";
   import HistoryList from "$lib/history/HistoryList.svelte";
   import ClipPreview from "$lib/history/ClipPreview.svelte";
+  import AppTitleBar from "$lib/history/AppTitleBar.svelte";
+  import HistoryActionBar from "$lib/history/HistoryActionBar.svelte";
   import { getSettings, quitApp } from "$lib/settings/api";
   import { currentPlatform } from "$lib/settings/shortcuts";
   import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
@@ -45,9 +46,6 @@
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
   let listbox = $state<HistoryList>();
-  let appMenuButton = $state<HTMLButtonElement | null>(null);
-  let menuButton = $state<HTMLButtonElement | null>(null);
-  let confirmActionButton = $state<HTMLButtonElement | null>(null);
   let pageNavigationPending = false;
   let searchTimer: number | undefined;
   let sourceSearchTimer: number | undefined;
@@ -276,11 +274,11 @@
     menuOpen = false;
   }
 
-  function requestDelete() {
+  function requestDelete(invoker?: HTMLElement | null) {
     if (!session.selectedId) return;
-    confirmationInvoker = document.activeElement instanceof HTMLElement
-      ? document.activeElement.closest("[role='menuitem']") ? menuButton ?? null : document.activeElement
-      : null;
+    confirmationInvoker = invoker === undefined
+      ? document.activeElement instanceof HTMLElement ? document.activeElement : null
+      : invoker;
     menuOpen = false;
     deletePending = true;
     mode = "confirmation";
@@ -352,6 +350,27 @@
     appMenuOpen = false;
     menuOpen = true;
     mode = "menu";
+  }
+
+  function setActionMenuOpen(open: boolean) {
+    menuOpen = open;
+    if (open) appMenuOpen = false;
+    syncOverlayMode();
+  }
+
+  function setAppMenuOpen(open: boolean) {
+    appMenuOpen = open;
+    if (open) menuOpen = false;
+    syncOverlayMode();
+  }
+
+  function setDeletePending(open: boolean) {
+    deletePending = open;
+    syncOverlayMode();
+  }
+
+  function syncOverlayMode() {
+    mode = deletePending ? "confirmation" : menuOpen || appMenuOpen ? "menu" : "browse";
   }
 
   function closeMenu() {
@@ -648,30 +667,17 @@
   {:else if view === "loading"}
     <div class="root-loading" role="status">{t("settings.loading")}</div>
   {:else}
-  <header class="titlebar">
-    {#if view === "history"}
-      <div class="brand">
-        <DropdownMenu.Root open={appMenuOpen} onOpenChange={(open) => { appMenuOpen = open; mode = open ? "menu" : "browse"; if (open) menuOpen = false; }}>
-        <div class="app-menu-wrap">
-          <DropdownMenu.Trigger bind:ref={appMenuButton} class="app-menu-trigger" aria-label={t("history.appMenu")}>
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span>ClipClop</span>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.ContentStatic class="menu app-menu" aria-label={t("history.appMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); appMenuButton?.focus(); }}>
-            <DropdownMenu.Item onclick={() => void openSettingsView()}>{t("history.settings")} <kbd>{settingsShortcut}</kbd></DropdownMenu.Item>
-            <DropdownMenu.Item onclick={checkForUpdates}>{t("history.checkUpdates")}</DropdownMenu.Item>
-            <DropdownMenu.Item onclick={() => void openSettingsView("about")}>{t("history.about")}</DropdownMenu.Item>
-            <DropdownMenu.Separator class="menu-separator" />
-            <DropdownMenu.Item class="danger" onclick={() => void quitApp()}><span>{t("history.quit")}</span><kbd>{quitShortcut}</kbd></DropdownMenu.Item>
-          </DropdownMenu.ContentStatic>
-        </div>
-        </DropdownMenu.Root>
-      </div>
-    {:else}
-      <span class="settings-title">{t("settings.title")}</span>
-    {/if}
-    <div class="titlebar-drag" data-tauri-drag-region></div>
-  </header>
+  <AppTitleBar
+    history={view === "history"}
+    open={appMenuOpen}
+    {settingsShortcut}
+    {quitShortcut}
+    onopenchange={setAppMenuOpen}
+    onsettings={() => void openSettingsView()}
+    onupdates={checkForUpdates}
+    onabout={() => void openSettingsView("about")}
+    onquit={() => void quitApp()}
+  />
   {#if view === "history"}
   <HistoryList
     bind:this={listbox}
@@ -726,42 +732,32 @@
     oninert={() => enterBrowse()}
   />
 
-  <AlertDialog.Root open={deletePending} onOpenChange={(open) => { deletePending = open; if (!open) mode = "browse"; }}>
-  <footer class="actions">
-    {#if deletePending}
-      <AlertDialog.Content class="confirmation" aria-label={t("history.confirmDeleteLabel")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmActionButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); focusConfirmationInvoker(); }}>
-        <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
-        <AlertDialog.Cancel class="ghost" onclick={cancelDelete}>{t("common.cancel")} <kbd>Esc</kbd></AlertDialog.Cancel>
-        <AlertDialog.Action bind:ref={confirmActionButton} class="destructive" onclick={confirmDelete}>{t("history.delete")}</AlertDialog.Action>
-      </AlertDialog.Content>
-    {:else}
-      {#if error}<span class="message error" title={error}>{error}</span>{/if}
-      {#if copied}<span class="message">{copied}</span>{/if}
-      <DropdownMenu.Root open={menuOpen} onOpenChange={(open) => { menuOpen = open; mode = open ? "menu" : "browse"; if (open) appMenuOpen = false; }}>
-      <div class="menu-wrap">
-        <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger${menuOpen ? " expanded" : ""}`} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</DropdownMenu.Trigger>
-          <DropdownMenu.ContentStatic class="menu action-menu" aria-label={t("history.actionMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); enterBrowse(); }}>
-            {#if canPreviewSelected()}<DropdownMenu.Item onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></DropdownMenu.Item>{/if}
-            {#if session.detail?.content_type === "link"}
-              <DropdownMenu.Item onclick={() => void openSelectedLink()}><span>{t("history.openLink")}</span></DropdownMenu.Item>
-            {/if}
-            <DropdownMenu.Separator class="menu-separator" />
-            {#if session.detail?.plain_text != null}
-              <DropdownMenu.Item onclick={() => void pastePlainSelected()}><span>{t("history.pastePlain")}</span><kbd>⇧⏎</kbd></DropdownMenu.Item>
-            {/if}
-            <DropdownMenu.Item onclick={() => void copyOnly()}><span>{t("history.copy")}</span></DropdownMenu.Item>
-            {#if session.detail?.plain_text != null}
-              <DropdownMenu.Item onclick={() => void copyOnly(true)}><span>{t("history.copyPlain")}</span><kbd>{isMac ? "⌘⇧C" : "Ctrl⇧C"}</kbd></DropdownMenu.Item>
-            {/if}
-            <DropdownMenu.Separator class="menu-separator" />
-            <DropdownMenu.Item class="danger" onclick={() => void requestDelete()}><span>{t("history.deleteFrom")}</span><kbd>{deleteShortcut}</kbd></DropdownMenu.Item>
-          </DropdownMenu.ContentStatic>
-      </div>
-      </DropdownMenu.Root>
-      <button class="copy" onclick={() => pasteSelected()} disabled={!session.selectedId}><kbd>⏎</kbd> {t("history.paste")}</button>
-    {/if}
-  </footer>
-  </AlertDialog.Root>
+  <HistoryActionBar
+    selected={Boolean(session.selectedId)}
+    canPreview={canPreviewSelected()}
+    isLink={session.detail?.content_type === "link"}
+    hasPlainText={session.detail?.plain_text != null}
+    {isMac}
+    {error}
+    {copied}
+    {menuOpen}
+    {deletePending}
+    {actionMenuShortcut}
+    {deleteShortcut}
+    onmenuopenchange={setActionMenuOpen}
+    ondeleteopenchange={setDeletePending}
+    onbrowse={() => enterBrowse()}
+    onpreview={() => void viewSelectedClip()}
+    onopenlink={() => void openSelectedLink()}
+    onpasteplain={() => void pastePlainSelected()}
+    oncopy={() => void copyOnly()}
+    oncopyplain={() => void copyOnly(true)}
+    onrequestdelete={requestDelete}
+    oncanceldelete={cancelDelete}
+    onconfirmdelete={confirmDelete}
+    onpaste={() => void pasteSelected()}
+    onrestorefocus={focusConfirmationInvoker}
+  />
   {:else}
     <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} />
   {/if}
@@ -771,43 +767,6 @@
 <style>
   .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:var(--radius-xl); box-shadow:var(--panel-shadow); overflow:hidden; }
   .root-loading{grid-column:1/-1;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);font-size:var(--fs-body)}
-  .titlebar { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--hairline); user-select:none; }
-  .titlebar-drag { flex:1; align-self:stretch; }
-  .brand { display:flex; align-items:center; color:var(--text-2); }
-  .app-menu-wrap { position:relative; }
-  :global(.app-menu-trigger) { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
-  :global(.app-menu-trigger:hover) { background:var(--bg-hover); }
-  .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
-  .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
-  kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
-  .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .copy, :global(.ghost), :global(.destructive) { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
-  .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
-  .copy:hover { background:var(--action-hover); }
-  .copy:active { filter:brightness(.92); }
-  .copy kbd { color:inherit; border-color:currentColor; opacity:.9; }
-  :global(.ghost:hover), :global(.ghost.expanded) { color:var(--text-1); background:var(--bg-hover); }
-  :global(.ghost:active), :global(.ghost.expanded:active) { background:var(--bg-selected); }
-  :global(.action-menu-trigger.expanded) kbd { color:inherit; border-color:currentColor; }
-  :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
-  button:disabled { opacity:.45; }
-  .menu-wrap { position:relative; }
-  :global(.menu) { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
-  :global(.action-menu) { width:260px; }
-  :global(.app-menu) { top:30px; bottom:auto; left:0; right:auto; width:180px; }
-  :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
-  :global(.menu [role="menuitem"] > span) { min-width:0; }
-  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
-  :global(.menu [role="menuitem"]:hover), :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
-  :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
-  :global(.menu .danger) { color:var(--danger); }
-  :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
-  .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
-  .message.error { color:var(--danger); }
-  :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
-  :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
-  :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }
   @media (prefers-reduced-motion:no-preference) { .panel { animation:enter 120ms ease-out; } @keyframes enter { from { opacity:0; transform:scale(.98); } } }

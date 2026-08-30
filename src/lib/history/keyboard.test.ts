@@ -12,8 +12,15 @@ describe("window keyboard priority", () => {
   it("pops one Escape layer before dismissing the panel", () => {
     expect(routeWindowKey(key("Escape"), { ...browse, deletePending: true })).toBe("cancel-delete");
     expect(routeWindowKey(key("Escape"), { ...browse, menuOpen: true })).toBe("close-menu");
+    expect(routeWindowKey(key("Escape"), { ...browse, appMenuOpen: true })).toBe("close-app-menu");
     expect(routeWindowKey(key("Escape"), { ...browse, mode: "search" })).toBe("return-to-browse");
     expect(routeWindowKey(key("Escape"), browse)).toBe("dismiss-panel");
+  });
+
+  it("keeps delete confirmation ahead of menus and window commands ahead of every layer", () => {
+    const layered = { ...browse, deletePending: true, menuOpen: true, appMenuOpen: true };
+    expect(routeWindowKey(key("Escape"), layered)).toBe("cancel-delete");
+    expect(routeWindowKey(key("w", { ctrlKey: true }), layered)).toBe("dismiss-panel");
   });
 
   it("does not override handled events, child views, or directional keys", () => {
