@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { getSourceAppIcon, openClipLink, previewClip } from "./api";
+import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip } from "./api";
 
 describe("history host contracts", () => {
   beforeEach(() => invoke.mockReset());
@@ -15,9 +15,22 @@ describe("history host contracts", () => {
   });
 
   it("previews through one complete host action", async () => {
-    invoke.mockResolvedValue("fallback_opened");
-    await expect(previewClip("clip-1", 2)).resolves.toBe("fallback_opened");
+    invoke.mockResolvedValue("native_opened");
+    await expect(previewClip("clip-1", 2)).resolves.toBe("native_opened");
     expect(invoke).toHaveBeenCalledWith("preview_clip", { id: "clip-1", index: 2 });
+  });
+
+  it("reads preview capability from the host", async () => {
+    invoke.mockResolvedValue({ provider: "powertoys_peek", reason: null });
+    await expect(getPreviewCapability()).resolves.toEqual({ provider: "powertoys_peek", reason: null });
+    expect(invoke).toHaveBeenCalledWith("get_preview_capability");
+  });
+
+  it("limits PowerToys Peek to files without narrowing macOS Quick Look", () => {
+    expect(canPreviewClip({ provider: "powertoys_peek", reason: null }, "file")).toBe(true);
+    expect(canPreviewClip({ provider: "powertoys_peek", reason: null }, "text")).toBe(false);
+    expect(canPreviewClip({ provider: "macos_quicklook", reason: null }, "text")).toBe(true);
+    expect(canPreviewClip({ provider: "unavailable", reason: "not_installed" }, "file")).toBe(false);
   });
 
   it("asks Rust to open either the full stored link or its origin", async () => {

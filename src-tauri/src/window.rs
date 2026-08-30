@@ -225,6 +225,10 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
         Ok(()) => lifecycle.mark_focused(label),
         Err(error) => log::warn!("show_panel: focus request failed: {error}"),
     }
+
+    if label == QUICK_LABEL {
+        let _ = window.emit("quick_panel_shown", ());
+    }
 }
 
 fn emit_main_request(app: &tauri::AppHandle, request: MainPanelRequest) {

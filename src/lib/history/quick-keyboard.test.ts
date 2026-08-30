@@ -12,4 +12,8 @@ describe("quick panel keyboard", () => {
     expect(routeQuickKey("ArrowDown", 2, 3)).toEqual({ type: "select", index: 2 });
     expect(routeQuickKey(" ", 1, 3)).toEqual({ type: "preview", index: 1 });
   });
+
+  it("leaves Space untouched when preview is unavailable", () => {
+    expect(routeQuickKey(" ", 1, 3, false)).toBeNull();
+  });
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { getClipThumbnail, hidePanel, pasteClip, previewClip, queryHistory, setQuickSelection } from "./api";
+  import { canPreviewClip, getClipThumbnail, getPreviewCapability, hidePanel, pasteClip, previewClip, queryHistory, setQuickSelection, type PreviewCapability } from "./api";
   import { fileName } from "./presentation";
   import type { ClipSummary } from "./types";
   import { localizedError, t } from "$lib/i18n/index.svelte";
@@ -17,6 +17,7 @@
   let thumbnails = $state<Record<string, string>>({});
   let loading = $state(true);
   let error = $state("");
+  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed" });
   let list = $state<HTMLDivElement>();
   const visibleCount = $derived(Math.max(1, Math.min(10, Math.floor((window.innerHeight - 188) / 40))));
   const visibleItems = $derived(items.slice(0, visibleCount));
@@ -27,10 +28,17 @@
 
   onMount(() => {
     void refresh();
+    void refreshPreviewCapability();
     const unlisten = listen("history_changed", () => void refresh());
+    const unlistenShown = listen("quick_panel_shown", () => void refreshPreviewCapability());
     requestAnimationFrame(() => list?.focus());
-    return () => { unlisten.then((fn) => fn()); };
+    return () => { unlisten.then((fn) => fn()); unlistenShown.then((fn) => fn()); };
   });
+
+  async function refreshPreviewCapability() {
+    try { previewCapability = await getPreviewCapability(); }
+    catch { previewCapability = { provider: "unavailable", reason: "detection_failed" }; }
+  }
 
   async function refresh() {
     try {
@@ -73,7 +81,9 @@
 
   function onkeydown(event: KeyboardEvent) {
     const index = visibleItems.findIndex((item) => item.id === selectedId);
-    const action = routeQuickKey(event.key, index, visibleItems.length);
+    const selected = visibleItems[Math.max(index, 0)];
+    const canPreview = canPreviewClip(previewCapability, selected?.content_type);
+    const action = routeQuickKey(event.key, index, visibleItems.length, canPreview);
     if (!action) return;
     event.preventDefault();
     if (action.type === "close") void hidePanel();

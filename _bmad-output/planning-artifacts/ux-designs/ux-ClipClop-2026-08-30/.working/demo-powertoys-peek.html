@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ClipClop · PowerToys Peek UX Demo</title>
+  <style>
+    /* Governed by DESIGN.md: Layout & Spacing, Components; EXPERIENCE.md: State Patterns, Key Flow 1. */
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;color-scheme:dark;--bg-page:#0e0f10;--bg-shell:#17181a;--bg-raised:#1e2022;--bg-hover:#242628;--bg-selected:#2a2d30;--hairline:#2c2f32;--text-1:#ecedee;--text-2:#aeb3b7;--text-3:#8a9095;--action:#eceef0;--action-on:#17181a;--danger:#ff6b72;--radius-sm:4px;--radius-md:6px;--radius-lg:8px;--radius-xl:14px;--shadow:0 2px 5px rgba(0,0,0,.18),0 18px 50px rgba(0,0,0,.45)}
+    *{box-sizing:border-box}body{min-height:100vh;margin:0;padding:32px;display:grid;place-items:center;background:radial-gradient(circle at 50% 0,#24272a 0,transparent 44%),var(--bg-page);color:var(--text-1)}button{font:inherit;border:0}.demo{width:min(1060px,100%)}.demo-head{margin:0 0 16px;display:flex;align-items:end;justify-content:space-between;gap:20px}.demo-head h1{margin:0 0 4px;font-size:18px}.demo-head p{margin:0;color:var(--text-2);font-size:12px}.scenario{display:flex;gap:6px;padding:4px;border:1px solid var(--hairline);border-radius:8px;background:var(--bg-shell)}.scenario button{padding:7px 10px;border-radius:5px;color:var(--text-2);background:transparent;font-size:12px;cursor:pointer}.scenario button:hover,.scenario button.active{color:var(--text-1);background:var(--bg-selected)}.stage{display:grid;grid-template-columns:minmax(0,840px) 190px;gap:18px;align-items:start}.window{height:640px;overflow:hidden;border:1px solid #303337;border-radius:14px;background:var(--bg-shell);box-shadow:var(--shadow)}.titlebar{height:42px;padding:0 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--hairline);background:var(--bg-raised);font-size:12px;font-weight:650}.appmark{width:19px;height:19px;display:grid;place-items:center;border-radius:5px;background:linear-gradient(145deg,#e56f67,#7b58d3);font-size:10px;color:white}.settings{height:550px;display:grid;grid-template-columns:180px 1fr}.nav{padding:14px 12px;border-right:1px solid var(--hairline)}.nav button{width:100%;height:40px;padding:0 12px;border-radius:6px;color:var(--text-2);background:transparent;text-align:left;font-size:13px;font-weight:600}.nav button.active{color:var(--text-1);background:var(--bg-selected)}.nav hr{height:1px;margin:8px 6px;border:0;background:var(--hairline)}.content{padding:0 24px 20px;overflow:hidden}.content h2{margin:18px 0 4px;font-size:18px}.row{min-height:68px;padding:12px 0;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}.row>span{display:flex;min-width:0;flex-direction:column;gap:3px}.row strong{font-size:13px}.row small{max-width:490px;color:var(--text-3);font-size:12px;line-height:1.4}.row .action{flex:none;min-height:32px;padding:0 12px;border-radius:6px;color:var(--text-2);background:transparent;font-size:12px;cursor:pointer}.row .action:hover{color:var(--text-1);background:var(--bg-hover)}.row .action.primary{color:var(--action-on);background:var(--action)}.switch{width:36px;height:20px;padding:2px;border-radius:999px;background:var(--action)}.switch:after{content:"";display:block;width:16px;height:16px;margin-left:16px;border-radius:50%;background:var(--action-on)}.footer{height:48px;padding:0 16px;display:flex;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid var(--hairline)}.footer button{min-width:92px;height:32px;border-radius:6px;color:var(--text-2);background:transparent}.footer .save{color:var(--action-on);background:var(--action)}.notes{display:flex;flex-direction:column;gap:10px}.note{padding:12px;border:1px solid var(--hairline);border-radius:8px;background:var(--bg-shell)}.note b{display:block;margin-bottom:5px;font-size:12px}.note p{margin:0;color:var(--text-2);font-size:11px;line-height:1.5}.menu-demo{margin-top:2px;padding:8px;border:1px solid var(--hairline);border-radius:8px;background:var(--bg-raised)}.menu-item{height:34px;padding:0 8px;display:flex;align-items:center;justify-content:space-between;border-radius:5px;color:var(--text-1);font-size:11px}.menu-item:hover{background:var(--bg-hover)}kbd{padding:2px 5px;border:1px solid var(--hairline);border-radius:4px;color:var(--text-2);background:var(--bg-shell);font:10px ui-monospace,monospace}.hidden{display:none!important}.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:9px 12px;border:1px solid var(--hairline);border-radius:7px;background:var(--bg-raised);box-shadow:var(--shadow);font-size:12px;opacity:0;pointer-events:none;transition:opacity .15s}.toast.show{opacity:1}@media(max-width:900px){body{padding:16px}.stage{grid-template-columns:1fr}.window{height:600px}.notes{display:grid;grid-template-columns:repeat(3,1fr)}.demo-head{align-items:flex-start;flex-direction:column}.settings{grid-template-columns:150px 1fr}}@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+  </style>
+</head>
+<body>
+  <main class="demo">
+    <header class="demo-head">
+      <div><h1>PowerToys Peek 集成 · Windows 设置体验</h1><p>切换状态，查看同一个设置入口如何表达能力。</p></div>
+      <nav class="scenario" aria-label="预览状态">
+        <button data-state="missing" class="active">未安装</button>
+        <button data-state="ready">已就绪</button>
+        <button data-state="elevated">管理员权限</button>
+      </nav>
+    </header>
+    <section class="stage">
+      <div class="window">
+        <div class="titlebar"><span class="appmark">C</span>ClipClop</div>
+        <div class="settings">
+          <nav class="nav" aria-label="设置分类"><button class="active">通用</button><button>历史记录</button><button>外观</button><button>快捷键</button><hr><button>更新</button><button>关于</button></nav>
+          <section class="content" aria-live="polite">
+            <h2>通用</h2>
+            <div class="row"><span><strong>登录时启动</strong><small>登录 Windows 后自动启动 ClipClop。</small></span><span class="switch" aria-hidden="true"></span></div>
+            <div class="row"><span><strong>快速上手</strong><small>重新查看 ClipClop 的基本操作。</small></span><button class="action">查看</button></div>
+            <div class="row" id="peek-row"><span><strong>PowerToys Peek 文件预览</strong><small id="peek-copy">安装 PowerToys 后，可在 ClipClop 中按 Space 预览文件。由 Microsoft PowerToys 提供，需单独安装。</small></span><button id="peek-action" class="action primary">了解并安装</button></div>
+            <div class="row"><span><strong>托盘点击行为</strong><small>左键打开 ClipClop，右键打开 Quick。</small></span><button class="action">默认</button></div>
+          </section>
+        </div>
+        <footer class="footer"><button>返回</button><button class="save">保存</button></footer>
+      </div>
+      <aside class="notes">
+        <div class="note"><b>为什么放在通用？</b><p>它改变 Windows 的核心键盘行为，但不是需要保存的偏好；状态由系统实时决定。</p></div>
+        <div class="note"><b>其他位置保持安静</b><p id="surface-note">未安装时，主面板和 Quick 不显示预览入口，也不拦截 Space。</p></div>
+        <div class="menu-demo hidden" id="menu-demo"><div class="menu-item"><span>使用 PowerToys Peek 预览</span><kbd>Space</kbd></div><div class="menu-item"><span>复制到剪贴板</span></div></div>
+      </aside>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status">Demo：这里会打开 Microsoft 官方 PowerToys 安装说明。</div>
+  <script>
+    const states={
+      missing:{copy:"安装 PowerToys 后，可在 ClipClop 中按 Space 预览文件。由 Microsoft PowerToys 提供，需单独安装。",action:"了解并安装",primary:true,note:"未安装时，主面板和 Quick 不显示预览入口，也不拦截 Space。",menu:false},
+      ready:{copy:"已检测到 PowerToys Peek。选择文件后按 Space 即可预览。",action:"了解 Peek",primary:false,note:"已就绪时，只有真实文件记录显示预览菜单并响应 Space。",menu:true},
+      elevated:{copy:"管理员模式下无法使用 Peek。请以普通权限重新启动 ClipClop。",action:"",primary:false,note:"权限不可用时不误导用户重新安装，也不显示预览入口。",menu:false}
+    };
+    const buttons=[...document.querySelectorAll('[data-state]')],copy=document.querySelector('#peek-copy'),action=document.querySelector('#peek-action'),note=document.querySelector('#surface-note'),menu=document.querySelector('#menu-demo'),toast=document.querySelector('#toast');
+    function show(state){const x=states[state];buttons.forEach(b=>b.classList.toggle('active',b.dataset.state===state));copy.textContent=x.copy;action.textContent=x.action;action.classList.toggle('hidden',!x.action);action.classList.toggle('primary',x.primary);note.textContent=x.note;menu.classList.toggle('hidden',!x.menu)}
+    buttons.forEach(b=>b.addEventListener('click',()=>show(b.dataset.state)));
+    action.addEventListener('click',()=>{toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),1800)});
+  </script>
+</body>
+</html>

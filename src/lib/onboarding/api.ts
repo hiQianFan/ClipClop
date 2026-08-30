@@ -16,7 +16,7 @@ export const openAutoPasteSettings = () => invoke<void>("open_auto_paste_setting
 export const saveLanguagePreference = (language: LanguagePreference) =>
   invoke<LanguagePreference>("set_language_preference", { language });
 
-export type PreviewOutcome = "native_opened" | "native_closed" | "fallback_opened" | "not_previewable";
+export type PreviewOutcome = "native_opened" | "native_closed" | "not_previewable";
 export const supportsOnboardingPreview = (platform: "macos" | "windows") => platform === "macos";
 // Sets native Quick Look to the requested state over a built-in example (no clipboard/DB access).
 export const previewOnboardingExample = (example: OnboardingExample, open: boolean) =>

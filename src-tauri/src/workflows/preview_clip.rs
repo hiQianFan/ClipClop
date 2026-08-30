@@ -12,7 +12,6 @@ use crate::{
 pub enum PreviewOutcome {
     NativeOpened,
     NativeClosed,
-    FallbackOpened,
     NotPreviewable,
 }
 
@@ -27,21 +26,13 @@ pub fn preview(
         service.close_native(app, state)?;
         return Ok(PreviewOutcome::NativeClosed);
     }
-    if service.toggle(app, state, id, index)? {
-        return Ok(PreviewOutcome::NativeOpened);
+    match service.toggle(app, state, id, index) {
+        Ok(true) => return Ok(PreviewOutcome::NativeOpened),
+        Ok(false) | Err(AppError::NotFound | AppError::Validation(_)) => {}
+        Err(error) => return Err(error),
     }
 
-    let fallback = service.open_clip_file(app, id, index);
-    match fallback {
-        Ok(()) => Ok(PreviewOutcome::FallbackOpened),
-        Err(AppError::Validation(_)) if index == 0 => match service.open_clip(app, id) {
-            Ok(()) => Ok(PreviewOutcome::FallbackOpened),
-            Err(AppError::NotFound) => Ok(PreviewOutcome::NotPreviewable),
-            Err(error) => Err(error),
-        },
-        Err(AppError::NotFound) => Ok(PreviewOutcome::NotPreviewable),
-        Err(error) => Err(error),
-    }
+    Ok(PreviewOutcome::NotPreviewable)
 }
 
 #[cfg(test)]
@@ -53,7 +44,6 @@ mod tests {
         let values = [
             (PreviewOutcome::NativeOpened, "\"native_opened\""),
             (PreviewOutcome::NativeClosed, "\"native_closed\""),
-            (PreviewOutcome::FallbackOpened, "\"fallback_opened\""),
             (PreviewOutcome::NotPreviewable, "\"not_previewable\""),
         ];
         for (outcome, expected) in values {

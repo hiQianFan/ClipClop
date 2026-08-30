@@ -38,8 +38,21 @@ export function getClipThumbnail(id: string): Promise<{ data_url: string | null;
 export type PreviewOutcome =
   | "native_opened"
   | "native_closed"
-  | "fallback_opened"
   | "not_previewable";
+
+export type PreviewCapability = {
+  provider: "macos_quicklook" | "powertoys_peek" | "unavailable";
+  reason: null | "not_installed" | "elevated" | "detection_failed";
+};
+
+export function getPreviewCapability(): Promise<PreviewCapability> {
+  return invoke("get_preview_capability");
+}
+
+export function canPreviewClip(capability: PreviewCapability, contentType: string | undefined) {
+  return capability.provider === "macos_quicklook"
+    || (capability.provider === "powertoys_peek" && contentType === "file");
+}
 
 export function previewClip(id: string, index = 0): Promise<PreviewOutcome> {
   return invoke("preview_clip", { id, index });

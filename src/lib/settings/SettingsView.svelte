@@ -2,7 +2,7 @@
   import { onDestroy, onMount, tick, untrack } from "svelte";
   import { AlertDialog, Progress, Tabs } from "bits-ui";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { clearHistory } from "$lib/history/api";
+  import { clearHistory, getPreviewCapability, type PreviewCapability } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
   import { applyTheme, getSettings, openFilePreviewSettings, openLogDir, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme, type TrayClickAction } from "./api";
   import AppSelect from "$lib/components/AppSelect.svelte";
@@ -21,6 +21,7 @@
   let tab = $state<Tab>("general");
   let status = $state("");
   let saving = $state(false);
+  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed" });
   // Update task state lives in the module-level store so an in-flight check or
   // download survives this view being closed and reopened. Read-only here.
   const appVersion = $derived(updateStore.appVersion);
@@ -174,6 +175,7 @@
 
   async function load() {
     void updateStore.hydrate();
+    if (platform === "windows") void refreshPreviewCapability();
     try {
       const loaded = await getSettings();
       if (destroyed) return;
@@ -183,6 +185,23 @@
       setLanguagePreference(loaded.language);
     }
     catch (reason) { if (!destroyed) status = t("settings.loadFailed", { error: localizedError(reason) }); }
+  }
+
+  async function refreshPreviewCapability() {
+    try { previewCapability = await getPreviewCapability(); }
+    catch { previewCapability = { provider: "unavailable", reason: "detection_failed" }; }
+  }
+
+  function windowsPreviewHelp() {
+    if (previewCapability.provider === "powertoys_peek") return t("settings.peekReady");
+    if (previewCapability.reason === "elevated") return t("settings.peekElevated");
+    if (previewCapability.reason === "not_installed") return t("settings.peekNotInstalled");
+    return t("settings.peekUnavailable");
+  }
+
+  async function openPowerToysInstall() {
+    try { await openUrl("https://learn.microsoft.com/windows/powertoys/install"); }
+    catch (reason) { status = localizedError(reason); }
   }
 
   async function openAutoPasteSystemSettings() {
@@ -253,6 +272,7 @@
 
   function selectTab(next: Tab) {
     tab = next;
+    if (next === "general" && platform === "windows") void refreshPreviewCapability();
     recording = false;
     shortcutError = "";
   }
@@ -444,6 +464,7 @@
           <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small></span><button onclick={() => void openAutoPasteSystemSettings()}>{t("settings.manage")}</button></div>{/if}
           {#if platform === "macos"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelp")}</small></span><button onclick={() => void openFilePreviewSystemSettings()}>{t("settings.manage")}</button></div>{/if}
+          {#if platform === "windows"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{windowsPreviewHelp()}</small></span>{#if previewCapability.reason === "not_installed"}<button onclick={() => void openPowerToysInstall()}>{t("settings.peekInstall")}</button>{/if}</div>{/if}
         {:else if tab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>

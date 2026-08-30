@@ -2,7 +2,7 @@
   import { onMount, tick } from "svelte";
   import { AlertDialog, DropdownMenu } from "bits-ui";
   import { listen } from "@tauri-apps/api/event";
-  import { copyClip, getHistoryFacets, hidePanel, openClipLink, pasteClip, previewClip } from "$lib/history/api";
+  import { canPreviewClip, copyClip, getHistoryFacets, getPreviewCapability, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability } from "$lib/history/api";
   import type { ContentType, HistorySourceOption } from "$lib/history/types";
   import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
@@ -25,6 +25,7 @@
   const isMac = currentPlatform() === "macos";
   let mode = $state<InteractionMode>("browse");
   let previewExternal = false;
+  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed" });
   let confirmationInvoker: HTMLElement | null = null;
   let fileIndex = $state(0);
   let trimWhitespace = $state(false);
@@ -87,7 +88,7 @@
   async function initializeView() {
     let initializationError = "";
     try {
-      await syncSettings();
+      await Promise.all([syncSettings(), refreshPreviewCapability()]);
       onboarding = await getOnboardingState();
       if (onboarding.completed_revision === null) {
         onboardingMode = "first_run";
@@ -101,6 +102,15 @@
     await syncFacets();
     await refreshAndFocus(1);
     if (initializationError && !error) error = initializationError;
+  }
+
+  async function refreshPreviewCapability() {
+    try { previewCapability = await getPreviewCapability(); }
+    catch { previewCapability = { provider: "unavailable", reason: "detection_failed" }; }
+  }
+
+  function canPreviewSelected() {
+    return canPreviewClip(previewCapability, session.detail?.content_type);
   }
 
   async function syncSettings() {
@@ -411,6 +421,7 @@
   // the history_changed listener and is current when the user exits. Within history,
   // Browse position and search conditions are independent saved-session choices.
   async function onPanelShown(request: MainPanelRequest) {
+    void refreshPreviewCapability();
     listbox?.closeFilters();
     if (request.settings) {
       await openSettingsView();
@@ -490,7 +501,7 @@
       event.preventDefault();
       if (session.page.page < session.page.total_pages) listbox?.turnPage(1);
     }
-    else if (event.key === " " || event.code === "Space") {
+    else if ((event.key === " " || event.code === "Space") && canPreviewSelected()) {
       event.preventDefault();
       void viewSelectedClip();
     }
@@ -730,7 +741,7 @@
       <div class="menu-wrap">
         <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger${menuOpen ? " expanded" : ""}`} disabled={!session.selectedId}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</DropdownMenu.Trigger>
           <DropdownMenu.ContentStatic class="menu action-menu" aria-label={t("history.actionMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); enterBrowse(); }}>
-            <DropdownMenu.Item onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></DropdownMenu.Item>
+            {#if canPreviewSelected()}<DropdownMenu.Item onclick={() => void viewSelectedClip()}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></DropdownMenu.Item>{/if}
             {#if session.detail?.content_type === "link"}
               <DropdownMenu.Item onclick={() => void openSelectedLink()}><span>{t("history.openLink")}</span></DropdownMenu.Item>
             {/if}

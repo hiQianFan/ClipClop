@@ -15,6 +15,49 @@ use crate::{
     window::PreviewState,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewProvider {
+    MacosQuicklook,
+    PowertoysPeek,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewUnavailableReason {
+    NotInstalled,
+    Elevated,
+    DetectionFailed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct PreviewCapability {
+    pub provider: PreviewProvider,
+    pub reason: Option<PreviewUnavailableReason>,
+}
+
+impl PreviewCapability {
+    fn ready(provider: PreviewProvider) -> Self {
+        Self {
+            provider,
+            reason: None,
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn unavailable(reason: PreviewUnavailableReason) -> Self {
+        Self {
+            provider: PreviewProvider::Unavailable,
+            reason: Some(reason),
+        }
+    }
+}
+
+pub fn capability() -> PreviewCapability {
+    platform::capability()
+}
+
 #[cfg(any(target_os = "macos", test))]
 const ONBOARDING_LOGO: &[u8] = include_bytes!("../../../static/app-icon.png");
 #[cfg(any(target_os = "macos", test))]
@@ -96,9 +139,9 @@ impl ExternalPreviewService {
         id: &str,
         index: usize,
     ) -> AppResult<bool> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         let path = self.clip_preview_path(app, id, index)?;
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         let path = {
             let _ = (id, index);
             PathBuf::new()
@@ -169,7 +212,7 @@ impl ExternalPreviewService {
         Ok(())
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     fn clip_preview_path(&self, app: &AppHandle, id: &str, index: usize) -> AppResult<PathBuf> {
         let detail = self.history.get_full(id)?;
         match detail.summary.content_type {
@@ -180,7 +223,7 @@ impl ExternalPreviewService {
                 }
                 Ok(path)
             }
-            ContentType::Image => {
+            ContentType::Image if cfg!(target_os = "macos") => {
                 let flavors = self.history.flavors(id)?;
                 let png = flavors
                     .iter()
@@ -190,7 +233,9 @@ impl ExternalPreviewService {
                 self.publish_preview(id, &path, &png.payload)?;
                 Ok(path)
             }
-            ContentType::Text | ContentType::Color | ContentType::Link => {
+            ContentType::Text | ContentType::Color | ContentType::Link
+                if cfg!(target_os = "macos") =>
+            {
                 let path = preview_path(app, id, "txt")?;
                 self.publish_preview(
                     id,
@@ -202,6 +247,7 @@ impl ExternalPreviewService {
                 )?;
                 Ok(path)
             }
+            _ => Err(AppError::NotFound),
         }
     }
 }

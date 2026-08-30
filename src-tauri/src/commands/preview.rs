@@ -10,6 +10,11 @@ use crate::{
 };
 
 #[tauri::command]
+pub fn get_preview_capability() -> crate::preview::PreviewCapability {
+    crate::preview::capability()
+}
+
+#[tauri::command]
 pub async fn get_clip_asset(state: State<'_, AppState>, id: String) -> AppResult<PreviewResource> {
     let assets = state.assets.clone();
     run_blocking(move || assets.asset(&id)).await
