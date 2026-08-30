@@ -109,9 +109,36 @@
   --menu-shadow: 0 6px 8px rgba(24, 28, 32, .18);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
 body { color: var(--text-1); }
 button, input { font: inherit; }
 button { border: 0; }
 :focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
+
+:where(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="url"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"],
+  .preview-body.text-preview
+),
+:where(
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"],
+  .preview-body.text-preview
+) * {
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
