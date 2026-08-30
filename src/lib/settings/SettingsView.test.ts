@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview } = vi.hoisted(() => ({
+const { preview, updateSettings } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -10,6 +10,7 @@ const { preview } = vi.hoisted(() => ({
     displayStatus: null as null | "current" | "available" | "skipped",
     lastUpdateCheck: null as string | null,
   },
+  updateSettings: vi.fn(async (settings) => settings),
 }));
 
 vi.mock("./api", () => ({
@@ -21,7 +22,7 @@ vi.mock("./api", () => ({
     tray_click_action: "recent", check_updates: true, last_update_check: preview.lastUpdateCheck,
     skipped_update_version: null,
   }),
-  updateSettings: vi.fn(), applyTheme: vi.fn(), previewTheme: vi.fn(),
+  updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
   openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(),
 }));
 vi.mock("$lib/history/api", () => ({ clearHistory: vi.fn() }));
@@ -49,6 +50,16 @@ vi.mock("$lib/updater/store.svelte", () => ({
 import SettingsView from "./SettingsView.svelte";
 
 afterEach(cleanup);
+
+it("keeps loading and saving owned by SettingsView across categories", async () => {
+  updateSettings.mockClear();
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  await waitFor(() => expect(screen.getByRole("heading", { name: "General" })).toBeTruthy());
+  await fireEvent.click(screen.getByRole("tab", { name: "Shortcuts" }));
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Shortcuts" })).toBeTruthy());
+  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+});
 
 async function show(
   phase: string,
