@@ -9,8 +9,8 @@
   import { currentPlatform, defaultShortcut, shortcutFromKeyboardEvent, shortcutKeycaps, shortcutSpokenLabel, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION, listReleaseNotes, openLatestRelease, type ReleaseNote } from "$lib/updater/api";
   import { updateStore } from "$lib/updater/store.svelte";
-  import { effectiveLocale, formatDateTime, formatNumber, localizedError, localizedUpdateError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
-  import { CircleAlert, CircleCheck, Download, RefreshCw } from "@lucide/svelte";
+  import { effectiveLocale, formatDateTime, formatNumber, localizedError, setLanguagePreference, t, type StaticMessageKey } from "$lib/i18n/index.svelte";
+  import { RefreshCw } from "@lucide/svelte";
 
   type Tab = "general" | "history" | "appearance" | "shortcuts" | "updates" | "about";
   type ShortcutRow = { name: StaticMessageKey; description: StaticMessageKey; keys: string[][] };
@@ -28,33 +28,47 @@
   const updateState = $derived(updateStore.phase);
   const updateProgress = $derived(updateStore.progress);
   const updateBusy = $derived(updateStore.busy);
-  const progressLabel = $derived(updateState === "installing" ? t("settings.installing") : updateProgress === null ? t("settings.downloading") : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) }));
+  const progressLabel = $derived(updateProgress === null ? t("settings.downloading") : `${formatNumber(updateProgress)}%`);
+  const lastChecked = $derived(settings?.last_update_check ? t("settings.lastChecked", { time: formatDateTime(settings.last_update_check) }) : t("settings.notChecked"));
   // Derived so the message re-localizes on language change instead of freezing
   // at the locale that was active when the task ran.
   const updateMessage = $derived.by(() => {
     effectiveLocale();
     switch (updateState) {
-      case "checking": return t("settings.checkingLong");
-      case "current": return t("settings.upToDate", { version: displayVersion(appVersion) });
+      case "checking":
+        return updateStore.displayStatus === "current"
+          ? t("settings.updateCurrent")
+          : updateStore.displayStatus === "available" && update
+            ? t("settings.newVersion", { version: update.version })
+            : updateStore.displayStatus === "skipped"
+              ? t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" })
+              : t("settings.checkingLong");
+      case "current": return t("settings.updateCurrent");
       case "skipped": return t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" });
-      case "downloading":
-        return updateProgress === null
-          ? t("settings.downloading")
-          : t("settings.downloadingProgress", { progress: formatNumber(updateProgress) });
-      case "downloaded": return t("settings.downloaded");
+      case "downloading": return t("settings.downloadingVersion", { version: update?.version ?? "" });
+      case "downloaded": return t("settings.downloadedVersion", { version: update?.version ?? "" });
       case "installing": return t("settings.installing");
       case "error":
         return updateStore.errorSource === "unsupported"
           ? t("settings.devUpdate")
           : updateStore.errorSource === "install"
-            ? t("settings.installFailed", { error: localizedUpdateError(updateStore.errorReason) })
+            ? t("settings.installFailedTitle")
             : updateStore.errorSource === "relaunch"
-              ? t("settings.restartFailed", { error: localizedUpdateError(updateStore.errorReason) })
+              ? t("settings.restartFailedTitle")
             : updateStore.errorSource === "download"
-              ? t("settings.downloadFailed", { error: localizedUpdateError(updateStore.errorReason) })
-            : t("settings.checkFailed", { error: localizedUpdateError(updateStore.errorReason) });
-      default: return update ? t("settings.found", { version: update.version }) : "";
+              ? t("settings.downloadFailedTitle")
+            : t("settings.checkFailedTitle");
+      default: return update ? t("settings.newVersion", { version: update.version }) : t("settings.notChecked");
     }
+  });
+  const updateDetail = $derived.by(() => {
+    if (updateState === "checking" && updateStore.displayStatus) return t("settings.checkingLong");
+    if (updateState === "current") return lastChecked;
+    if (updateState !== "error") return "";
+    if (updateStore.errorSource === "download" || updateStore.errorSource === "check") return t("settings.checkConnection");
+    if (updateStore.errorSource === "install") return t("settings.packageRetained");
+    if (updateStore.errorSource === "relaunch") return t("settings.updateInstalled");
+    return "";
   });
   let confirmClear = $state(false);
   let navFocusRing = $state(false);
@@ -343,8 +357,12 @@
   // The store owns the async lifecycle; these just trigger it. State updates flow
   // back through the derived reads above, so closing/reopening the view mid-task
   // never loses progress.
-  function checkUpdates() {
-    void updateStore.check();
+  async function checkUpdates() {
+    await updateStore.check();
+    if (!destroyed && settings) {
+      try { settings.last_update_check = (await getSettings()).last_update_check; }
+      catch { /* The update result remains useful when refreshing this timestamp fails. */ }
+    }
   }
 
   function installUpdate() { void updateStore.install(); }
@@ -472,45 +490,36 @@
         {:else if tab === "updates"}
           <div class="updates-layout">
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.updates")}</h1>
-          <div class="update-head"><span><strong>{t("settings.updateHeading")}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span><div class="update-head-controls"><span id="auto-check-label">{t("settings.autoCheck")}</span><label class="switch compact-switch"><input type="checkbox" role="switch" aria-labelledby="auto-check-label" bind:checked={settings.check_updates} /><span class="switch-track"></span></label></div></div>
-          <div class="update-check update-head-controls">
-            <span class="update-status" class:error={updateState === "error"} role="status" aria-live="polite" aria-atomic="true">
-              {#if updateState === "checking"}<span class="visually-hidden">{updateMessage}</span><span>{updateStore.displayStatus === "current" ? t("settings.upToDate", { version: displayVersion(appVersion) }) : updateStore.displayStatus === "available" && update ? t("settings.found", { version: update.version }) : updateStore.displayStatus === "skipped" ? t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" }) : updateMessage}</span>
-              {:else}{#if updateState === "current"}<CircleCheck size={15} />{:else if updateState === "error"}<CircleAlert size={15} />{/if}<span>{updateMessage}</span>{/if}
-            </span>
-            <div class="update-actions"><button onclick={() => void openReleasePage()}>{t("settings.releasePage")}</button><button class="update-check-btn" disabled={updateState === "checking" || updateBusy} aria-busy={updateState === "checking"} onclick={checkUpdates}><RefreshCw size={14} class={updateState === "checking" ? "spin" : ""} />{updateState === "checking" ? t("settings.checking") : t("settings.check")}</button></div>
-          </div>
-          {#if update}
-            <div class="update-card">
-              <div class="update-card-head">
-                <span class="update-badge" aria-hidden="true"><Download size={17} /></span>
-                <span class="update-card-title"><strong>{t("settings.updateAvailable", { version: update.version })}</strong><small>{t("settings.versionHelp", { version: displayVersion(appVersion) })}</small></span>
+          <section class="update-section" aria-label={t("settings.updateSettingsAndStatus")}>
+            <div class="update-head"><span><strong>{t("settings.autoCheckUpdates")}</strong><small>{t("settings.currentVersion", { version: displayVersion(appVersion) })}</small></span><div class="update-head-controls"><button class="update-refresh" disabled={updateState === "checking" || updateBusy} aria-label={t("settings.check")} title={t("settings.check")} aria-busy={updateState === "checking"} onclick={checkUpdates}><RefreshCw size={15} class={updateState === "checking" ? "spin" : ""} /></button><label class="switch compact-switch"><input type="checkbox" role="switch" aria-label={t("settings.autoCheckUpdates")} bind:checked={settings.check_updates} /><span class="switch-track"></span></label></div></div>
+            <div class="update-rail">
+              <span class="visually-hidden" role={updateState === "error" ? "alert" : "status"} aria-live="polite">{updateMessage}{updateDetail ? ` ${updateDetail}` : ""}</span>
+              <div class="update-rail-main">
+                <strong class:error={updateState === "error" && updateStore.errorSource !== "unsupported"}>{updateMessage}</strong>
+                {#if updateState === "downloading"}
+                  <div class="update-progress">
+                    <Progress.Root class="progress-track" value={updateProgress} max={100} aria-label={progressLabel} aria-valuetext={progressLabel}><div class="progress-fill" class:indeterminate={updateProgress === null} style={updateProgress === null ? "" : `width:${updateProgress}%`}></div></Progress.Root>
+                    {#if updateProgress !== null}<span class="progress-label">{formatNumber(updateProgress)}%</span>{/if}
+                  </div>
+                {:else if updateDetail}<span class="update-detail">{updateDetail}</span>{/if}
               </div>
-              {#if updateBusy}
-                <div class="update-progress">
-                  <Progress.Root class="progress-track" value={updateProgress} max={100} aria-label={progressLabel} aria-valuetext={progressLabel}><div class="progress-fill" class:indeterminate={updateProgress === null} style={updateProgress === null ? "" : `width:${updateProgress}%`}></div></Progress.Root>
-                  <span class="progress-label">{progressLabel}</span>
-                </div>
-              {:else if updateState === "error"}
-                <p class="update-status error" role="alert"><CircleAlert size={14} /><span>{updateMessage}</span></p>
-              {:else if updateState === "downloaded"}
-                <p class="update-status" role="status"><CircleCheck size={14} /><span>{updateMessage}</span></p>
-              {/if}
               <div class="update-actions">
                 {#if updateState === "downloading"}
-                  <button onclick={cancelDownload}>{t("settings.cancelDownload")}</button>
-                {:else if updateState === "downloaded" || (updateState === "error" && updateStore.errorSource === "install")}
-                  <button onclick={updateState === "error" ? retryUpdate : installUpdate}>{t("settings.installRestart")}</button>
+                  <button class="update-primary" onclick={cancelDownload}>{t("common.cancel")}</button>
+                {:else if updateState === "downloaded"}
+                  <button class="secondary" onclick={skipUpdate}>{t("settings.skipVersion")}</button><button class="update-primary" onclick={installUpdate}>{t("settings.installRestart")}</button>
                 {:else if updateState === "error" && updateStore.errorSource === "relaunch"}
-                  <button onclick={retryUpdate}>{t("settings.retry")}</button>
-                {:else if updateState === "error"}
-                  <button onclick={skipUpdate}>{t("settings.skipVersion")}</button><button onclick={retryUpdate}>{t("settings.retry")}</button>
-                {:else if updateState !== "installing" && updateState !== "checking"}
-                  <button onclick={skipUpdate}>{t("settings.skipVersion")}</button><button onclick={() => downloadUpdate()}>{t("settings.download")}</button><button onclick={() => downloadUpdate(true)}>{t("settings.install")}</button>
+                  <button class="update-primary" onclick={retryUpdate}>{t("settings.restart")}</button>
+                {:else if updateState === "error" && (updateStore.errorSource === "download" || updateStore.errorSource === "install")}
+                  <button class="secondary" onclick={skipUpdate}>{t("settings.skipVersion")}</button><button class="update-primary" onclick={retryUpdate}>{t("settings.retry")}</button>
+                {:else if updateState === "error" && updateStore.errorSource === "check"}
+                  <button class="update-primary" onclick={retryUpdate}>{t("settings.retry")}</button>
+                {:else if update && updateState !== "installing" && updateState !== "checking"}
+                  <button class="secondary" onclick={skipUpdate}>{t("settings.skipVersion")}</button><button class="update-primary" onclick={() => downloadUpdate()}>{t("settings.download")}</button>
                 {/if}
               </div>
             </div>
-          {/if}
+          </section>
           <section class="release-history" aria-label={t("settings.releaseNotes")}>
             {#if releasesLoading}
               <div class="release-browser release-loading" aria-busy="true" aria-label={t("settings.loading")}>
@@ -529,7 +538,7 @@
                 <div bind:this={releaseList} class="release-list" role="listbox" aria-label={t("settings.releaseNotes")} aria-activedescendant={selectedRelease ? `release-option-${selectedRelease.version}` : undefined} tabindex="0" onclick={onReleaseListClick} onkeydown={onReleaseListKeydown}>
                   {#each releases as release, index}<div id={`release-option-${release.version}`} class="release-option" class:active={selectedRelease?.version === release.version} data-release-index={index} role="option" aria-selected={selectedRelease?.version === release.version}><strong>{release.version}</strong><small>{formatDateTime(release.publishedAt)}</small></div>{/each}
                 </div>
-                {#if selectedRelease}<article class="release-detail"><header><span><span class="release-detail-title"><strong>{selectedRelease.version}</strong>{#if selectedRelease.isLatest}<em>{t("settings.latestRelease")}</em>{/if}</span><small>{formatDateTime(selectedRelease.publishedAt)}</small></span></header><div class="release-body" class:raw-release-body={!selectedRelease.notesHtml}>{#if selectedRelease.notesHtml}{@html selectedRelease.notesHtml}{:else}{selectedRelease.notes}{/if}</div></article>{/if}
+                {#if selectedRelease}<article class="release-detail"><header><span><span class="release-detail-title"><strong>{selectedRelease.version}</strong>{#if selectedRelease.isLatest}<em>{t("settings.latestRelease")}</em>{/if}</span><small>{formatDateTime(selectedRelease.publishedAt)}</small></span>{#if selectedRelease.isLatest}<button class="release-page" onclick={() => void openReleasePage()}>{t("settings.releasePage")} ↗</button>{/if}</header><div class="release-body" class:raw-release-body={!selectedRelease.notesHtml}>{#if selectedRelease.notesHtml}{@html selectedRelease.notesHtml}{:else}{selectedRelease.notes}{/if}</div></article>{/if}
               </div>
             {/if}
           </section>
@@ -566,11 +575,24 @@
   .row>button,.update-check-btn{min-height:32px;padding:0 12px;white-space:nowrap}
   .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
   .updates-layout{height:100%;min-height:0;display:flex;flex-direction:column}
-  .update-check{flex:none;min-height:56px;margin-top:0;padding-block:12px;border-bottom:1px solid var(--hairline)}
-  .update-check .update-status{min-width:0}
-  .update-check .update-actions{flex:none}
-  .update-check .update-actions>button{min-height:32px;padding:0 12px;white-space:nowrap}
-  .update-card .update-actions>button{min-height:32px;padding:0 12px;white-space:nowrap}
+  .update-section{flex:none}
+  .update-head-controls{gap:8px}
+  .update-refresh{position:relative;width:32px;height:32px;padding:0;display:grid;place-items:center}
+  .update-refresh :global(svg.spin){animation:spin 1s linear infinite}
+  .update-rail{height:56px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--hairline)}
+  .update-rail-main{min-width:0;flex:1;display:flex;align-items:center;gap:12px}
+  .update-rail-main>strong{min-width:0;max-width:210px;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .update-detail{min-width:0;overflow:hidden;color:var(--text-2);font-size:var(--fs-ui);text-overflow:ellipsis;white-space:nowrap}
+  .update-progress{min-width:80px;flex:1;display:flex;flex-direction:row;align-items:center;gap:8px}
+  .update-progress :global(.progress-track){min-width:80px;flex:1;height:4px}
+  .progress-label{width:38px;flex:none;text-align:right}
+  .update-rail .update-actions{flex:none;display:flex;align-items:center;gap:8px}
+  .update-rail .update-actions>button{min-height:32px;padding:0 12px;white-space:nowrap}
+  .update-rail .update-actions>.secondary{color:var(--text-3)}
+  .update-rail .update-actions>.secondary:hover{color:var(--text-1)}
+  .update-rail .update-actions>.update-primary{min-width:88px;color:var(--action-on);background:var(--action);font-weight:600}
+  .update-rail .update-actions>.update-primary:hover{color:var(--action-on);background:var(--action-hover)}
+  @media(prefers-reduced-motion:reduce){.update-refresh :global(svg.spin){animation:none}}
   .release-history{flex:1 1 auto;min-height:0;margin-top:16px;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr)}
   .release-browser{height:100%;min-height:0;overflow:hidden;display:grid;grid-template-columns:180px minmax(0,1fr)}
   .release-list{min-height:0;overflow-y:auto;padding:4px 8px 0 0;border-right:1px solid var(--hairline)}
@@ -599,6 +621,7 @@
   .release-load-message{display:flex;align-items:center;gap:12px}.release-load-message .inline-error{margin:0}.release-load-message button{min-height:32px;padding:0 12px;white-space:nowrap}
   .release-detail{min-width:0;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);padding:10px 0 0 14px}
   .release-detail header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .release-page{padding:4px 6px;color:var(--text-3);white-space:nowrap}
   .release-detail header>span{display:flex;min-width:0;flex-direction:column;gap:2px}.release-detail-title{display:flex;align-items:center;gap:6px}.release-detail-title em{padding:1px 4px;border-radius:var(--radius-sm);color:var(--text-2);background:var(--bg-hover);font-size:var(--fs-meta);font-style:normal;font-weight:400;line-height:1.3;white-space:nowrap}
   .release-body{min-height:0;margin-top:8px;padding:10px 12px;overflow-y:auto;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-shell);font-size:var(--fs-ui);line-height:1.55}.release-body.raw-release-body{white-space:pre-wrap}.release-body :global(h2),.release-body :global(h3){margin:0 0 8px;color:var(--text-1);font-size:var(--fs-body);line-height:1.35}.release-body :global(h2:not(:first-child)),.release-body :global(h3:not(:first-child)){margin-top:18px}.release-body :global(p),.release-body :global(ul),.release-body :global(blockquote){margin:0 0 12px}.release-body :global(ul){padding-left:20px}.release-body :global(li+li){margin-top:4px}.release-body :global(blockquote){padding:8px 10px;border-left:2px solid var(--hairline);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--bg-raised)}.release-body :global(a){color:var(--action);text-decoration:underline;text-underline-offset:2px}
   :global(.settings-body){min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}

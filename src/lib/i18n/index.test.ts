@@ -47,13 +47,13 @@ describe("localization", () => {
 
   it("keeps catalog keys identical and rejects unresolved interpolation", () => {
     expect(Object.keys(zhCN).sort()).toEqual(Object.keys(en).sort());
-    expect(() => (t as unknown as (key: string) => string)("settings.found")).toThrow(/Missing translation parameter/);
+    expect(() => (t as unknown as (key: string) => string)("settings.newVersion")).toThrow(/Missing translation parameter/);
 
     if (false) {
       // @ts-expect-error interpolation parameters are required
-      t("settings.found");
+      t("settings.newVersion");
       // @ts-expect-error the parameter name must match the catalog placeholder
-      t("settings.found", { wrong: "1.0" });
+      t("settings.newVersion", { wrong: "1.0" });
       // @ts-expect-error static messages do not accept parameters
       t("settings.general", { value: "unused" });
     }
