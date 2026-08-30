@@ -15,6 +15,18 @@ Tauri commands are adapters. Business rules belong in their feature modules, and
 
 History UI state is split by ownership: `HistorySession` owns the list, pagination, and selection; `PreviewSession` owns resource URLs, thumbnails, caches, debounce, and request invalidation versions. `HistoryWorkspace` orchestrates their call order and continues to own DOM focus, keyboard routing, and the multi-file `fileIndex` cursor. A session must not reach back into component state, and runtime state must not have duplicate owners.
 
+### Frontend composition
+
+The frontend remains feature-first. Do not reproduce backend-style `domain`, `application`, `infrastructure`, or `presentation` layers inside every feature. Routes assemble windows; feature orchestrators own session assembly, DOM focus, cross-view commands, and lifecycle; feature components own their markup and local compound interactions; sessions, stores, and pure logic own durable state and testable decisions; each feature's `api.ts` remains the Tauri transport boundary. Dependencies flow in that direction, and presentation components do not call raw Tauri IPC.
+
+Every runtime state has one owner. Child components receive narrow values and callbacks instead of mirroring session or store state. Extract a component when it has an independent reason to change, isolates a local interaction, or can be tested independently; markup or CSS repetition alone does not justify an abstraction. Shared primitives require at least three equivalent consumers and a net maintenance reduction.
+
+### Style ownership
+
+Root `DESIGN.md` is the product-wide design authority. Dated `_bmad-output/**/DESIGN.md` files are workflow artifacts and do not override it.
+
+`src/app.css` contains design tokens, reset rules, and genuinely application-wide defaults. CSS for owned markup stays with the component that renders that markup. `:global()` is reserved for real scope boundaries such as Bits UI rendered descendants or explicitly dynamic rich content; it is not a cross-feature style-sharing mechanism. Use existing tokens when they express the intended value, but keep one-off geometry local instead of inventing speculative tokens or a shared UI layer.
+
 The Rust host keeps concrete services; a single SQLite database or single platform implementation does not justify Repository, Factory, or DI interfaces. `AssetService` owns resources and thumbnails rendered in the webview. `ExternalPreviewService` owns Quick Look-style external preview and its temporary-file lifecycle. They share only a cheap cloned `HistoryService` handle. Platform paste code lives in platform submodules under `paste`; settings models, hotkey rules, and persistence service live in separate `settings` submodules. Storage migration and settings queries have separate implementation files while remaining methods on the one concrete `Database` type.
 
 ## Panel lifecycle

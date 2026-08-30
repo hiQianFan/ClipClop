@@ -15,6 +15,18 @@ Tauri command 只是适配层。业务规则放在对应功能模块，原生窗
 
 历史界面按状态所有权拆分：`HistorySession` 只拥有列表、分页和选中项；`PreviewSession` 只拥有资源 URL、缩略图、缓存、防抖与请求作废版本。`HistoryWorkspace` 负责两者的调用顺序，并继续拥有 DOM 焦点、键盘路由和多文件 `fileIndex` 游标。不得让 Session 反向操作组件状态，也不得复制同一份运行时状态。
 
+### 前端组合
+
+前端继续按 feature 组织，不在每个 feature 内照搬后端式 `domain`、`application`、`infrastructure` 或 `presentation` 分层。Route 负责窗口装配；feature orchestrator 负责 Session 装配、DOM 焦点、跨子视图命令和生命周期；feature component 负责自身模板与局部复合交互；Session、store 与纯逻辑模块负责长期状态和可测试决策；各 feature 的 `api.ts` 保持为 Tauri transport 边界。依赖按此方向单向流动，展示组件不得直接调用原始 Tauri IPC。
+
+每份运行时状态只有一个 owner。子组件通过窄值和 callback 协作，不镜像 Session 或 store 状态。只有职责能独立变化、能隔离局部交互或能独立测试时才拆组件；单纯重复 markup 或 CSS 不足以建立抽象。共享 primitive 至少需要三个等价消费者，并且必须净减维护成本。
+
+### 样式所有权
+
+根目录 `DESIGN.md` 是产品级设计约束的权威文件；带日期的 `_bmad-output/**/DESIGN.md` 只是具体工作流产物，不能覆盖根文档。
+
+`src/app.css` 只承载设计 token、reset 和真正全局的基础规则。自有 markup 的 CSS 留在渲染它的组件中。`:global()` 只用于 Bits UI 渲染后代、明确的动态富文本等真实作用域边界，不能作为跨 feature 共享样式的机制。现有 token 能准确表达意图时应复用；一次性几何保留在局部，不为它预建 token 或共享 UI 层。
+
 Rust 宿主保持具体服务，不为单一 SQLite 或单一平台实现增加 Repository、Factory 或 DI 接口。`AssetService` 负责 WebView 内的资源读取和缩略图，`ExternalPreviewService` 负责 Quick Look 等外部预览及其临时文件生命周期；两者只共享可克隆的 `HistoryService` 句柄。平台粘贴实现位于 `paste` 的平台子模块，设置模型、快捷键规则和持久化服务分别放在 `settings` 子模块。数据库迁移和设置查询位于 `storage` 的独立实现文件，但继续由同一个具体 `Database` 类型提供。
 
 ## 面板生命周期
