@@ -246,7 +246,7 @@ jobs:
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
       - name: Upload versioned release files to R2
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
