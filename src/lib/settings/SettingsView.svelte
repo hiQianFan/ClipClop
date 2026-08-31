@@ -2,6 +2,8 @@
   import { onDestroy, onMount, tick, untrack } from "svelte";
   import { AlertDialog, Tabs } from "bits-ui";
   import { Check, LoaderCircle } from "@lucide/svelte";
+  import Icon from "@iconify/svelte/dist/OfflineIcon.svelte";
+  import githubIcon from "@iconify-icons/simple-icons/github";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
   import { applyTheme, getSettings, openLogDir, performHaptic, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme } from "./api";
@@ -268,7 +270,7 @@
           <UpdateSettings bind:settings onchecked={checkUpdates} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1" class="visually-hidden">{t("settings.about")}</h1>
-          <div class="about"><img src="/app-icon-rounded.png" alt={t("settings.iconAlt")} /><h2>ClipClop</h2><p>{t("settings.tagline")}</p><small>{t("settings.version", { version: displayVersion(appVersion) })}</small><button class="github" aria-label={t("settings.github")} title={t("settings.github")} onclick={() => void openGithub()}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.28-.36 6.72-1.61 6.72-7A5.4 5.4 0 0 0 19.3 3.75 5 5 0 0 0 19.18.25S18.07-.11 15 1.67a13.4 13.4 0 0 0-6 0C5.93-.11 4.82.25 4.82.25A5 5 0 0 0 4.7 3.75 5.4 5.4 0 0 0 3.28 7.5c0 5.38 3.44 6.63 6.72 7A4.8 4.8 0 0 0 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></button>
+          <div class="about"><img src="/app-icon-rounded.png" alt={t("settings.iconAlt")} /><h2>ClipClop</h2><p>{t("settings.tagline")}</p><small>{t("settings.version", { version: displayVersion(appVersion) })}</small><button class="github" aria-label={t("settings.github")} title={t("settings.github")} onclick={() => void openGithub()}><Icon icon={githubIcon} width={20} aria-hidden="true" /></button>
             <button class="log-door" title={t("settings.diagnosticsHelp")} onclick={() => void openLogs()}>{t("settings.diagnostics")}</button>
           </div>
         {/if}
