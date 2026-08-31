@@ -181,10 +181,12 @@ jobs:
               "$asset_api_url" > "$manifest_dir/$asset_name"
           }
 
+          mac_installer="ClipClop_${RELEASE_VERSION}_universal.dmg"
           mac_bundle="ClipClop_universal.app.tar.gz"
           mac_signature="$mac_bundle.sig"
           windows_bundle="ClipClop_${RELEASE_VERSION}_x64-setup.exe"
           windows_signature="$windows_bundle.sig"
+          download_asset "$mac_installer"
           download_asset "$mac_bundle"
           download_asset "$mac_signature"
           download_asset "$windows_bundle"
@@ -192,7 +194,7 @@ jobs:
 
           mac_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
           windows_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
-          release_base="https://clipclop.mapin.net/latest"
+          release_base="https://clipclop.mapin.net/releases/v$RELEASE_VERSION"
           release_notes_file="docs/release-notes/v$RELEASE_VERSION.md"
           test -s "$release_notes_file"
           release_notes="$(cat "$release_notes_file")"
@@ -204,9 +206,9 @@ jobs:
             --arg version "$RELEASE_VERSION" \
             --arg notes "$release_notes" \
             --arg pub_date "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            --arg mac_url "$release_base/ClipClop_macos_universal.app.tar.gz?v=$RELEASE_VERSION" \
+            --arg mac_url "$release_base/ClipClop_${RELEASE_VERSION}_macos_universal.app.tar.gz" \
             --arg mac_sig "$mac_manifest_signature" \
-            --arg win_url "$release_base/ClipClop_windows_x64-setup.exe?v=$RELEASE_VERSION" \
+            --arg win_url "$release_base/ClipClop_${RELEASE_VERSION}_windows_x64-setup.exe" \
             --arg win_sig "$windows_manifest_signature" \
             '{version:$version,notes:$notes,pub_date:$pub_date,platforms:{
               "darwin-aarch64":{signature:$mac_sig,url:$mac_url},
@@ -215,11 +217,22 @@ jobs:
               "windows-x86_64-nsis":{signature:$win_sig,url:$win_url}
             }}' > "$manifest_dir/latest.json"
 
+          jq -n \
+            --arg version "$RELEASE_VERSION" \
+            --arg macos "/releases/v$RELEASE_VERSION/$mac_installer" \
+            --arg windows "/releases/v$RELEASE_VERSION/ClipClop_${RELEASE_VERSION}_windows_x64-setup.exe" \
+            '{version:$version,macos:$macos,windows:$windows}' > "$manifest_dir/downloads.json"
+
           jq -e --arg version "$RELEASE_VERSION" '
             . as $manifest
             | .version == $version and (["darwin-aarch64","darwin-x86_64","windows-x86_64","windows-x86_64-nsis"]
               | all(. as $platform | ($manifest.platforms[$platform].url | length > 0) and ($manifest.platforms[$platform].signature | length > 0)))
           ' "$manifest_dir/latest.json"
+          jq -e --arg version "$RELEASE_VERSION" '
+            .version == $version
+            and (.macos | startswith("/releases/v" + $version + "/"))
+            and (.windows | startswith("/releases/v" + $version + "/"))
+          ' "$manifest_dir/downloads.json"
 
           updater_pubkey="$(
             jq -r '.plugins.updater.pubkey' src-tauri/tauri.conf.json \
@@ -232,15 +245,19 @@ jobs:
           minisign -Vm "$manifest_dir/$mac_bundle" -x "$manifest_dir/$mac_signature.decoded" -P "$updater_pubkey"
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
-      - name: Upload latest updater files to R2
+      - name: Upload versioned release files to R2
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
           command: |
-            r2 object put clipclop-releases/latest/ClipClop_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/latest/ClipClop_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --content-type=application/x-apple-diskimage --content-disposition='attachment; filename="ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg"' --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --content-type=application/gzip --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_macos_universal.app.tar.gz.sig --file=.release-assets/ClipClop_universal.app.tar.gz.sig --content-type=text/plain --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --content-type=application/vnd.microsoft.portable-executable --content-disposition='attachment; filename="ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe"' --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe.sig --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe.sig --content-type=text/plain --cache-control="public, max-age=31536000, immutable"
+            r2 object put clipclop-releases/downloads.json --file=.release-assets/downloads.json --content-type=application/json --cache-control="no-cache"
             r2 object put clipclop-releases/latest.json --file=.release-assets/latest.json --content-type=application/json --cache-control="no-cache"
       - name: Publish verified release
         shell: bash
