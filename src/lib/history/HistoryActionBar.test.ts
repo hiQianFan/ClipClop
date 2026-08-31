@@ -66,4 +66,16 @@ describe("HistoryActionBar actions", () => {
     expect(oncopy).toHaveBeenCalledOnce();
     expect(onrequestdelete).toHaveBeenCalledWith(screen.getByRole("button", { name: /Actions/ }));
   });
+
+  it("wires deletion cancellation and confirmation", async () => {
+    const oncanceldelete = vi.fn();
+    const onconfirmdelete = vi.fn();
+    const cancelView = render(HistoryActionBar, { props: { ...props, deletePending: true, oncanceldelete, onconfirmdelete } });
+    await fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
+    cancelView.unmount();
+    render(HistoryActionBar, { props: { ...props, deletePending: true, oncanceldelete, onconfirmdelete } });
+    await fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(oncanceldelete).toHaveBeenCalledOnce();
+    expect(onconfirmdelete).toHaveBeenCalledOnce();
+  });
 });

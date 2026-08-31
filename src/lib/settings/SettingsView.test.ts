@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings, listReleaseNotes } = vi.hoisted(() => ({
+const { preview, updateSettings, listReleaseNotes, platform } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -14,6 +14,7 @@ const { preview, updateSettings, listReleaseNotes } = vi.hoisted(() => ({
   listReleaseNotes: vi.fn(async () => [{
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
   }]),
+  platform: { value: "windows" as "windows" | "macos" },
 }));
 
 vi.mock("./api", () => ({
@@ -28,8 +29,15 @@ vi.mock("./api", () => ({
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
   openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(),
 }));
-vi.mock("$lib/history/api", () => ({ clearHistory: vi.fn() }));
+vi.mock("$lib/history/api", () => ({
+  clearHistory: vi.fn(),
+  getPreviewCapability: async () => ({ provider: "unavailable", reason: "not_installed" }),
+}));
 vi.mock("$lib/onboarding/api", () => ({ openAutoPasteSettings: vi.fn() }));
+vi.mock("./shortcuts", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./shortcuts")>(),
+  currentPlatform: () => platform.value,
+}));
 vi.mock("$lib/updater/api", () => ({
   DEVELOPMENT_VERSION: "0.0.0-dev",
   listReleaseNotes,
@@ -52,7 +60,10 @@ vi.mock("$lib/updater/store.svelte", () => ({
 
 import SettingsView from "./SettingsView.svelte";
 
-afterEach(cleanup);
+afterEach(() => {
+  platform.value = "windows";
+  cleanup();
+});
 
 it("keeps loading and saving owned by SettingsView across categories", async () => {
   updateSettings.mockClear();
@@ -72,6 +83,42 @@ it("keeps release notes mounted while switching categories", async () => {
   await fireEvent.click(screen.getByRole("tab", { name: "Software Update" }));
   await waitFor(() => expect(screen.getByText("Changes")).toBeTruthy());
   expect(listReleaseNotes).toHaveBeenCalledTimes(1);
+});
+
+it("rolls editable settings back when saving fails", async () => {
+  updateSettings.mockRejectedValueOnce(new Error("disk full"));
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  const launch = await screen.findByRole("switch", { name: "Launch at login" }) as HTMLInputElement;
+  await fireEvent.click(launch);
+  expect(launch.checked).toBe(true);
+  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect((screen.getByRole("switch", { name: "Launch at login" }) as HTMLInputElement).checked).toBe(false));
+});
+
+it("keeps shortcut recording validation, cancellation, defaults, and saving wired", async () => {
+  updateSettings.mockClear();
+  render(SettingsView, { props: { initialTab: "shortcuts", onclose() {}, oncleared() {}, onquickstart() {} } });
+  await screen.findByRole("heading", { name: "Shortcuts" });
+  const change = screen.getByRole("button", { name: "Change" });
+  await fireEvent.click(change);
+  await fireEvent.keyDown(change, { key: "v", code: "KeyV", ctrlKey: true });
+  expect(screen.getByRole("alert").textContent).toContain("common system or window shortcut");
+  await fireEvent.keyDown(change, { key: "Escape" });
+  expect(screen.getByText("Shortcut recording cancelled")).toBeTruthy();
+  await fireEvent.click(screen.getByRole("button", { name: "Restore default" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ hotkey: "Ctrl+Alt+C" })));
+});
+
+it("renders the platform-specific preview entry", async () => {
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByRole("button", { name: "Learn and install" })).toBeTruthy();
+  cleanup();
+  platform.value = "macos";
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  await screen.findByRole("heading", { name: "General" });
+  expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: "Learn and install" })).toBeNull();
 });
 
 async function show(
