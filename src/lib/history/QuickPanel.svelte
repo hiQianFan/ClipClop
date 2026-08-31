@@ -6,6 +6,8 @@
   import type { ClipSummary, HistoryPage } from "./types";
   import { localizedError, t } from "$lib/i18n/index.svelte";
   import { quitApp } from "$lib/settings/api";
+  import { currentPlatform } from "$lib/settings/shortcuts";
+  import ShortcutHint from "$lib/components/ShortcutHint.svelte";
   import { routeQuickKey } from "./quick-keyboard";
   import PageScrubber from "./PageScrubber.svelte";
 
@@ -15,6 +17,7 @@
     onsettings: () => void;
   } = $props();
   const slotCount = Math.max(1, Math.min(10, Math.floor((window.innerHeight - 188) / 40)));
+  const platform = currentPlatform();
   let page = $state<HistoryPage>({ items: [], page: 1, page_size: slotCount, total: 0, total_pages: 1 });
   let thumbnails = $state<Record<string, string>>({});
   let loading = $state(true);
@@ -198,9 +201,9 @@
     {#if error && items.length > 0}<p class="inline-error" role="alert">{error}</p>{/if}
     <nav aria-label={t("quick.title")}>
       <button onclick={onfull}><span>{t("quick.openHistory")}</span></button>
-      <button onclick={onsettings}><span>{t("history.settings")}</span><kbd>{navigator.platform.includes("Mac") ? "⌘," : "Ctrl,"}</kbd></button>
+      <button onclick={onsettings}><span>{t("history.settings")}</span><ShortcutHint shortcut={platform === "macos" ? "Command+," : "Ctrl+,"} {platform} /></button>
       <span class="separator"></span>
-      <button class="danger" onclick={() => void quitApp()}><span>{t("history.quit")} ClipClop</span><kbd>{navigator.platform.includes("Mac") ? "⌘Q" : "Ctrl+Q"}</kbd></button>
+      <button class="danger" onclick={() => void quitApp()}><span>{t("history.quit")} ClipClop</span><ShortcutHint shortcut={platform === "macos" ? "Command+Q" : "Ctrl+Q"} {platform} /></button>
     </nav>
   </section>
 </main>
@@ -233,8 +236,7 @@
   nav{flex:none;padding:5px 6px 6px;border-top:1px solid var(--hairline)}
   nav button{width:100%;height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-radius:var(--radius-md);color:var(--text-1);background:transparent;text-align:left;font-size:var(--fs-ui);font-weight:500}
   nav button:hover,nav button:focus-visible{background:var(--bg-hover)}
-  nav button.danger,nav button.danger kbd{color:var(--danger)}
-  nav kbd{color:var(--text-2);font-family:inherit;font-size:var(--fs-body);font-weight:500;line-height:1}
+  nav button.danger{color:var(--danger)}
   .separator{display:block;height:1px;margin:5px 6px;background:var(--hairline)}
   @media(prefers-reduced-motion:no-preference){.quick-panel{animation:appear var(--dur-fast) var(--ease-out)}}
   @keyframes appear{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}

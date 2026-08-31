@@ -199,8 +199,13 @@ Every interactive element is quiet at rest and responds through tonal shift. Cor
 ### Menus
 - `bg-raised`, 1px hairline, `lg` radius, 6px padding, `menu` shadow. Items are `md`-radius ghost rows with a right-aligned keycap. `z-index: var(--z-menu)`.
 
-### Keycaps
-- Mono 10px, 1px hairline, `sm` radius, 1px 5px padding. Used inline to teach the keyboard shortcut for every action.
+### Keyboard shortcuts
+- Render every shortcut through `ShortcutHint`; do not style raw `<kbd>` elements in feature components.
+- **Menu accelerator:** right-aligned, borderless `text-3`, system sans 12/500. macOS symbols use a 3px gap without `+`; Windows combinations use a low-contrast `+` separator.
+- **Compact hint:** a single subtle hairline container for buttons, search hints, and inline teaching.
+- **Teaching keycaps:** settings and onboarding render each key as its own 22px-high cap with a 4px gap and no `+` signs.
+- Shortcut labels use the platform system font rather than the content mono stack so macOS modifier glyphs and Windows key names share stable metrics.
+- Destructive command labels may use `danger`; their shortcut remains neutral `text-3` because it is supporting information, not the action's semantic label.
 
 ### Settings Row (the label/control contract)
 
@@ -245,7 +250,7 @@ Every row in Settings — toggles, selects, buttons, the update header, shortcut
 - **Do** express state through the four tonal background steps — hover, selected, active are background changes.
 - **Do** use monospace for any copied content, path, count, or key; system-sans for authored chrome.
 - **Do** keep every divider and border at 1px `hairline`.
-- **Do** teach the keyboard: pair actionable controls with an inline keycap.
+- **Do** teach the keyboard with the appropriate `ShortcutHint` variant: accelerator in menus, compact in controls, keycaps in instructional surfaces.
 - **Do** honor `prefers-reduced-motion` and `forced-colors` on every animated or bordered control.
 - **Do** keep motion in the 140–250ms range (`--dur-fast/mid/slow`), conveying state only.
 - **Do** give every Settings row the two-zone contract: elastic text (`flex:1;min-width:0`), protected action (`flex:none`). (The Two-Zone Rule.)

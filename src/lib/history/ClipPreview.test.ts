@@ -26,7 +26,7 @@ describe("ClipPreview file tabs", () => {
       detail: image, selectedId: image.id, page: { ...page, items: [image] }, noMatches: false, pending: false,
       assetUrl: null, thumbnailUrl: "thumbnail", fileAccessDenied: false, sourceIconUrl: null,
       fileThumbnailUrls: [], fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
-      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
       onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
     expect(container.querySelector("img.asset.thumbnail")?.getAttribute("src")).toBe("thumbnail");
@@ -39,7 +39,7 @@ describe("ClipPreview file tabs", () => {
       detail, selectedId: detail.id, page, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
-      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile,
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile,
       onfilekeydown, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
 
@@ -61,7 +61,7 @@ describe("ClipPreview file tabs", () => {
       detail, selectedId: detail.id, page, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [null, null],
       fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
-      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
       onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
 
@@ -84,7 +84,7 @@ describe("ClipPreview file tabs", () => {
       detail: link, selectedId: link.id, page: { ...page, items: [link] }, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
       fileAccessDenied: false, sourceIconUrl: null, fileThumbnailUrls: [],
       fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
-      previousFileShortcut: "⌘←", nextFileShortcut: "⌘→", onfile() {},
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
       onfilekeydown() {}, onfilefocus() {}, onopenorigin, oninert() {},
     } });
 

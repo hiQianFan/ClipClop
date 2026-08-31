@@ -4,6 +4,28 @@ import { describe, expect, it, vi } from "vitest";
 import AppTitleBar from "./AppTitleBar.svelte";
 
 describe("AppTitleBar menu", () => {
+  it("opens on click release rather than pointer down", async () => {
+    const onopenchange = vi.fn();
+    const view = render(AppTitleBar, { props: {
+      history: true,
+      open: false,
+      settingsShortcut: "Command+,",
+      quitShortcut: "Command+Q",
+      onopenchange,
+      onsettings() {},
+      onupdates() {},
+      onabout() {},
+      onquit() {},
+    } });
+    const trigger = screen.getByRole("button", { name: /application menu/i });
+
+    await fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+    expect(onopenchange).not.toHaveBeenCalled();
+    await fireEvent.click(trigger);
+    expect(onopenchange).toHaveBeenCalledWith(true);
+    view.unmount();
+  });
+
   it("keeps the existing application actions wired", async () => {
     const onsettings = vi.fn();
     const onupdates = vi.fn();
@@ -13,8 +35,8 @@ describe("AppTitleBar menu", () => {
       const view = render(AppTitleBar, { props: {
         history: true,
         open: true,
-        settingsShortcut: "⌘,",
-        quitShortcut: "⌘Q",
+        settingsShortcut: "Command+,",
+        quitShortcut: "Command+Q",
         onopenchange() {},
         onsettings,
         onupdates,

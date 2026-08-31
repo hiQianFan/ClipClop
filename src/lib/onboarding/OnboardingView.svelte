@@ -2,7 +2,8 @@
   import { onMount, tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
   import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
-  import { currentPlatform, defaultShortcut, shortcutKeycaps, shortcutSpokenLabel } from "$lib/settings/shortcuts";
+  import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import { currentPlatform, defaultShortcut } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
   import { openFilePreviewSettings, type LanguagePreference } from "$lib/settings/api";
   import {
@@ -286,26 +287,21 @@
       <h1>{t("onboarding.overview.title")}</h1>
       <p>{t("onboarding.overview.body")}</p>
       <div class="mini" role="img" aria-label={t("onboarding.overview.samples")}>
-        <div class="mini-search" aria-hidden="true"><Search size={14} /><span class="ph">{t("history.searchPlaceholder")}</span><kbd>/</kbd></div>
+        <div class="mini-search" aria-hidden="true"><Search size={14} /><span class="ph">{t("history.searchPlaceholder")}</span><ShortcutHint shortcut="/" {platform} variant="compact" /></div>
         <div class="mini-list" aria-hidden="true">
           {#each examples as example, index}<div class="mini-row">{@render listRow(example, index)}</div>{/each}
         </div>
       </div>
-      <kbd class="hotkey" aria-label={shortcutSpokenLabel(defaultShortcut(platform), platform)}>
-        {#each shortcutKeycaps(defaultShortcut(platform), platform) as key, index}
-          {#if index > 0}<span class="hotkey-plus" aria-hidden="true">+</span>{/if}
-          <span class="hotkey-key" aria-hidden="true">{key}</span>
-        {/each}
-      </kbd>
+      <ShortcutHint shortcut={defaultShortcut(platform)} {platform} variant="keycaps" />
     </div>
   {:else if step === "practice"}
     <div class="legend">
       <h1>{t("onboarding.practice.title")}</h1>
       <dl>
-        <div><dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>{t("onboarding.practice.select")}</dd></div>
-        <div><dt><kbd>1</kbd>–<kbd>3</kbd></dt><dd>{t("onboarding.practice.quickSelect")}</dd></div>
-        {#if supportsOnboardingPreview(platform)}<div><dt><kbd>Space</kbd></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
-        <div><dt><kbd>⏎</kbd></dt><dd>{t("onboarding.practice.paste")}</dd></div>
+        <div><dt><ShortcutHint shortcut="ArrowUp" {platform} variant="compact" /><ShortcutHint shortcut="ArrowDown" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.select")}</dd></div>
+        <div><dt><ShortcutHint shortcut="1" {platform} variant="compact" />–<ShortcutHint shortcut="3" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.quickSelect")}</dd></div>
+        {#if supportsOnboardingPreview(platform)}<div><dt><ShortcutHint shortcut="Space" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
+        <div><dt><ShortcutHint shortcut="Enter" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.paste")}</dd></div>
       </dl>
     </div>
     <div class="sandbox">
@@ -337,7 +333,7 @@
         </div>
       </div>
       <small class="capability-note">
-        {t("onboarding.auto.fallback")} {t("onboarding.auto.systemPreviewPrefix")} <kbd>Space</kbd> {t("onboarding.auto.systemPreviewSuffix")}
+        {t("onboarding.auto.fallback")} {t("onboarding.auto.systemPreviewPrefix")} <ShortcutHint shortcut="Space" {platform} variant="compact" /> {t("onboarding.auto.systemPreviewSuffix")}
       </small>
     </div>
   {/if}
@@ -378,16 +374,12 @@
   .mini{width:min(360px,82vw);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-shell);overflow:hidden}
   .mini-search{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--text-3);border-bottom:1px solid var(--hairline);font-size:var(--fs-ui)}
   .mini-search .ph{flex:1;text-align:left}
-  .mini-search kbd,.legend kbd,.capability-note kbd{font:var(--fs-caption)/var(--lh-snug) var(--mono);color:var(--text-2);border:1px solid var(--hairline);border-radius:var(--radius-sm);padding:1px 5px;white-space:nowrap}
   .mini-list{padding:6px;display:flex;flex-direction:column;gap:1px}
   .mini-row{min-height:44px;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--radius-lg);color:var(--text-1);background:transparent;text-align:left}
   .mini-row .num{width:16px;flex:none;color:var(--text-3);font:650 var(--fs-ui) var(--mono);text-align:center}
   .mini-row .lead{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:var(--radius-sm);color:var(--text-2);background:var(--bg-raised)}
   .mini-row .lead img{width:100%;height:100%;object-fit:cover}
   .mini-row .snippet{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--fs-body)/var(--lh-normal) var(--mono)}
-  .hotkey{display:flex;align-items:center;gap:8px;border:0;background:transparent}
-  .hotkey-key{min-width:34px;padding:9px 12px;border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:0 2px 0 var(--hairline);font:700 var(--fs-heading)/var(--lh-flush) var(--mono);text-align:center}
-  .hotkey-plus{color:var(--text-3);font:var(--fs-emphasis)/var(--lh-flush) var(--mono)}
   /* 第2屏 42/58 分栏 */
   .body.practice{grid-template-columns:42% 58%;place-items:stretch;padding:0;gap:0}
   .legend{display:flex;flex-direction:column;justify-content:center;gap:14px;padding:28px 24px 28px 40px;border-right:1px solid var(--hairline)}

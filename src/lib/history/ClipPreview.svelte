@@ -2,6 +2,8 @@
   import { File, MonitorSmartphone } from "@lucide/svelte";
   import { Tabs } from "bits-ui";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
+  import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import { shortcutSpokenLabel, type ShortcutPlatform } from "$lib/settings/shortcuts";
   import { clipPreview, detailText, fileName, filePaths, metadataFacts } from "./presentation";
   import type { ClipDetail, HistoryPage } from "./types";
 
@@ -48,6 +50,7 @@
     onopenorigin: () => void;
     oninert: () => void;
   } = $props();
+  const shortcutPlatform = $derived<ShortcutPlatform>(previousFileShortcut.startsWith("Command") ? "macos" : "windows");
 </script>
 
 <section role="group" class:pending class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={pending} onpointerdown={(event) => { if (!(event.target as Element).closest("button, a, input, [role='tab']")) oninert(); }}>
@@ -67,7 +70,7 @@
     </div>
     {#if detail.content_type === "file" && filePaths(detail).length > 1}
       <nav class="file-nav" aria-label={t("history.fileNavigation")}>
-        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: previousFileShortcut })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><kbd>{previousFileShortcut}</kbd></button>
+        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.previousFile", { shortcut: shortcutSpokenLabel(previousFileShortcut, shortcutPlatform) })} disabled={fileIndex === 0} onclick={() => onfile(fileIndex - 1)}><ShortcutHint shortcut={previousFileShortcut} platform={shortcutPlatform} variant="compact" /></button>
         <Tabs.Root class="file-tabs" value={String(fileIndex)} onValueChange={(value) => onfile(Number(value))} orientation="horizontal" activationMode="automatic" loop={false}>
         <Tabs.List class="file-strip" aria-label={t("history.fileCount", { count: formatNumber(filePaths(detail).length) })}>
           {#each filePaths(detail) as path, index}
@@ -78,7 +81,7 @@
           {/each}
         </Tabs.List>
         </Tabs.Root>
-        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.nextFile", { shortcut: nextFileShortcut })} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => onfile(fileIndex + 1)}><kbd>{nextFileShortcut}</kbd></button>
+        <button tabindex="-1" class="file-nav-arrow" aria-label={t("history.nextFile", { shortcut: shortcutSpokenLabel(nextFileShortcut, shortcutPlatform) })} disabled={fileIndex === filePaths(detail).length - 1} onclick={() => onfile(fileIndex + 1)}><ShortcutHint shortcut={nextFileShortcut} platform={shortcutPlatform} variant="compact" /></button>
         <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
       </nav>
     {/if}
@@ -157,5 +160,4 @@
   .file-nav-count { color:var(--text-3); font:var(--fs-caption) var(--mono); }
   .preview-loading { flex:1; min-height:0; padding:20px; color:var(--text-2); }
   .preview-loading span { display:block; margin-bottom:8px; color:var(--text-3); font-size:var(--fs-meta); }
-  kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
 </style>

@@ -54,12 +54,12 @@
   let typeCounts = $state<Partial<Record<ContentType, number>>>({});
   let activeSourceQuery = "";
   let facetsVersion = 0;
-  const deleteShortcut = isMac ? "⌘⌫" : "Ctrl⌫";
-  const settingsShortcut = isMac ? "⌘," : "Ctrl,";
-  const quitShortcut = isMac ? "⌘Q" : "Ctrl+Q";
-  const previousFileShortcut = isMac ? "⌘←" : "Ctrl←";
-  const nextFileShortcut = isMac ? "⌘→" : "Ctrl→";
-  const actionMenuShortcut = isMac ? "⌘K" : "Ctrl K";
+  const deleteShortcut = isMac ? "Command+Backspace" : "Ctrl+Delete";
+  const settingsShortcut = isMac ? "Command+," : "Ctrl+,";
+  const quitShortcut = isMac ? "Command+Q" : "Ctrl+Q";
+  const previousFileShortcut = isMac ? "Command+ArrowLeft" : "Ctrl+ArrowLeft";
+  const nextFileShortcut = isMac ? "Command+ArrowRight" : "Ctrl+ArrowRight";
+  const actionMenuShortcut = isMac ? "Command+K" : "Ctrl+K";
   type MainPanelRequest = { selectedId: string | null; settings: boolean };
 
   $effect(() => {

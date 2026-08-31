@@ -13,8 +13,8 @@ const props = {
   copied: "",
   menuOpen: true,
   deletePending: false,
-  actionMenuShortcut: "⌘K",
-  deleteShortcut: "⌘⌫",
+  actionMenuShortcut: "Command+K",
+  deleteShortcut: "Command+Backspace",
   onmenuopenchange() {},
   ondeleteopenchange() {},
   onbrowse() {},
@@ -37,6 +37,17 @@ afterEach(async () => {
 });
 
 describe("HistoryActionBar actions", () => {
+  it("opens the action menu on click release rather than pointer down", async () => {
+    const onmenuopenchange = vi.fn();
+    render(HistoryActionBar, { props: { ...props, menuOpen: false, onmenuopenchange } });
+    const trigger = screen.getByRole("button", { name: /Actions/ });
+
+    await fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+    expect(onmenuopenchange).not.toHaveBeenCalled();
+    await fireEvent.click(trigger);
+    expect(onmenuopenchange).toHaveBeenCalledWith(true);
+  });
+
   it("gates preview, link, and plain-text actions from capabilities", () => {
     const hidden = render(HistoryActionBar, { props });
     expect(hidden.container.textContent).not.toContain("View selected content");

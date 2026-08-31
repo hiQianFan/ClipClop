@@ -5,6 +5,7 @@
   import { Popover } from "bits-ui";
   import { ArrowLeft, ArrowRight, ChevronRight, File, Image, Search, SlidersHorizontal } from "@lucide/svelte";
   import { formatNumber, t } from "$lib/i18n/index.svelte";
+  import ShortcutHint from "$lib/components/ShortcutHint.svelte";
   import type { StaticMessageKey } from "$lib/i18n/index.svelte";
   import PageScrubber from "./PageScrubber.svelte";
   import { canExpand, clipPreview, fileName, groupedFiles } from "./presentation";
@@ -115,7 +116,7 @@
     <Popover.Root bind:open={filterOpen}>
       <Popover.Trigger class={`filter-trigger${activeFilterCount ? " active" : ""}`} aria-label={activeFilterCount ? t("filter.active", { count: activeFilterCount }) : t("filter.open")}>
         <SlidersHorizontal size={14} aria-hidden="true" />
-        {#if activeFilterCount}<span>{activeFilterCount}</span>{:else}<kbd>/</kbd>{/if}
+        {#if activeFilterCount}<span>{activeFilterCount}</span>{:else}<ShortcutHint shortcut="/" variant="compact" />{/if}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content class="filter-popover" align="end" sideOffset={6}>
@@ -199,7 +200,6 @@
   :global(.filter-trigger) { min-width:30px; height:28px; flex:none; display:flex; align-items:center; justify-content:center; gap:4px; padding:0 5px; border-radius:var(--radius-sm); color:var(--text-2); background:transparent; font:var(--fs-caption)/1 var(--mono); }
   :global(.filter-trigger:hover),:global(.filter-trigger.active) { color:var(--text-1); background:var(--bg-hover); }
   :global(.filter-trigger:focus-visible) { outline:2px solid var(--text-1); outline-offset:2px; }
-  :global(.filter-trigger kbd) { pointer-events:none; }
   :global(.filter-popover) { z-index:var(--z-menu); width:280px; padding:10px; border:1px solid var(--hairline); border-radius:var(--radius-lg); color:var(--text-1); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
   :global(.filter-popover section+section) { margin-top:12px; }
   :global(.filter-popover h2) { margin:0 0 6px; color:var(--text-2); font:600 var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
@@ -218,7 +218,6 @@
   :global(.filter-options button[aria-pressed="true"] .facet-count) { color:var(--text-2); background:var(--bg-raised); }
   :global(.filter-options button:focus-visible),:global(.clear-filters:focus-visible) { outline:2px solid var(--text-1); outline-offset:1px; }
   :global(.clear-filters) { width:100%; margin-top:10px; border-top:1px solid var(--hairline); border-radius:0 0 var(--radius-md) var(--radius-md); }
-  kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; overflow-y:auto; }
   .list:focus-visible { outline:none; }
   .empty-state { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:24px; color:var(--text-2); text-align:center; }

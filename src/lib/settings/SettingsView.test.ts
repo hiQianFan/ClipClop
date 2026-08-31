@@ -76,7 +76,7 @@ it("keeps loading and saving owned by SettingsView across categories", async () 
   await waitFor(() => expect(screen.getByRole("heading", { name: "Shortcuts" })).toBeTruthy());
   await fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
-  expect(screen.getByRole("button", { name: "Settings saved" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Saved" })).toBeTruthy();
 });
 
 it("keeps release notes mounted while switching categories", async () => {
