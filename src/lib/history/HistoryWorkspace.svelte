@@ -414,8 +414,11 @@
 
   async function closeSettingsView() {
     await syncSettings();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     view = "history";
-    enterBrowse();
+    mode = "browse";
+    await tick();
+    listbox?.focus();
   }
 
   function listHasFocus() {
@@ -459,6 +462,10 @@
     if (restoreBrowsePosition) await resumeBrowse();
     else await resetToLatest();
     await syncFacets();
+  }
+
+  function clearWindowFocus() {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }
 
   async function resetToLatest() {
@@ -659,7 +666,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onfocusin={updateModeFromFocus} onfocus={restoreAfterNativePreview} oncontextmenu={suppressContextMenu} />
+<svelte:window onkeydown={onWindowKeydown} onfocusin={updateModeFromFocus} onfocus={restoreAfterNativePreview} onblur={clearWindowFocus} oncontextmenu={suppressContextMenu} />
 
 <main class="panel" aria-label={t("history.panel")}>
   {#if view === "onboarding" && onboarding}

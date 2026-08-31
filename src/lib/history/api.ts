@@ -1,18 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipDetail, HistoryFacets, HistoryFilters, HistoryPage } from "./types";
 
-function historyRequest(query: string, page: number, filters?: HistoryFilters) {
+function historyRequest(query: string, page: number, filters?: HistoryFilters, pageSize = 10) {
   const days = filters?.time_range === "day" ? 1 : filters?.time_range === "week" ? 7 : filters?.time_range === "month" ? 30 : 0;
   return {
-    query, page, page_size: 10,
+    query, page, page_size: pageSize,
     content_type: filters?.content_type ?? null,
     source_id: filters?.source_id ?? null,
     since: days ? new Date(Date.now() - days * 86_400_000).toISOString() : null,
   };
 }
 
-export function queryHistory(query = "", page = 1, filters?: HistoryFilters): Promise<HistoryPage> {
-  return invoke("query_history", { request: historyRequest(query, page, filters) });
+export function queryHistory(query = "", page = 1, filters?: HistoryFilters, pageSize = 10): Promise<HistoryPage> {
+  return invoke("query_history", { request: historyRequest(query, page, filters, pageSize) });
 }
 
 export function getHistoryFacets(query: string, filters: HistoryFilters, sourceQuery = ""): Promise<HistoryFacets> {

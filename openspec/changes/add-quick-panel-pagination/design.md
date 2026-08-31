@@ -6,7 +6,11 @@ Quick 使用与主面板相同的 `query_history` 后端，但当前固定请求
 
 ### 分页栏位于 header 右侧
 
-分页栏放在现有 header 右侧，不增加 header 高度。单页显示低权重 `1/1` 与禁用箭头；多页显示 `current/total`。使用原生按钮与现有 token。
+分页栏放在现有 header 右侧，不增加 header 高度。header 只分为左侧固定品牌和右侧固定导航两组，中间保留弹性空白；导航严格使用 70/26/64/26px 四列与 4px gap，依次承载 compact 转轮、上一页、页码和下一页。页码使用等宽表格数字，位数变化不会移动任何控件。使用原生按钮与现有 token。
+
+### 抽取并复用快速翻页转轮
+
+当前主面板的 scrubber 手势、横向 wheel 累积、越界连续翻页、ticks、haptic、reduced-motion 和清理逻辑从 `HistoryList.svelte` 原样迁入 feature 内 `PageScrubber.svelte`。主面板和 Quick 使用同一实现，禁止复制状态机。Quick 使用同一组件的 compact 外观：透明 70x28 hit area 内使用更短、更密、低对比 ticks，容器在 hover/drag 时仍无卡片、边框、圆角或底色；反馈只通过 ticks 从 text-3 提亮到 text-2，拖动时当前 tick 接近 text-1。主面板外观保持不变。任意跳页成功后选中目标页第一项。共享组件不拥有业务查询。
 
 ### 十槽网格消除额外 gap
 
@@ -36,3 +40,4 @@ PageUp/PageDown 显式翻页；当前页末项 Down 进入下一页首项，首�
 | 分页失败造成列表闪空 | 成功后原子替换 |
 | 小工作区隐藏同页尾部记录 | page size 使用实际槽位数 |
 | 组件状态变重 | 只保存 HistoryPage、请求版本和 pending target |
+| 抽取导致主面板分页回归 | 保留 HistoryList 的 turnPage API，并补共享转轮与现有键盘路径测试 |

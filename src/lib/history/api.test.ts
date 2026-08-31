@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip } from "./api";
+import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip, queryHistory } from "./api";
 
 describe("history host contracts", () => {
   beforeEach(() => invoke.mockReset());
@@ -39,5 +39,17 @@ describe("history host contracts", () => {
     expect(invoke).toHaveBeenLastCalledWith("open_clip_link", { id: "clip-1", originOnly: false });
     await openClipLink("clip-1", true);
     expect(invoke).toHaveBeenLastCalledWith("open_clip_link", { id: "clip-1", originOnly: true });
+  });
+
+  it("keeps the default history page size and lets Quick request fewer rows", async () => {
+    invoke.mockResolvedValue({ items: [], page: 1, page_size: 10, total: 0, total_pages: 1 });
+    await queryHistory("", 2);
+    expect(invoke).toHaveBeenLastCalledWith("query_history", {
+      request: expect.objectContaining({ page: 2, page_size: 10 }),
+    });
+    await queryHistory("", 3, undefined, 7);
+    expect(invoke).toHaveBeenLastCalledWith("query_history", {
+      request: expect.objectContaining({ page: 3, page_size: 7 }),
+    });
   });
 });

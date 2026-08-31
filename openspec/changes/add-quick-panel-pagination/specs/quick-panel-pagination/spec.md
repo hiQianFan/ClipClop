@@ -11,12 +11,17 @@ The Quick panel SHALL expose paged history without requiring the full history pa
 
 ### Requirement: Quick pagination is continuously operable
 
-The Quick panel SHALL support pointer pagination, PageUp/PageDown, and Up/Down traversal across page boundaries while retaining page-local number shortcuts.
+The Quick panel SHALL support pointer pagination, the same drag/wheel/haptic fast-page scrubber as full history, PageUp/PageDown, and Up/Down traversal across page boundaries while retaining page-local number shortcuts.
 
 #### Scenario: Selection crosses a page boundary
 
 - **WHEN** the user moves down from the last item of a non-final page or up from the first item of a non-first page
 - **THEN** Quick loads the adjacent page and selects its first or last item respectively
+
+#### Scenario: User quickly traverses many pages
+
+- **WHEN** the user drags or horizontally scrolls the header scrubber
+- **THEN** Quick traverses pages with the same feedback model as full history and selects the committed target page's first item
 
 ### Requirement: Quick paging preserves committed state
 
