@@ -62,13 +62,12 @@
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
   .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
   kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
-  :global(.menu) { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
-  :global(.app-menu) { top:30px; bottom:auto; left:0; right:auto; width:180px; }
-  :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
-  :global(.menu [role="menuitem"] > span) { min-width:0; }
-  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
-  :global(.menu [role="menuitem"]:hover), :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
-  :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
-  :global(.menu .danger) { color:var(--danger); }
-  :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
+  .app-menu-wrap :global(.menu) { position:absolute; top:30px; left:0; width:180px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .app-menu-wrap :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
+  .app-menu-wrap :global(.menu [role="menuitem"] > span) { min-width:0; }
+  .app-menu-wrap :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
+  .app-menu-wrap :global(.menu [role="menuitem"]:hover), .app-menu-wrap :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
+  .app-menu-wrap :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
+  .app-menu-wrap :global(.menu .danger) { color:var(--danger); }
+  .app-menu-wrap :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
 </style>

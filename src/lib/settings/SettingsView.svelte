@@ -28,7 +28,6 @@
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
   let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
-  let settingsContent = $state<HTMLElement | null>(null);
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
   let confirmClearButton = $state<HTMLButtonElement | null>(null);
@@ -95,6 +94,7 @@
 
   async function focusDetail() {
     await tick();
+    const settingsContent = document.querySelector<HTMLElement>('.settings-content[data-state="active"]');
     const first = settingsContent?.querySelector<HTMLElement>(
       'input:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex="0"]',
     );
@@ -231,12 +231,11 @@
       <Tabs.Trigger bind:ref={navButtons[5]} value="about" class={tab === "about" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.about")}</Tabs.Trigger>
     </Tabs.List>
     {#each tabs as panelTab}
-    {#if panelTab === tab}
-    <Tabs.Content bind:ref={settingsContent} value={panelTab} class={`settings-content${tab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
+    <Tabs.Content value={panelTab} class={`settings-content${panelTab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
       {#if settings}
-        {#if tab === "general"}
+        {#if panelTab === "general"}
           <GeneralSettings bind:settings {platform} {onquickstart} onerror={(message) => status = message} bind:heading={sectionHeading} />
-        {:else if tab === "history"}
+        {:else if panelTab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>
           <div class="row"><span><strong>{t("settings.historyLimit")}</strong><small>{t("settings.historyLimitHelp")}</small></span><AppSelect value={settings.history_limit === null ? "none" : String(settings.history_limit)} items={historyLimitItems} ariaLabel={t("settings.historyLimit")} onchange={(value) => settings!.history_limit = value === "none" ? null : Number(value) as Settings["history_limit"]} /></div>
@@ -246,13 +245,13 @@
           <div class="row setting-row"><span><strong id="trim-whitespace-label">{t("settings.trimWhitespace")}</strong><small id="trim-whitespace-help">{t("settings.trimWhitespaceHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="trim-whitespace-label" aria-describedby="trim-whitespace-help" bind:checked={settings.trim_whitespace} /><span class="switch-track"></span></label></div>
           {#if settings.retention_days === null || settings.history_limit === null}<p class="retention-warning">{t("settings.retentionWarning")}</p>{/if}
           <div class="row"><span><strong>{t("settings.data")}</strong><small>{t("settings.dataHelp")}</small></span><button bind:this={clearTrigger} class="danger" onclick={requestClear}>{t("settings.clearAll")}</button></div>
-        {:else if tab === "appearance"}
+        {:else if panelTab === "appearance"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.appearance")}</h1>
           <div class="row"><span><strong>{t("settings.theme")}</strong><small>{t("settings.appearanceHelp")}</small></span><AppSelect value={settings.theme} items={themeItems} ariaLabel={t("settings.theme")} onchange={changeTheme} /></div>
           <div class="row"><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><AppSelect value={settings.language} items={languageItems} ariaLabel={t("settings.language")} onchange={changeLanguage} /></div>
-        {:else if tab === "shortcuts"}
+        {:else if panelTab === "shortcuts"}
           <ShortcutSettings bind:settings {platform} onstatus={(message) => status = message} bind:heading={sectionHeading} bind:recorder bind:recording />
-        {:else if tab === "updates"}
+        {:else if panelTab === "updates"}
           <UpdateSettings bind:settings onchecked={checkUpdates} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1" class="visually-hidden">{t("settings.about")}</h1>
@@ -262,9 +261,6 @@
         {/if}
       {:else}<div class="loading" role="status">{status || t("settings.loading")}</div>{/if}
     </Tabs.Content>
-    {:else}
-      <Tabs.Content value={panelTab} class="settings-content" tabindex={-1} />
-    {/if}
     {/each}
   </Tabs.Root>
   <AlertDialog.Root open={confirmClear} onOpenChange={(open) => confirmClear = open}>

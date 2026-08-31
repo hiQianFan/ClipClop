@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings } = vi.hoisted(() => ({
+const { preview, updateSettings, listReleaseNotes } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -11,6 +11,9 @@ const { preview, updateSettings } = vi.hoisted(() => ({
     lastUpdateCheck: null as string | null,
   },
   updateSettings: vi.fn(async (settings) => settings),
+  listReleaseNotes: vi.fn(async () => [{
+    version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
+  }]),
 }));
 
 vi.mock("./api", () => ({
@@ -29,7 +32,7 @@ vi.mock("$lib/history/api", () => ({ clearHistory: vi.fn() }));
 vi.mock("$lib/onboarding/api", () => ({ openAutoPasteSettings: vi.fn() }));
 vi.mock("$lib/updater/api", () => ({
   DEVELOPMENT_VERSION: "0.0.0-dev",
-  listReleaseNotes: async () => [],
+  listReleaseNotes,
   openLatestRelease: vi.fn(),
 }));
 vi.mock("$lib/updater/store.svelte", () => ({
@@ -59,6 +62,16 @@ it("keeps loading and saving owned by SettingsView across categories", async () 
   await waitFor(() => expect(screen.getByRole("heading", { name: "Shortcuts" })).toBeTruthy());
   await fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+});
+
+it("keeps release notes mounted while switching categories", async () => {
+  listReleaseNotes.mockClear();
+  render(SettingsView, { props: { initialTab: "updates", onclose() {}, oncleared() {}, onquickstart() {} } });
+  await waitFor(() => expect(screen.getByText("Changes")).toBeTruthy());
+  await fireEvent.click(screen.getByRole("tab", { name: "General" }));
+  await fireEvent.click(screen.getByRole("tab", { name: "Software Update" }));
+  await waitFor(() => expect(screen.getByText("Changes")).toBeTruthy());
+  expect(listReleaseNotes).toHaveBeenCalledTimes(1);
 });
 
 async function show(

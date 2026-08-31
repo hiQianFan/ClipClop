@@ -58,8 +58,7 @@
   let confirmButton = $state<HTMLButtonElement | null>(null);
 
   function requestDelete() {
-    const active = document.activeElement;
-    onrequestdelete(active instanceof HTMLElement && active.closest("[role='menuitem']") ? menuButton : active instanceof HTMLElement ? active : null);
+    onrequestdelete(menuButton);
   }
 </script>
 
@@ -77,7 +76,7 @@
       <DropdownMenu.Root open={menuOpen} onOpenChange={onmenuopenchange}>
         <div class="menu-wrap">
           <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger${menuOpen ? " expanded" : ""}`} disabled={!selected}><kbd>{actionMenuShortcut}</kbd> {t("history.actions")}</DropdownMenu.Trigger>
-          <DropdownMenu.ContentStatic class="menu action-menu" aria-label={t("history.actionMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); onbrowse(); }}>
+          <DropdownMenu.ContentStatic class="menu action-menu" aria-label={t("history.actionMenu")} loop={true} onCloseAutoFocus={(event) => { event.preventDefault(); if (!deletePending) onbrowse(); }}>
             {#if canPreview}<DropdownMenu.Item onclick={onpreview}><span>{t("history.viewSelected")}</span><kbd>Space</kbd></DropdownMenu.Item>{/if}
             {#if isLink}<DropdownMenu.Item onclick={onopenlink}><span>{t("history.openLink")}</span></DropdownMenu.Item>{/if}
             <DropdownMenu.Separator class="menu-separator" />
@@ -108,15 +107,14 @@
   :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
-  :global(.menu) { position:absolute; right:0; bottom:38px; width:210px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
-  :global(.action-menu) { width:260px; }
-  :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
-  :global(.menu [role="menuitem"] > span) { min-width:0; }
-  :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
-  :global(.menu [role="menuitem"]:hover), :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
-  :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
-  :global(.menu .danger) { color:var(--danger); }
-  :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
+  .menu-wrap :global(.menu) { position:absolute; right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .menu-wrap :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; }
+  .menu-wrap :global(.menu [role="menuitem"] > span) { min-width:0; }
+  .menu-wrap :global(.menu [role="menuitem"] > kbd) { flex:none; align-self:center; font-family:inherit; font-size:var(--fs-body); font-weight:500; line-height:1; }
+  .menu-wrap :global(.menu [role="menuitem"]:hover), .menu-wrap :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
+  .menu-wrap :global(.menu-separator) { height:1px; margin:5px 6px; background:var(--hairline); }
+  .menu-wrap :global(.menu .danger) { color:var(--danger); }
+  .menu-wrap :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
   :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }

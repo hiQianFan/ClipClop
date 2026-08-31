@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { render } from "svelte/server";
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import HistoryActionBar from "./HistoryActionBar.svelte";
 
 const props = {
@@ -29,22 +30,40 @@ const props = {
   onrestorefocus() {},
 };
 
+afterEach(cleanup);
+
 describe("HistoryActionBar actions", () => {
   it("gates preview, link, and plain-text actions from capabilities", () => {
-    const hidden = render(HistoryActionBar, { props }).body;
-    expect(hidden).not.toContain("View selected content");
-    expect(hidden).not.toContain("Open in default browser");
-    expect(hidden).not.toContain("Paste as plain text");
+    const hidden = render(HistoryActionBar, { props });
+    expect(hidden.container.textContent).not.toContain("View selected content");
+    expect(hidden.container.textContent).not.toContain("Open in default browser");
+    expect(hidden.container.textContent).not.toContain("Paste as plain text");
+    hidden.unmount();
 
-    const visible = render(HistoryActionBar, { props: { ...props, canPreview: true, isLink: true, hasPlainText: true } }).body;
-    expect(visible).toContain("View selected content");
-    expect(visible).toContain("Open in default browser");
-    expect(visible).toContain("Paste as plain text");
+    const visible = render(HistoryActionBar, { props: { ...props, canPreview: true, isLink: true, hasPlainText: true } });
+    expect(visible.container.textContent).toContain("View selected content");
+    expect(visible.container.textContent).toContain("Open in default browser");
+    expect(visible.container.textContent).toContain("Paste as plain text");
   });
 
   it("replaces actions with the existing delete confirmation", () => {
-    const body = render(HistoryActionBar, { props: { ...props, deletePending: true } }).body;
-    expect(body).toContain("Delete this item from ClipClop?");
-    expect(body).not.toContain("action-menu-trigger");
+    const view = render(HistoryActionBar, { props: { ...props, deletePending: true } });
+    expect(view.container.textContent).toContain("Delete this item from ClipClop?");
+    expect(view.container.querySelector(".action-menu-trigger")).toBeNull();
+  });
+
+  it("wires menu actions and returns the trigger as the delete invoker", async () => {
+    const onpreview = vi.fn();
+    const oncopy = vi.fn();
+    const onrequestdelete = vi.fn();
+    render(HistoryActionBar, { props: { ...props, canPreview: true, onpreview, oncopy, onrequestdelete } });
+    await fireEvent.click(screen.getByRole("menuitem", { name: /View selected content/ }));
+    await fireEvent.click(screen.getByRole("button", { name: /Actions/ }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Copy to clipboard" }));
+    await fireEvent.click(screen.getByRole("button", { name: /Actions/ }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: /Delete from ClipClop/ }));
+    expect(onpreview).toHaveBeenCalledOnce();
+    expect(oncopy).toHaveBeenCalledOnce();
+    expect(onrequestdelete).toHaveBeenCalledWith(screen.getByRole("button", { name: /Actions/ }));
   });
 });
