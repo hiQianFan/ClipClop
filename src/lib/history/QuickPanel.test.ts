@@ -21,6 +21,7 @@ vi.mock("./api", () => ({
   hidePanel: vi.fn(),
   pasteClip: vi.fn(),
   previewClip: vi.fn(),
+  performPagerHaptic: vi.fn(),
   queryHistory: host.queryHistory,
   setQuickSelection: vi.fn(),
 }));

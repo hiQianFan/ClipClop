@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { performPagerHaptic } from "./api";
   import { draggedPage, PAGE_DRAG_STEP, visiblePageTicks } from "./pager";
 
   let {
@@ -34,6 +35,7 @@
   let repeatDirection: -1 | 0 | 1 = 0;
   let wheelDistance = 0;
   let wheelEndTimer: number | undefined;
+  let lastHapticAt = Number.NEGATIVE_INFINITY;
   const currentPage = () => draggingPage ? dragPage : visualPage ?? page;
 
   $effect(() => {
@@ -51,6 +53,13 @@
     const height = Math.max(5, 16 - distance * 3.5);
     const opacity = Math.max(.2, 1 - distance * .2);
     return `height:${height}px;opacity:${opacity};transform:translate(${position * 18}px,-50%)`;
+  }
+
+  function performStepHaptic() {
+    const now = performance.now();
+    if (now - lastHapticAt < 40) return;
+    lastHapticAt = now;
+    void performPagerHaptic();
   }
 
   function startPageDrag(event: PointerEvent) {
@@ -82,6 +91,7 @@
     if (next < 1 || next > totalPages) return stopRepeat();
     dragPage = next;
     onpage(next);
+    performStepHaptic();
     animatePageStep(direction);
   }
 
@@ -114,6 +124,7 @@
     if (next === dragPage) return;
     dragPage = next;
     onpage(next);
+    performStepHaptic();
   }
 
   function stopPageDrag(event: PointerEvent) {
@@ -143,6 +154,7 @@
     if (next < 1 || next > totalPages) return;
     visualPage = next;
     onpage(next);
+    performStepHaptic();
     animatePageStep(direction);
   }
 

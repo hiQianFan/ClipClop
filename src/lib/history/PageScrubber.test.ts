@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const performPagerHaptic = vi.hoisted(() => vi.fn());
+vi.mock("./api", () => ({ performPagerHaptic }));
 
 import PageScrubber from "./PageScrubber.svelte";
 
@@ -12,6 +15,7 @@ function pointerEvent(type: string, { button = 0, pointerId, clientX }: { button
   return event;
 }
 
+beforeEach(() => performPagerHaptic.mockReset());
 afterEach(() => {
   cleanup();
   document.documentElement.classList.remove("pager-dragging");
@@ -33,6 +37,7 @@ describe("PageScrubber", () => {
     const scrubber = view.container.querySelector(".scrubber")!;
     await fireEvent.wheel(scrubber, { deltaX: 96, deltaY: 0 });
     expect(onpage.mock.calls).toEqual([[6], [7]]);
+    expect(performPagerHaptic).toHaveBeenCalled();
     await fireEvent.wheel(scrubber, { deltaX: 0, deltaY: 96 });
     expect(onpage).toHaveBeenCalledTimes(2);
   });
