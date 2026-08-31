@@ -1,0 +1,24 @@
+name: Verify R2 Access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: production-release
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_RELEASES_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_RELEASES_R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      PROBE: s3://clipclop-releases/.verification/${{ github.run_id }}
+    steps:
+      - name: Verify read and write access
+        run: |
+          aws s3api head-object --bucket clipclop-releases --key latest.json --endpoint-url "$R2_ENDPOINT"
+          printf ok | aws s3 cp - "$PROBE" --endpoint-url "$R2_ENDPOINT"
+          aws s3 rm "$PROBE" --endpoint-url "$R2_ENDPOINT"
