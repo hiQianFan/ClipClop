@@ -30,7 +30,11 @@ const props = {
   onrestorefocus() {},
 };
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  // Bits UI restores body scroll after a 24 ms transition.
+  await new Promise((resolve) => setTimeout(resolve, 30));
+});
 
 describe("HistoryActionBar actions", () => {
   it("gates preview, link, and plain-text actions from capabilities", () => {

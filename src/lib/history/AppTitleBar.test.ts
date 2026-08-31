@@ -24,6 +24,8 @@ describe("AppTitleBar menu", () => {
       await fireEvent.click(screen.getAllByRole("menuitem")[index]);
       view.unmount();
     }
+    // Keep jsdom alive for Bits UI's 24 ms body-scroll cleanup.
+    await new Promise((resolve) => setTimeout(resolve, 30));
     expect([onsettings, onupdates, onabout, onquit].map((callback) => callback.mock.calls.length)).toEqual([1, 1, 1, 1]);
   });
 });
