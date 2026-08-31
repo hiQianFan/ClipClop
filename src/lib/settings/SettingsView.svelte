@@ -6,7 +6,7 @@
   import githubIcon from "@iconify-icons/simple-icons/github";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { clearHistory } from "$lib/history/api";
-  import { applyTheme, getSettings, openLogDir, performHaptic, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme } from "./api";
+  import { applyTheme, getSettings, openLogDir, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme } from "./api";
   import AppSelect from "$lib/components/AppSelect.svelte";
   import { currentPlatform, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION } from "$lib/updater/api";
@@ -147,7 +147,6 @@
       applyTheme(saved.theme);
       recording = false;
       saveSucceeded = true;
-      void performHaptic().catch(() => {});
       saveFeedbackTimer = setTimeout(() => saveSucceeded = false, 1600);
     } catch (reason) {
       if (savedSettings) {

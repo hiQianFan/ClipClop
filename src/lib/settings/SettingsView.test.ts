@@ -30,7 +30,7 @@ vi.mock("./api", () => ({
     skipped_update_version: null,
   }),
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
-  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(), performHaptic: vi.fn(),
+  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(),
 }));
 vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),

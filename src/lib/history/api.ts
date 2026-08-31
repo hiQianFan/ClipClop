@@ -78,10 +78,6 @@ export function setQuickSelection(id: string | null): Promise<void> {
   return invoke("set_quick_selection", { id });
 }
 
-export function performPagerHaptic(): Promise<void> {
-  return invoke("perform_pager_haptic");
-}
-
 export function copyClip(id: string, plainText = false): Promise<boolean> {
   return invoke("copy_clip", { id, plainText });
 }
