@@ -2,7 +2,7 @@
 title: 'Refactor frontend composition'
 type: 'refactor'
 created: '2026-08-30'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'a20f4d93042d878c4b6b28d8836111c6ede76b3c'
 context:
   - '{project-root}/AGENTS.md'
@@ -52,11 +52,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] 文档和 baseline -- 同步架构/交互契约并记录绿灯。
-- [ ] 文本选择 -- 全局默认 + 编辑/正文预览白名单，双平台核对。
-- [ ] Settings 护栏与拆分 -- GeneralSettings、ShortcutSettings、UpdateSettings、ReleaseNotes；清理死 CSS/ignore。
-- [ ] History 护栏与拆分 -- AppTitleBar、HistoryActionBar；集中 open/mode 同步。
-- [ ] 完整审计 -- 单向依赖、状态 owner、CSS owner、OpenSpec tasks 与门禁逐项核验。
+- [x] 文档和 baseline -- 同步架构/交互契约并记录绿灯。
+- [ ] 文本选择 -- 全局默认 + 编辑/正文预览白名单，双平台核对（代码和 macOS 问题修复完成，待 Windows 复核）。
+- [x] Settings 护栏与拆分 -- GeneralSettings、ShortcutSettings、UpdateSettings、ReleaseNotes；清理死 CSS/ignore。
+- [x] History 护栏与拆分 -- AppTitleBar、HistoryActionBar；集中 open/mode 同步。
+- [ ] 完整审计 -- 单向依赖、状态 owner、CSS owner、OpenSpec tasks 与门禁逐项核验（自动化完成，待双平台人工验收）。
 
 **Acceptance Criteria:**
 - Given 任一静态 UI，when 鼠标移动或拖动，then 不出现文本 I-beam 且不产生选择。
@@ -78,3 +78,10 @@ context:
 
 **Manual checks:**
 - macOS/Windows：文本指针与选择白名单、Settings 各分类、History 菜单/确认、浅深主题、键盘/focus、更新和 Preview capability。
+
+**Latest evidence (2026-08-31):**
+- `pnpm check`：0 errors / 0 warnings。
+- `pnpm test`：20 files / 98 tests passed。
+- `pnpm build`：passed，无 CSS syntax/minify warning。
+- `git diff --check` 与 `openspec validate refactor-frontend-composition --strict`：passed。
+- macOS 实机发现并修复预览空白区文本指针范围；双平台完整人工验收仍未完成。
