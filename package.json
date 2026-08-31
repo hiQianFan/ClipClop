@@ -21,7 +21,7 @@
     "test": "vitest run",
     "tauri": "tauri"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@iconify-icons/simple-icons": "^2.0.1",
     "@iconify/svelte": "^5.2.2",
