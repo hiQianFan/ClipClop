@@ -22,7 +22,8 @@ metadata and redirects use `no-cache`.
    `clipclop.mapin.net/download/*` route is provisioned once, outside CI.
 3. Save it as the `CLOUDFLARE_DOWNLOAD_WORKER_API_TOKEN` secret in the
    `production-downloads` GitHub environment.
-4. Run the **Deploy Download Worker** workflow once.
+4. Save `CLOUDFLARE_ACCOUNT_ID` as a repository variable, then run the
+   **Deploy Download Worker** workflow once.
 
 The existing `CLOUDFLARE_API_TOKEN` continues to handle R2 uploads. Run the
 Worker workflow again only when files under `cloudflare/` change.

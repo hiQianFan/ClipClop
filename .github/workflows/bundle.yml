@@ -249,7 +249,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
           command: |
             r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --content-type=application/x-apple-diskimage --content-disposition='attachment; filename="ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg"' --cache-control="public, max-age=31536000, immutable"
