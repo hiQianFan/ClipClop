@@ -27,7 +27,7 @@ ClipClop 是桌面命令面板，不是网页文档。标题、列表摘要、�
 以下区域保留原生文本光标、选择和复制：
 
 - 文本型 `input`、`textarea` 和明确启用的 `contenteditable`；
-- 右侧文本或链接正文预览 `.preview-body.text-preview`。
+- 右侧文本或链接正文预览 `.preview-body.text-preview pre`；正文外的预览空白区域仍使用默认指针且不可选择。
 
 正文白名单不扩展到同一预览中的元信息、路径、颜色值或加载占位。按钮、菜单项和链接仍保留各自的 hover、focus 和点击反馈，但标签文字不可拖选。
 
