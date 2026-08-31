@@ -89,7 +89,7 @@ describe("HistoryActionBar actions", () => {
     await fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
     cancelView.unmount();
     render(HistoryActionBar, { props: { ...props, deletePending: true, oncanceldelete, onconfirmdelete } });
-    await fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await fireEvent.click(screen.getByRole("button", { name: /^Delete/ }));
     expect(oncanceldelete).toHaveBeenCalledOnce();
     expect(onconfirmdelete).toHaveBeenCalledOnce();
   });

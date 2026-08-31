@@ -74,8 +74,8 @@
     {#if deletePending}
       <AlertDialog.Content class="confirmation" aria-label={t("history.confirmDeleteLabel")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); onrestorefocus(); }}>
         <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
-        <AlertDialog.Cancel class="ghost" onclick={oncanceldelete}>{t("common.cancel")} <ShortcutHint shortcut="Escape" variant="compact" /></AlertDialog.Cancel>
-        <AlertDialog.Action bind:ref={confirmButton} class="destructive" onclick={onconfirmdelete}>{t("history.delete")}</AlertDialog.Action>
+        <AlertDialog.Cancel class="ghost pressable" onclick={oncanceldelete}>{t("common.cancel")} <ShortcutHint shortcut="Escape" variant="compact" /></AlertDialog.Cancel>
+        <AlertDialog.Action bind:ref={confirmButton} class="destructive pressable" onclick={onconfirmdelete}>{t("history.delete")} <ShortcutHint shortcut="Enter" platform={isMac ? "macos" : "windows"} inherit /></AlertDialog.Action>
       </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
@@ -131,6 +131,7 @@
   .message.error { color:var(--danger); }
   .actions :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
   .actions :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
+  .actions :global(.confirmation .ghost) { border:1px solid var(--hairline); }
   .actions :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
   .actions :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
 </style>
