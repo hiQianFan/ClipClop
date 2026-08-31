@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
-  import { ArrowLeft, ArrowRight, Check, Languages, Link, Search, Type } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
   import { currentPlatform, defaultShortcut, shortcutKeycaps, shortcutSpokenLabel } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
   import { openFilePreviewSettings, type LanguagePreference } from "$lib/settings/api";
@@ -41,6 +41,7 @@
   let languageOpenFocus: "current" | "last" = "current";
   let languageTabExit = false;
   let previewOpen = $state(false);
+  let finishing = $state(false);
   let saveQueue = Promise.resolve();
   const announcement = $derived(t("onboarding.stepLabel", {
     current: steps.indexOf(step) + 1,
@@ -139,6 +140,8 @@
   }
 
   async function finish() {
+    if (finishing) return;
+    finishing = true;
     if (mode === "first_run") {
       try {
         await saveQueue;
@@ -151,6 +154,7 @@
         });
       } catch (reason) {
         error = localizedError(reason);
+        finishing = false;
         return;
       }
     }
@@ -350,7 +354,7 @@
     </span>
     <button aria-label={t("onboarding.next")} disabled={isLastStep || mode === "auto_paste"} onclick={() => void enter(steps[steps.indexOf(step) + 1]!)}><ArrowRight size={17} /></button>
   </div>
-  {#if isLastStep}<button class="primary" onclick={() => void finish()}>{t("onboarding.finish")}</button>{/if}
+  {#if isLastStep}<button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else}{t("onboarding.finish")}{/if}</button>{/if}
 </footer>
 
 <style>
@@ -420,6 +424,8 @@
   /* 工具栏 */
   footer{grid-column:1/-1;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-top:1px solid var(--hairline)}
   footer button{min-height:30px;padding:7px 12px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui)}
+  footer .finish{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  footer .finish :global(.finish-spinner){animation:finish-spin .8s linear infinite}
   .navigation{display:flex;align-items:center;gap:8px}
   .navigation>button:first-child,.navigation>button:last-child{width:36px;height:30px;padding:0;display:grid;place-items:center;border:1px solid var(--hairline);border-radius:var(--radius-sm)}
   /* 进度圆点: 纯状态展示, 不可点击/聚焦 */
@@ -429,6 +435,8 @@
   .dots .dot.current{width:9px;height:9px;background:var(--action);box-shadow:0 0 0 2px var(--bg-shell)}
   button:hover:not(:disabled){background:var(--bg-hover)}
   button:disabled{opacity:.4}
+  @keyframes finish-spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){footer .finish :global(.finish-spinner){animation:none}}
   :global(.language-trigger:focus-visible),:global(.language-menu [role="menuitemradio"]:focus-visible),.body button:focus-visible,footer button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
   .sandbox-list:focus-visible,.mini-row[role=option]:focus-visible{outline:none}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

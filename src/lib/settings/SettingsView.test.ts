@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings, listReleaseNotes, platform } = vi.hoisted(() => ({
+const { preview, updateSettings, listReleaseNotes, openUrl, platform } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -14,8 +14,11 @@ const { preview, updateSettings, listReleaseNotes, platform } = vi.hoisted(() =>
   listReleaseNotes: vi.fn(async () => [{
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
   }]),
+  openUrl: vi.fn(),
   platform: { value: "windows" as "windows" | "macos" },
 }));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl }));
 
 vi.mock("./api", () => ({
   getSettings: async () => ({
@@ -27,7 +30,7 @@ vi.mock("./api", () => ({
     skipped_update_version: null,
   }),
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
-  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(),
+  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(), performHaptic: vi.fn(),
 }));
 vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),
@@ -73,6 +76,7 @@ it("keeps loading and saving owned by SettingsView across categories", async () 
   await waitFor(() => expect(screen.getByRole("heading", { name: "Shortcuts" })).toBeTruthy());
   await fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole("button", { name: "Settings saved" })).toBeTruthy();
 });
 
 it("keeps release notes mounted while switching categories", async () => {
@@ -119,6 +123,13 @@ it("renders the platform-specific preview entry", async () => {
   await screen.findByRole("heading", { name: "General" });
   expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(2);
   expect(screen.queryByRole("button", { name: "Learn and install" })).toBeNull();
+});
+
+it("opens the repository from the GitHub icon", async () => {
+  openUrl.mockClear();
+  render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
+  await fireEvent.click(await screen.findByRole("button", { name: "View ClipClop on GitHub" }));
+  expect(openUrl).toHaveBeenCalledWith("https://github.com/hiQianFan/ClipClop");
 });
 
 async function show(
