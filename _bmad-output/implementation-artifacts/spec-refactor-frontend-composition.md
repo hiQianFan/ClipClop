@@ -84,4 +84,4 @@ context:
 - `pnpm test`：20 files / 98 tests passed。
 - `pnpm build`：passed，无 CSS syntax/minify warning。
 - `git diff --check` 与 `openspec validate refactor-frontend-composition --strict`：passed。
-- macOS 实机发现并修复预览空白区文本指针范围；双平台完整人工验收仍未完成。
+- macOS 实机发现并修复预览空白区文本指针范围，用户复核通过；Windows 因当前无可用设备仍待验证。

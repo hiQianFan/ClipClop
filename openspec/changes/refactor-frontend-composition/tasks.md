@@ -55,5 +55,5 @@
 ## 验收记录
 
 - 2026-08-31：`pnpm check` 通过（0 errors / 0 warnings）；`pnpm test` 通过（20 files / 98 tests）；`pnpm build` 通过且无 CSS syntax/minify warning；`git diff --check` 通过；OpenSpec strict validate 通过。
-- 2026-08-31：macOS 实机检查发现正文预览空白区错误显示文本指针，已在 `3509205` 将白名单收窄到实际正文 `pre`；等待双平台复核后完成 2.4 与 7.4。
+- 2026-08-31：macOS 实机检查发现正文预览空白区错误显示文本指针，已在 `3509205` 将白名单收窄到实际正文 `pre`，用户复核通过；Windows 因当前无可用设备仍待验证，故 2.4 与 7.4 保持未完成。
 - 提交边界：文档 `af3a049`；文本选择 `e0cc705`、`3509205`；Settings `74333aa`；History chrome `611b164`；行为修复 `f339b00`；测试 `b374ff0`；CSS ownership `1f785f6`。
