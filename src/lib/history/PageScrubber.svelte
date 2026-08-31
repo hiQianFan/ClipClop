@@ -199,9 +199,11 @@
 </div>
 
 <style>
-  .scrubber{height:30px;min-width:70px;position:relative;overflow:hidden;border-radius:var(--radius-sm);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
-  .scrubber.dragging{cursor:grabbing}
-  .scrubber.disabled{cursor:default;opacity:.35}
+  /* ponytail: no hover cursor here. WebKit only pushes the CSS cursor on mousemove, so a
+     hover `grab` flickers back to the arrow once the pointer stops. The drag cursor below
+     works because a drag always has a live event stream. */
+  .scrubber{height:30px;min-width:70px;position:relative;overflow:hidden;border-radius:var(--radius-sm);touch-action:none;user-select:none;-webkit-user-select:none}
+  .scrubber.disabled{opacity:.35}
   .ticks{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity 220ms ease-out}
   .scrubber:hover .ticks,.scrubber.dragging .ticks,.ticks.key-visible{opacity:1}
   .ticks i{width:2px;position:absolute;left:50%;top:50%;margin-left:-1px;border-radius:var(--radius-pill);background:var(--text-2);transform-origin:center;transition:none}
