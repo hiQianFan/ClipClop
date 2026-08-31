@@ -186,10 +186,10 @@
 </section>
 
 <footer class="pager">
-  <button disabled={currentPage() <= 1} onclick={() => turnPage(-1)} aria-label={t("history.previousPage")}><ArrowLeft size={16} aria-hidden="true" /></button>
+  <button class="pressable" disabled={currentPage() <= 1} onclick={() => turnPage(-1)} aria-label={t("history.previousPage")}><ArrowLeft size={16} aria-hidden="true" /></button>
   <PageScrubber bind:this={pageScrubber} bind:displayPage={scrubberPage} page={page.page} totalPages={page.total_pages} {reducedMotion} {onpage} />
   <span class="page-count">{formatNumber(page.total_pages === 0 ? 0 : currentPage())}/{formatNumber(page.total_pages)}</span>
-  <button disabled={currentPage() >= page.total_pages} onclick={() => turnPage(1)} aria-label={t("history.nextPage")}><ArrowRight size={16} aria-hidden="true" /></button>
+  <button class="pressable" disabled={currentPage() >= page.total_pages} onclick={() => turnPage(1)} aria-label={t("history.nextPage")}><ArrowRight size={16} aria-hidden="true" /></button>
 </footer>
 
 <style>
