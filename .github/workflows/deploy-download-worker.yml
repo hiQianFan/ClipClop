@@ -18,4 +18,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_DOWNLOAD_WORKER_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: npm
+          wranglerVersion: "4.127.1"
           command: deploy --config cloudflare/wrangler.toml

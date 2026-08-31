@@ -18,7 +18,8 @@ metadata and redirects use `no-cache`.
 
 1. Keep `clipclop.mapin.net` connected to the `clipclop-releases` R2 bucket.
 2. Create an **Edit Cloudflare Workers** API token, scoped to the ClipClop
-   account and the `mapin.net` zone.
+   account. CI only needs `Workers Scripts Write` because the stable
+   `clipclop.mapin.net/download/*` route is provisioned once, outside CI.
 3. Save it as the `CLOUDFLARE_DOWNLOAD_WORKER_API_TOKEN` secret in the
    `production-downloads` GitHub environment.
 4. Run the **Deploy Download Worker** workflow once.

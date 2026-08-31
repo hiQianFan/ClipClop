@@ -2,7 +2,3 @@ name = "clipclop-downloads"
 main = "download-worker.js"
 compatibility_date = "2026-08-31"
 workers_dev = false
-
-[[routes]]
-pattern = "clipclop.mapin.net/download/*"
-zone_name = "mapin.net"
