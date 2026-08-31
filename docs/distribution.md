@@ -25,5 +25,7 @@ metadata and redirects use `no-cache`.
 4. Save `CLOUDFLARE_ACCOUNT_ID` as a repository variable, then run the
    **Deploy Download Worker** workflow once.
 
-The existing `CLOUDFLARE_API_TOKEN` continues to handle R2 uploads. Run the
-Worker workflow again only when files under `cloudflare/` change.
+Release uploads use the bucket-scoped
+`CLOUDFLARE_RELEASES_R2_ACCESS_KEY_ID` and
+`CLOUDFLARE_RELEASES_R2_SECRET_ACCESS_KEY` secrets in `production-release`.
+Run the Worker workflow again only when files under `cloudflare/` change.

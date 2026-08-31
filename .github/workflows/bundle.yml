@@ -137,6 +137,7 @@ jobs:
     name: Finalize and Verify Draft Release
     needs: [prepare, build]
     runs-on: ubuntu-latest
+    environment: production-release
     permissions:
       # GitHub hides draft releases from tokens without release write access.
       # This job only reads the draft and downloads latest.json.
@@ -246,19 +247,22 @@ jobs:
           minisign -Vm "$manifest_dir/$windows_bundle" -x "$manifest_dir/$windows_signature.decoded" -P "$updater_pubkey"
 
       - name: Upload versioned release files to R2
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          packageManager: npm
-          command: |
-            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg --content-type=application/x-apple-diskimage --content-disposition='attachment; filename="ClipClop_${{ needs.prepare.outputs.version }}_universal.dmg"' --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_macos_universal.app.tar.gz --file=.release-assets/ClipClop_universal.app.tar.gz --content-type=application/gzip --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_macos_universal.app.tar.gz.sig --file=.release-assets/ClipClop_universal.app.tar.gz.sig --content-type=text/plain --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe --content-type=application/vnd.microsoft.portable-executable --content-disposition='attachment; filename="ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe"' --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/releases/v${{ needs.prepare.outputs.version }}/ClipClop_${{ needs.prepare.outputs.version }}_windows_x64-setup.exe.sig --file=.release-assets/ClipClop_${{ needs.prepare.outputs.version }}_x64-setup.exe.sig --content-type=text/plain --cache-control="public, max-age=31536000, immutable"
-            r2 object put clipclop-releases/downloads.json --file=.release-assets/downloads.json --content-type=application/json --cache-control="no-cache"
-            r2 object put clipclop-releases/latest.json --file=.release-assets/latest.json --content-type=application/json --cache-control="no-cache"
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_RELEASES_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_RELEASES_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          release_path="s3://clipclop-releases/releases/v$RELEASE_VERSION"
+          aws s3 cp ".release-assets/ClipClop_${RELEASE_VERSION}_universal.dmg" "$release_path/ClipClop_${RELEASE_VERSION}_universal.dmg" --endpoint-url "$R2_ENDPOINT" --content-type application/x-apple-diskimage --content-disposition "attachment; filename=\"ClipClop_${RELEASE_VERSION}_universal.dmg\"" --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp .release-assets/ClipClop_universal.app.tar.gz "$release_path/ClipClop_${RELEASE_VERSION}_macos_universal.app.tar.gz" --endpoint-url "$R2_ENDPOINT" --content-type application/gzip --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp .release-assets/ClipClop_universal.app.tar.gz.sig "$release_path/ClipClop_${RELEASE_VERSION}_macos_universal.app.tar.gz.sig" --endpoint-url "$R2_ENDPOINT" --content-type text/plain --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp ".release-assets/ClipClop_${RELEASE_VERSION}_x64-setup.exe" "$release_path/ClipClop_${RELEASE_VERSION}_windows_x64-setup.exe" --endpoint-url "$R2_ENDPOINT" --content-type application/vnd.microsoft.portable-executable --content-disposition "attachment; filename=\"ClipClop_${RELEASE_VERSION}_windows_x64-setup.exe\"" --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp ".release-assets/ClipClop_${RELEASE_VERSION}_x64-setup.exe.sig" "$release_path/ClipClop_${RELEASE_VERSION}_windows_x64-setup.exe.sig" --endpoint-url "$R2_ENDPOINT" --content-type text/plain --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp .release-assets/downloads.json s3://clipclop-releases/downloads.json --endpoint-url "$R2_ENDPOINT" --content-type application/json --cache-control no-cache
+          aws s3 cp .release-assets/latest.json s3://clipclop-releases/latest.json --endpoint-url "$R2_ENDPOINT" --content-type application/json --cache-control no-cache
       - name: Publish verified release
         shell: bash
         env:
