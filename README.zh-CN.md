@@ -69,7 +69,7 @@ ClipClop 完全开源，任何人都可以审查剪贴内容如何处理、数�
 
 ## 开源许可
 
-ClipClop 采用 [MIT License](LICENSE) 开源。如果它对你有帮助，欢迎点亮 ⭐，让更多人发现它。
+ClipClop 采用 [GNU Affero General Public License v3.0](LICENSE) 开源。如果它对你有帮助，欢迎点亮 ⭐，让更多人发现它。
 
 ## Star History
 

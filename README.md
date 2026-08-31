@@ -69,7 +69,7 @@ Development setup, project conventions, and private security reporting live in t
 
 ## License
 
-ClipClop is open source under the [MIT License](LICENSE). If it helps you, a ⭐ makes the project easier for others to discover.
+ClipClop is open source under the [GNU Affero General Public License v3.0](LICENSE). If it helps you, a ⭐ makes the project easier for others to discover.
 
 ## Star History
 
