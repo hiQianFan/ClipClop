@@ -280,22 +280,21 @@
   /* Unified action-button sizing across every section (ghost per DESIGN.md). */
   .row>button{min-height:32px;padding:0 12px;white-space:nowrap}
   .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
-  :global(.settings-body){min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}
-  :global(.settings-nav){display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}
-  :global(.settings-nav button){min-height:40px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;text-align:left;font-size:var(--fs-body);font-weight:600;line-height:1.4}
-  :global(.settings-nav button:hover),:global(.settings-nav button.active){color:var(--text-1);background:var(--bg-hover)}
-  :global(.settings-nav button.active){background:var(--bg-selected)}
-  :global(.settings-nav button:focus-visible){outline:none}
-  :global(.settings-nav.tab-focus button:focus-visible){box-shadow:inset 0 0 0 2px var(--text-1)}
-  :global(.settings-content){min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}
-  :global(.settings-content h1){margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}
-  :global(.settings-content h1:focus){outline:none}
-  :global(.settings-content>label){min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}
-  :global(.settings-content>label>select){flex:none}
-  :global(.settings-content.updates-content){overflow:hidden;padding-bottom:0}
-  :global(.progress-track){height:6px;overflow:hidden;border-radius:var(--radius-pill);background:var(--bg-selected)}
-  :global(.clear-confirmation){width:100%;display:flex;align-items:center;justify-content:flex-end;gap:10px}
-  :global(.clear-confirmation strong){min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  :global(.clear-confirmation button){min-width:92px;min-height:32px;padding:0 12px}
-  :global(.clear-confirmation .danger){color:var(--danger-on);background:var(--danger-fill);font-weight:600}
+  .settings-shell :global(.settings-body){min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}
+  .settings-shell :global(.settings-nav){display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}
+  .settings-shell :global(.settings-nav button){min-height:40px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;text-align:left;font-size:var(--fs-body);font-weight:600;line-height:1.4}
+  .settings-shell :global(.settings-nav button:hover),.settings-shell :global(.settings-nav button.active){color:var(--text-1);background:var(--bg-hover)}
+  .settings-shell :global(.settings-nav button.active){background:var(--bg-selected)}
+  .settings-shell :global(.settings-nav button:focus-visible){outline:none}
+  .settings-shell :global(.settings-nav.tab-focus button:focus-visible){box-shadow:inset 0 0 0 2px var(--text-1)}
+  .settings-shell :global(.settings-content){min-width:0;min-height:0;overflow:auto;padding:0 24px 20px}
+  .settings-shell :global(.settings-content h1){margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}
+  .settings-shell :global(.settings-content h1:focus){outline:none}
+  .settings-shell :global(.settings-content>label){min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}
+  .settings-shell :global(.settings-content>label>select){flex:none}
+  .settings-shell :global(.settings-content.updates-content){overflow:hidden;padding-bottom:0}
+  .settings-shell :global(.clear-confirmation){width:100%;display:flex;align-items:center;justify-content:flex-end;gap:10px}
+  .settings-shell :global(.clear-confirmation strong){min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .settings-shell :global(.clear-confirmation button){min-width:92px;min-height:32px;padding:0 12px}
+  .settings-shell :global(.clear-confirmation .danger){color:var(--danger-on);background:var(--danger-fill);font-weight:600}
 </style>

@@ -96,15 +96,15 @@
 <style>
   kbd { font:var(--fs-caption)/var(--lh-snug) var(--mono); color:var(--text-2); border:1px solid var(--hairline); border-radius:var(--radius-sm); padding:1px 5px; white-space:nowrap; }
   .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .copy, :global(.ghost), :global(.destructive) { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
+  .copy, .actions :global(.ghost), .actions :global(.destructive) { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
   .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
   .copy:hover { background:var(--action-hover); }
   .copy:active { filter:brightness(.92); }
   .copy kbd { color:inherit; border-color:currentColor; opacity:.9; }
-  :global(.ghost:hover), :global(.ghost.expanded) { color:var(--text-1); background:var(--bg-hover); }
-  :global(.ghost:active), :global(.ghost.expanded:active) { background:var(--bg-selected); }
-  :global(.action-menu-trigger.expanded) kbd { color:inherit; border-color:currentColor; }
-  :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
+  .actions :global(.ghost:hover), .actions :global(.ghost.expanded) { color:var(--text-1); background:var(--bg-hover); }
+  .actions :global(.ghost:active), .actions :global(.ghost.expanded:active) { background:var(--bg-selected); }
+  .actions :global(.action-menu-trigger.expanded kbd) { color:inherit; border-color:currentColor; }
+  .actions :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
   .menu-wrap :global(.menu) { position:absolute; right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
@@ -117,8 +117,8 @@
   .menu-wrap :global(.menu .danger kbd) { color:currentColor; border-color:currentColor; }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
-  :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
-  :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
-  :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
+  .actions :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+  .actions :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
+  .actions :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
+  .actions :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
 </style>
