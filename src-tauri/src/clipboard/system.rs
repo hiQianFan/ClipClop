@@ -173,8 +173,14 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
             )));
         }
     }
-    let files = context.get_files().ok().filter(|items| !items.is_empty());
     let image = context.get_image().ok();
+    // Photos also advertises protected file promises for copied images. Prefer
+    // the image payload so capture does not trigger a Photos access prompt.
+    let files = image
+        .is_none()
+        .then(|| context.get_files().ok())
+        .flatten()
+        .filter(|items| !items.is_empty());
     let text = context.get_text().ok().filter(|value| !value.is_empty());
     let html = text
         .as_ref()
