@@ -5,6 +5,7 @@ import type { ClipSummary, HistoryPage } from "./types";
 
 const host = vi.hoisted(() => ({
   queryHistory: vi.fn(),
+  previewClip: vi.fn(),
   listeners: new Map<string, () => void>(),
 }));
 
@@ -15,12 +16,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 vi.mock("./api", () => ({
-  canPreviewClip: () => false,
+  canPreviewClip: () => true,
   getClipThumbnail: vi.fn(async () => ({ data_url: null, byte_size: null, access_denied: false })),
   getPreviewCapability: vi.fn(async () => ({ provider: "unavailable", reason: "not_installed" })),
   hidePanel: vi.fn(),
   pasteClip: vi.fn(),
-  previewClip: vi.fn(),
+  previewClip: host.previewClip,
   performPagerHaptic: vi.fn(),
   queryHistory: host.queryHistory,
   setQuickSelection: vi.fn(),
@@ -65,6 +66,7 @@ function show() {
 
 beforeEach(() => {
   host.queryHistory.mockReset();
+  host.previewClip.mockReset();
   host.listeners.clear();
 });
 
@@ -132,6 +134,26 @@ describe("QuickPanel pagination", () => {
     expect(screen.getByRole("option", { selected: true }).textContent).toContain("item 3");
     await fireEvent.blur(window);
     expect(document.activeElement).toBe(document.body);
+    await fireEvent.focus(window);
+    expect(document.activeElement).toBe(list);
+  });
+
+  it("returns pointer-operated buttons to the list but preserves explicit keyboard focus", async () => {
+    host.queryHistory.mockResolvedValue(page(1, 10, 10));
+    const view = show();
+    const list = await screen.findByRole("listbox");
+    await screen.findByText("item 1");
+    const settings = view.container.querySelector("nav button:nth-child(2)") as HTMLButtonElement;
+
+    await fireEvent.pointerUp(settings);
+    await new Promise(requestAnimationFrame);
+    expect(document.activeElement).toBe(list);
+
+    settings.focus();
+    await fireEvent.keyDown(settings, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(settings);
+    expect(screen.getByRole("option", { selected: true }).textContent).toContain("item 1");
+    expect(host.previewClip).not.toHaveBeenCalled();
   });
 
   it("matches the app left and right page shortcuts", async () => {

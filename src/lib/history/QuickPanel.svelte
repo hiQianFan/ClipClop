@@ -43,6 +43,7 @@
     const updateReducedMotion = () => { reducedMotion = motionQuery?.matches ?? false; };
     updateReducedMotion();
     motionQuery?.addEventListener("change", updateReducedMotion);
+    window.addEventListener("pointerup", restoreAfterPointer, true);
     void loadPage(1, "first");
     void refreshPreviewCapability();
     const unlisten = listen("history_changed", () => void loadPage(1, "first"));
@@ -54,6 +55,7 @@
     requestAnimationFrame(() => list?.focus());
     return () => {
       motionQuery?.removeEventListener("change", updateReducedMotion);
+      window.removeEventListener("pointerup", restoreAfterPointer, true);
       unlisten.then((fn) => fn());
       unlistenShown.then((fn) => fn());
     };
@@ -147,6 +149,14 @@
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }
 
+  function restoreWindowFocus() {
+    list?.focus();
+  }
+
+  function restoreAfterPointer() {
+    requestAnimationFrame(() => list?.focus());
+  }
+
   async function preview(item: ClipSummary | undefined) {
     if (!item) return;
     selectedId = item.id;
@@ -158,7 +168,7 @@
   }
 </script>
 
-<svelte:window onblur={clearWindowFocus} />
+<svelte:window onblur={clearWindowFocus} onfocus={restoreWindowFocus} />
 
 <main class="quick-shell">
   <section class="quick-panel" aria-label={t("quick.title")}>
