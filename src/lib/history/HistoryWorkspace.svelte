@@ -34,8 +34,6 @@
   let preserveSearchConditions = $state(false);
   let expandedId = $state<string | null>(null);
   let error = $state("");
-  let copied = $state("");
-  let copiedTimer: number | undefined;
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
@@ -183,15 +181,6 @@
     enterBrowse();
   }
 
-  function pasteMessage(outcome: string) {
-    if (outcome === "copied_permission_required") return t("paste.permission");
-    if (outcome === "copied_target_lost") return t("paste.targetLost");
-    if (outcome === "copied_focus_failed") return t("paste.focusFailed");
-    if (outcome === "copied_injection_failed") return t("paste.injectionFailed");
-    if (outcome === "already_in_progress") return t("paste.inProgress");
-    return t("paste.unsupported");
-  }
-
   async function select(id: string | null, readSelectedFile = false) {
     const selectionChanged = session.selectedId !== id;
     if (selectionChanged) expandedId = null;
@@ -220,11 +209,7 @@
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
     try {
-      const outcome = await pasteClip(session.selectedId, plainText);
-      if (outcome !== "pasted") {
-        window.clearTimeout(copiedTimer);
-        copied = pasteMessage(outcome);
-      }
+      await pasteClip(session.selectedId, plainText);
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
@@ -239,12 +224,7 @@
     if (plainText && session.detail?.plain_text == null) return;
     try {
       const moved = await copyClip(session.selectedId, plainText);
-      window.clearTimeout(copiedTimer);
-      copied = plainText ? t("history.copiedPlain") : t("history.copied");
       await refresh(moved ? 1 : session.page.page, moved);
-      copiedTimer = window.setTimeout(() => {
-        copied = "";
-      }, 1800);
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
@@ -746,7 +726,6 @@
     hasPlainText={session.detail?.plain_text != null}
     {isMac}
     {error}
-    {copied}
     {menuOpen}
     {deletePending}
     {actionMenuShortcut}

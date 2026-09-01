@@ -10,7 +10,6 @@
     hasPlainText,
     isMac,
     error,
-    copied,
     menuOpen,
     deletePending,
     actionMenuShortcut,
@@ -35,7 +34,6 @@
     hasPlainText: boolean;
     isMac: boolean;
     error: string;
-    copied: string;
     menuOpen: boolean;
     deletePending: boolean;
     actionMenuShortcut: string;
@@ -79,7 +77,6 @@
       </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
-      {#if copied}<span class="message">{copied}</span>{/if}
       <DropdownMenu.Root open={menuOpen} onOpenChange={onmenuopenchange}>
         <div class="menu-wrap">
           <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger pressable${menuOpen ? " expanded" : ""}`} disabled={!selected}>

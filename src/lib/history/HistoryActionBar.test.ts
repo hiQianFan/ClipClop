@@ -10,7 +10,6 @@ const props = {
   hasPlainText: false,
   isMac: true,
   error: "",
-  copied: "",
   menuOpen: true,
   deletePending: false,
   actionMenuShortcut: "Command+K",
