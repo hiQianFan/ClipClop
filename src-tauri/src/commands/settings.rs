@@ -2,6 +2,14 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::{error::AppResult, settings::Settings, state::AppState, workflows::settings_update};
 
+fn open_url(app: &AppHandle, url: &str) -> AppResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))
+}
+
 #[tauri::command]
 pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> AppResult<Settings> {
     settings_update::get(&app, &state.settings)
@@ -45,23 +53,20 @@ pub fn open_log_dir(app: AppHandle) -> AppResult<()> {
 
 #[tauri::command]
 pub fn open_release_page(app: AppHandle) -> AppResult<()> {
-    use tauri_plugin_opener::OpenerExt;
-
-    app.opener()
-        .open_url(
-            "https://github.com/hiQianFan/ClipClop/releases",
-            None::<&str>,
-        )
-        .map_err(|error| crate::error::AppError::Platform(error.to_string()))
+    open_url(&app, "https://github.com/hiQianFan/ClipClop/releases")
 }
 
 #[tauri::command]
 pub fn open_repository(app: AppHandle) -> AppResult<()> {
-    use tauri_plugin_opener::OpenerExt;
+    open_url(&app, "https://github.com/hiQianFan/ClipClop")
+}
 
-    app.opener()
-        .open_url("https://github.com/hiQianFan/ClipClop", None::<&str>)
-        .map_err(|error| crate::error::AppError::Platform(error.to_string()))
+#[tauri::command]
+pub fn open_powertoys_install_page(app: AppHandle) -> AppResult<()> {
+    open_url(
+        &app,
+        "https://learn.microsoft.com/windows/powertoys/install",
+    )
 }
 
 #[tauri::command]
