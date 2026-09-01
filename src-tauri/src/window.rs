@@ -199,6 +199,9 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
 
     #[cfg(target_os = "macos")]
     if macos::show_as_panel(app, label) {
+        if let Err(error) = window.set_focus() {
+            log::warn!("show_panel: webview focus request failed: {error}");
+        }
         lifecycle.mark_focused(label);
         return;
     }

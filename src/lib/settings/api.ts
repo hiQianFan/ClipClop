@@ -28,6 +28,7 @@ export const updateSettings = (settings: Settings) => invoke<Settings>("update_s
 export const recordUpdateCheck = () => invoke<string>("record_update_check");
 export const skipUpdateVersion = (version: string) => invoke<void>("skip_update_version", { version });
 export const openLogDir = () => invoke<void>("open_log_dir");
+export const openRepository = () => invoke<void>("open_repository");
 export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
 export const quitApp = () => invoke<void>("quit_app");
 export const THEME_PREVIEW_EVENT = "theme_preview";

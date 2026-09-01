@@ -3,6 +3,7 @@
   import { DropdownMenu } from "bits-ui";
   import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import PageScrubber from "$lib/history/PageScrubber.svelte";
   import { currentPlatform, defaultShortcut } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
   import { openFilePreviewSettings, type LanguagePreference } from "$lib/settings/api";
@@ -29,10 +30,12 @@
     ? ["overview", "practice", "auto_paste"]
     : ["overview", "practice"];
   const examples: OnboardingExample[] = ["image", "text", "link"];
+  const practicePages = 3;
   const starting = untrack(() => $state.snapshot(initial)) as OnboardingState;
   let journey = $state<OnboardingState>(starting);
   let step = $state<OnboardingStep>(untrack(() => mode === "auto_paste" || starting.current_step === "file_preview") ? "auto_paste" : starting.current_step ?? "overview");
   let selected = $state<OnboardingExample>(starting.selected_example ?? "image");
+  let practicePage = $state(1);
   let inputValue = $state("");
   let pastedImage = $state(false);
   let error = $state("");
@@ -43,6 +46,7 @@
   let languageTabExit = false;
   let previewOpen = $state(false);
   let finishing = $state(false);
+  let reducedMotion = $state(false);
   let saveQueue = Promise.resolve();
   const announcement = $derived(t("onboarding.stepLabel", {
     current: steps.indexOf(step) + 1,
@@ -53,6 +57,7 @@
   const isLastStep = $derived(mode === "auto_paste" || step === steps[steps.length - 1]);
 
   onMount(() => {
+    reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     void enter(step, false);
   });
 
@@ -93,25 +98,52 @@
 
   function practiceKeydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return;
-    const index = examples.indexOf(selected);
+    const visible = practiceExamples();
+    const index = visible.indexOf(selected);
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      void selectExample(examples[(index + (event.key === "ArrowDown" ? 1 : -1) + examples.length) % examples.length]!);
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const next = index + direction;
+      if (next >= 0 && next < visible.length) void selectExample(visible[next]!);
+      else turnPracticePage(practicePage + direction, direction > 0 ? "first" : "last");
+    } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+      event.preventDefault();
+      turnPracticePage(practicePage - 1, "last");
+    } else if (event.key === "ArrowRight" || event.key === "PageDown") {
+      event.preventDefault();
+      turnPracticePage(practicePage + 1, "first");
     } else if (/^[1-3]$/.test(event.key)) {
       event.preventDefault();
-      void selectExample(examples[Number(event.key) - 1]!);
+      void selectExample(visible[Number(event.key) - 1]!);
     } else if (event.key === " " || event.code === "Space") {
       event.preventDefault();
       if (supportsOnboardingPreview(platform)) void togglePreview();
     } else if (event.key === "Enter") {
       event.preventDefault();
       pastedImage = selected === "image";
-      inputValue = pastedImage ? "" : exampleText();
+      inputValue = pastedImage ? "" : practiceExampleText(selected);
       // Focus stays on the sandbox list so the user can keep selecting and
       // pasting after Enter; the input remains independently editable.
     }
-    // ArrowLeft/ArrowRight are intentionally not handled here so they bubble to
-    // the window handler and page between steps.
+  }
+
+  function onWindowClick(event: MouseEvent) {
+    if (step !== "practice") return;
+    if (event.target instanceof Element && event.target.closest("input, button, [role=menuitemradio]")) return;
+    sandboxList?.focus();
+  }
+
+  function practiceExamples() {
+    const offset = practicePage - 1;
+    return examples.map((_, index) => examples[(index + offset) % examples.length]!);
+  }
+
+  function turnPracticePage(page: number, edge?: "first" | "last") {
+    const next = Math.max(1, Math.min(page, practicePages));
+    if (next === practicePage) return;
+    practicePage = next;
+    const visible = practiceExamples();
+    void selectExample(visible[edge === "last" ? visible.length - 1 : 0]!);
   }
 
   async function togglePreview() {
@@ -219,18 +251,8 @@
     }
     if (step === "practice" && !(event.target instanceof HTMLInputElement) && /^[1-3]$/.test(event.key)) {
       event.preventDefault();
-      void selectExample(examples[Number(event.key) - 1]!);
-      return;
+      void selectExample(practiceExamples()[Number(event.key) - 1]!);
     }
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    // Left/right page between steps everywhere except native form controls.
-    if (mode === "auto_paste") return;
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
-    const delta = event.key === "ArrowRight" ? 1 : -1;
-    const nextIndex = steps.indexOf(step) + delta;
-    if (nextIndex < 0 || nextIndex >= steps.length) return;
-    event.preventDefault();
-    void enter(steps[nextIndex]!);
   }
 
   function onWindowFocus() {
@@ -246,20 +268,25 @@
   function exampleText(example = selected) {
     return t(`onboarding.example.${example}` as "onboarding.example.image");
   }
+
+  function practiceExampleText(example: OnboardingExample) {
+    if (practicePage === 1 || example !== "text") return exampleText(example);
+    return t(`onboarding.practice.page${practicePage}.text` as "onboarding.practice.page2.text");
+  }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onfocus={onWindowFocus} />
+<svelte:window onkeydown={onWindowKeydown} onfocus={onWindowFocus} onclick={onWindowClick} />
 
-{#snippet exampleIcon(example: OnboardingExample)}
-  {#if example === "image"}<img src="/app-icon.png" alt={exampleText(example)} />
+{#snippet exampleIcon(example: OnboardingExample, label = exampleText(example))}
+  {#if example === "image"}<img src="/app-icon.png" alt={label} />
   {:else if example === "link"}<Link size={15} aria-hidden="true" />
   {:else}<Type size={15} aria-hidden="true" />{/if}
 {/snippet}
 
-{#snippet listRow(example: OnboardingExample, index: number)}
+{#snippet listRow(example: OnboardingExample, index: number, label = exampleText(example))}
   <span class="num" aria-hidden="true">{index + 1}</span>
-  <span class="lead">{@render exampleIcon(example)}</span>
-  {#if example !== "image"}<span class="snippet">{exampleText(example)}</span>{/if}
+  <span class="lead">{@render exampleIcon(example, label)}</span>
+  {#if example !== "image"}<span class="snippet">{label}</span>{/if}
 {/snippet}
 
 <header class="titlebar">
@@ -299,19 +326,29 @@
       <h1>{t("onboarding.practice.title")}</h1>
       <dl>
         <div><dt><ShortcutHint shortcut="ArrowUp" {platform} variant="compact" /><ShortcutHint shortcut="ArrowDown" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.select")}</dd></div>
+        <div><dt><ShortcutHint shortcut="ArrowLeft" {platform} variant="compact" /><ShortcutHint shortcut="ArrowRight" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.page")}</dd></div>
         <div><dt><ShortcutHint shortcut="1" {platform} variant="compact" />–<ShortcutHint shortcut="3" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.quickSelect")}</dd></div>
         {#if supportsOnboardingPreview(platform)}<div><dt><ShortcutHint shortcut="Space" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
         <div><dt><ShortcutHint shortcut="Enter" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.paste")}</dd></div>
       </dl>
     </div>
     <div class="sandbox">
+      <div class="practice-pager">
+        <span class="pager-hint">{t("onboarding.practice.scrubberHint")}</span>
+        <div class="pager-controls">
+          <button aria-label={t("history.previousPage")} disabled={practicePage <= 1} onclick={() => turnPracticePage(practicePage - 1, "last")}><span aria-hidden="true">‹</span></button>
+          <PageScrubber page={practicePage} totalPages={practicePages} {reducedMotion} onpage={(page) => turnPracticePage(page)} />
+          <span aria-live="polite">{t("quick.pageStatus", { current: practicePage, total: practicePages })}</span>
+          <button aria-label={t("history.nextPage")} disabled={practicePage >= practicePages} onclick={() => turnPracticePage(practicePage + 1, "first")}><span aria-hidden="true">›</span></button>
+        </div>
+      </div>
       <div bind:this={sandboxList} class="mini sandbox-list" role="listbox" tabindex="0" aria-label={t("onboarding.practice.sandbox")} aria-activedescendant={`sandbox-${selected}`} onkeydown={practiceKeydown}>
-        {#each examples as example, index}
-          <div id={`sandbox-${example}`} class="mini-row" role="option" tabindex="-1" aria-selected={selected === example} class:selected={selected === example} onclick={() => void selectExample(example)} onkeydown={practiceKeydown}>{@render listRow(example, index)}</div>
+        {#each practiceExamples() as example, index}
+          <div id={`sandbox-${example}`} class="mini-row" role="option" tabindex="-1" aria-selected={selected === example} class:selected={selected === example} onclick={() => void selectExample(example)} onkeydown={practiceKeydown}>{@render listRow(example, index, practiceExampleText(example))}</div>
         {/each}
       </div>
       {#if pastedImage}
-        <div class="mock pasted-image" role="img" aria-label={t("onboarding.example.image")}><img src="/app-icon.png" alt="" /></div>
+        <div class="mock pasted-image" role="img" aria-label={practiceExampleText("image")}><img src="/app-icon.png" alt="" /></div>
       {:else}
         <label class="mock">
           <input type="text" bind:value={inputValue} placeholder={t("onboarding.practice.targetHint")} aria-label={t("onboarding.practice.target")} />
@@ -341,16 +378,13 @@
 </section>
 
 <footer>
-  <div class="navigation">
-    <button aria-label={t("onboarding.previous")} disabled={step === "overview" || mode === "auto_paste"} onclick={() => void enter(steps[steps.indexOf(step) - 1]!)}><ArrowLeft size={17} /></button>
-    <span class="dots" aria-hidden="true">
-      {#each steps as item}
-        <span class="dot" class:current={step === item} class:visited={journey.visited_steps.includes(item)}></span>
-      {/each}
-    </span>
-    <button aria-label={t("onboarding.next")} disabled={isLastStep || mode === "auto_paste"} onclick={() => void enter(steps[steps.indexOf(step) + 1]!)}><ArrowRight size={17} /></button>
-  </div>
-  {#if isLastStep}<button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else}{t("onboarding.finish")}{/if}</button>{/if}
+  <button class="step-button previous" disabled={step === "overview" || mode === "auto_paste"} onclick={() => void enter(steps[steps.indexOf(step) - 1]!)}><ArrowLeft size={15} aria-hidden="true" />{t("onboarding.previous")}</button>
+  {#if mode !== "auto_paste"}<span class="step-progress" aria-live="polite">{steps.indexOf(step) + 1} / {steps.length}</span>{/if}
+  {#if isLastStep}
+    <button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else}{t("onboarding.finish")}{/if}</button>
+  {:else}
+    <button class="step-button next" onclick={() => void enter(steps[steps.indexOf(step) + 1]!)}>{t("onboarding.next")}<ArrowRight size={15} aria-hidden="true" /></button>
+  {/if}
 </footer>
 
 <style>
@@ -388,6 +422,11 @@
   .legend dt{flex:none;display:inline-flex;gap:3px;align-items:center;color:var(--text-3)}
   .legend dd{margin:0}
   .sandbox{display:flex;flex-direction:column;justify-content:center;gap:20px;padding:24px 40px 24px 24px;min-height:0}
+  .practice-pager{min-height:30px;display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--text-3);font:500 var(--fs-meta)/1 var(--mono)}
+  .pager-hint{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-weight:400;white-space:nowrap}
+  .pager-controls{display:flex;align-items:center;gap:6px}
+  .practice-pager button{width:28px;height:28px;padding:0;border-radius:var(--radius-sm);color:var(--text-2);background:transparent;font-size:20px;line-height:1}
+  .practice-pager :global(.ticks){opacity:1}
   .sandbox .mini{width:100%}
   .mini-row[role=option]{cursor:default}
   .mini-row[role=option]:hover{background:var(--bg-hover)}
@@ -408,23 +447,20 @@
   .capability-row>span{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
   .capability-row strong{color:var(--text-1);font-size:var(--fs-ui)}
   .capability-row small{color:var(--text-3);font-size:var(--fs-meta);line-height:var(--lh-normal)}
-  .capability-row button{flex:none;min-height:32px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
+  .capability-row button{flex:none;min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
   .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
   .capability-row button:active{background:var(--bg-selected)}
   .capability-note{margin-top:14px}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */
-  footer{grid-column:1/-1;grid-row:3;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-top:1px solid var(--hairline)}
+  footer{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px;border-top:1px solid var(--hairline)}
   footer button{min-height:30px;padding:7px 12px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui)}
-  footer .finish{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+  footer .finish{grid-column:3;justify-self:end;display:inline-flex;align-items:center;justify-content:center;gap:6px}
   footer .finish :global(.finish-spinner){animation:finish-spin .8s linear infinite}
-  .navigation{display:flex;align-items:center;gap:8px}
-  .navigation>button:first-child,.navigation>button:last-child{width:36px;height:30px;padding:0;display:grid;place-items:center;border:1px solid var(--hairline);border-radius:var(--radius-sm)}
-  /* 进度圆点: 纯状态展示, 不可点击/聚焦 */
-  .dots{display:flex;align-items:center;gap:8px;padding:0 4px}
-  .dots .dot{width:7px;height:7px;border-radius:50%;background:var(--hairline)}
-  .dots .dot.visited{background:var(--text-3)}
-  .dots .dot.current{width:9px;height:9px;background:var(--action);box-shadow:0 0 0 2px var(--bg-shell)}
+  .step-button{display:flex;align-items:center;gap:5px;border:1px solid var(--hairline)}
+  .step-button.previous{justify-self:start}
+  .step-button.next{grid-column:3;justify-self:end}
+  .step-progress{grid-column:2;color:var(--text-3);font:500 var(--fs-meta)/1 var(--mono);font-variant-numeric:tabular-nums}
   button:hover:not(:disabled){background:var(--bg-hover)}
   button:disabled{opacity:.4}
   @keyframes finish-spin{to{transform:rotate(360deg)}}

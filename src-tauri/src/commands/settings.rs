@@ -56,6 +56,15 @@ pub fn open_release_page(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn open_repository(app: AppHandle) -> AppResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+
+    app.opener()
+        .open_url("https://github.com/hiQianFan/ClipClop", None::<&str>)
+        .map_err(|error| crate::error::AppError::Platform(error.to_string()))
+}
+
+#[tauri::command]
 pub fn record_update_check(state: State<'_, AppState>) -> AppResult<String> {
     state.settings.record_update_check()
 }

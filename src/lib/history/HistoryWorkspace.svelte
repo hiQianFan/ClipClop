@@ -674,7 +674,7 @@
   {:else if view === "loading"}
     <div class="root-loading" role="status">{t("settings.loading")}</div>
   {:else}
-  <AppTitleBar
+  {#if view === "history"}<AppTitleBar
     history={view === "history"}
     open={appMenuOpen}
     {settingsShortcut}
@@ -684,7 +684,7 @@
     onupdates={checkForUpdates}
     onabout={() => void openSettingsView("about")}
     onquit={() => void quitApp()}
-  />
+  />{/if}
   {#if view === "history"}
   <HistoryList
     bind:this={listbox}

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings, listReleaseNotes, openUrl, platform } = vi.hoisted(() => ({
+const { preview, updateSettings, listReleaseNotes, openRepository, platform } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -14,11 +14,9 @@ const { preview, updateSettings, listReleaseNotes, openUrl, platform } = vi.hois
   listReleaseNotes: vi.fn(async () => [{
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
   }]),
-  openUrl: vi.fn(),
+  openRepository: vi.fn(),
   platform: { value: "windows" as "windows" | "macos" },
 }));
-
-vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl }));
 
 vi.mock("./api", () => ({
   getSettings: async () => ({
@@ -30,7 +28,7 @@ vi.mock("./api", () => ({
     skipped_update_version: null,
   }),
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
-  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(),
+  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(), openRepository,
 }));
 vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),
@@ -126,10 +124,15 @@ it("renders the platform-specific preview entry", async () => {
 });
 
 it("opens the repository from the GitHub icon", async () => {
-  openUrl.mockClear();
+  openRepository.mockClear();
   render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
   await fireEvent.click(await screen.findByRole("button", { name: "View ClipClop on GitHub" }));
-  expect(openUrl).toHaveBeenCalledWith("https://github.com/hiQianFan/ClipClop");
+  expect(openRepository).toHaveBeenCalledOnce();
+});
+
+it("keeps save available on the About category", async () => {
+  render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
 });
 
 async function show(

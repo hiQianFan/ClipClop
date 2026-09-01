@@ -130,13 +130,11 @@ button {
     color var(--dur-fast) var(--ease-out),
     background-color var(--dur-fast) var(--ease-out),
     opacity var(--dur-fast) var(--ease-out),
-    filter var(--dur-fast) var(--ease-out),
-    translate var(--dur-fast) var(--ease-out);
+    filter var(--dur-fast) var(--ease-out);
 }
 .pressable:active:not(:disabled) {
   opacity: .86;
   filter: brightness(.9);
-  translate: 1px 1px;
   transition-duration: 40ms;
 }
 :focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }

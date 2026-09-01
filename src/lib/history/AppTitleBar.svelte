@@ -72,8 +72,9 @@
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }
   .app-menu-wrap { position:relative; }
-  .brand :global(.app-menu-trigger) { height:24px; display:flex; align-items:center; gap:4px; padding:0 4px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
-  .brand :global(.app-menu-trigger:hover), .brand :global(.app-menu-trigger.expanded) { background:var(--bg-hover); }
+  .brand :global(.app-menu-trigger) { height:30px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px solid transparent; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
+  .brand :global(.app-menu-trigger:hover) { border-color:color-mix(in srgb,var(--hairline) 60%,transparent); background:color-mix(in srgb,var(--bg-hover) 65%,transparent); }
+  .brand :global(.app-menu-trigger:active), .brand :global(.app-menu-trigger.expanded) { border-color:var(--hairline); background:var(--bg-selected); }
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
   .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
   .app-menu-wrap :global(.menu) { position:absolute; top:30px; left:0; width:180px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }

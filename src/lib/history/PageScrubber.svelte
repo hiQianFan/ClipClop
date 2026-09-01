@@ -71,7 +71,6 @@
     dragStartPage = currentPage();
     dragPage = currentPage();
     dragOffset = 0;
-    document.documentElement.classList.add("pager-dragging");
     if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -132,7 +131,6 @@
     stopRepeat();
     draggingPage = false;
     dragOffset = 0;
-    document.documentElement.classList.remove("pager-dragging");
   }
 
   function animatePageStep(direction: -1 | 1) {
@@ -154,7 +152,6 @@
     if (next < 1 || next > totalPages) return;
     visualPage = next;
     onpage(next);
-    performStepHaptic();
     animatePageStep(direction);
   }
 
@@ -176,6 +173,7 @@
         wheelDistance = 0;
         break;
       }
+      performStepHaptic();
       wheelDistance -= direction * PAGE_DRAG_STEP;
     }
     wheelEndTimer = window.setTimeout(() => wheelDistance = 0, 120);
@@ -187,21 +185,19 @@
     window.clearTimeout(keyMotionTimer);
     window.clearTimeout(keyHideTimer);
     window.clearTimeout(wheelEndTimer);
-    document.documentElement.classList.remove("pager-dragging");
   });
 </script>
 
+<svelte:window onpointerup={stopPageDrag} onpointercancel={stopPageDrag} />
+
 <!-- svelte-ignore a11y_no_static_element_interactions Pointer-only enhancement; keyboard pagination stays on the owning list. -->
-<div class="scrubber" class:dragging={draggingPage} class:disabled aria-disabled={disabled} onwheel={onScrubberWheel} onpointerdown={startPageDrag} onpointermove={movePageDrag} onpointerup={stopPageDrag} onpointercancel={stopPageDrag}>
+<div class="scrubber" class:dragging={draggingPage} class:disabled aria-disabled={disabled} onwheel={onScrubberWheel} onpointerdown={startPageDrag} onpointermove={movePageDrag} onlostpointercapture={stopPageDrag}>
   <span class="ticks" class:key-visible={keyTicksVisible} class:key-motion={keyDirection !== 0} aria-hidden="true">
     {#each visiblePageTicks(currentPage(), totalPages) as tick}<i class:current={tick === currentPage()} style={tickStyle(tick)}></i>{/each}
   </span>
 </div>
 
 <style>
-  /* ponytail: no hover cursor here. WebKit only pushes the CSS cursor on mousemove, so a
-     hover `grab` flickers back to the arrow once the pointer stops. The drag cursor below
-     works because a drag always has a live event stream. */
   .scrubber{height:30px;min-width:70px;position:relative;overflow:hidden;border-radius:var(--radius-sm);touch-action:none;user-select:none;-webkit-user-select:none}
   .scrubber.disabled{opacity:.35}
   .ticks{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity 220ms ease-out}
@@ -209,5 +205,4 @@
   .ticks i{width:2px;position:absolute;left:50%;top:50%;margin-left:-1px;border-radius:var(--radius-pill);background:var(--text-2);transform-origin:center;transition:none}
   .ticks.key-motion i{transition:height var(--dur-fast) var(--ease-out),opacity var(--dur-fast) ease-out,transform var(--dur-fast) var(--ease-out)}
   @media(prefers-reduced-motion:reduce){.ticks,.ticks.key-motion i{transition:none}}
-  :global(html.pager-dragging),:global(html.pager-dragging *){cursor:grabbing!important}
 </style>

@@ -18,7 +18,6 @@ function pointerEvent(type: string, { button = 0, pointerId, clientX }: { button
 beforeEach(() => performPagerHaptic.mockReset());
 afterEach(() => {
   cleanup();
-  document.documentElement.classList.remove("pager-dragging");
 });
 
 describe("PageScrubber", () => {
@@ -29,6 +28,7 @@ describe("PageScrubber", () => {
     expect(onpage).toHaveBeenLastCalledWith(6);
     view.component.turnPage(1);
     expect(onpage).toHaveBeenCalledTimes(1);
+    expect(performPagerHaptic).not.toHaveBeenCalled();
   });
 
   it("turns horizontal wheel distance into consecutive pages", async () => {
@@ -42,18 +42,18 @@ describe("PageScrubber", () => {
     expect(onpage).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves drag paging and clears the global dragging cursor", async () => {
+  it("preserves drag paging and clears its dragging state", async () => {
     const onpage = vi.fn();
     const view = render(PageScrubber, { props: { page: 5, totalPages: 20, reducedMotion: true, onpage } });
     const scrubber = view.container.querySelector(".scrubber") as HTMLElement;
     scrubber.setPointerCapture = vi.fn();
     vi.spyOn(scrubber, "getBoundingClientRect").mockReturnValue({ left: 0, right: 100 } as DOMRect);
     await fireEvent(scrubber, pointerEvent("pointerdown", { pointerId: 1, clientX: 100 }));
-    expect(document.documentElement.classList.contains("pager-dragging")).toBe(true);
+    expect(scrubber.classList.contains("dragging")).toBe(true);
     await fireEvent(scrubber, pointerEvent("pointermove", { pointerId: 1, clientX: 4 }));
     expect(onpage).toHaveBeenLastCalledWith(3);
     await fireEvent(scrubber, pointerEvent("pointerup", { pointerId: 1, clientX: 4 }));
-    expect(document.documentElement.classList.contains("pager-dragging")).toBe(false);
+    expect(scrubber.classList.contains("dragging")).toBe(false);
   });
 
   it("ignores gestures while disabled and cleans up an interrupted drag", async () => {
@@ -67,7 +67,10 @@ describe("PageScrubber", () => {
     const scrubber = active.container.querySelector(".scrubber") as HTMLElement;
     scrubber.setPointerCapture = vi.fn();
     await fireEvent(scrubber, pointerEvent("pointerdown", { pointerId: 2, clientX: 50 }));
+    await fireEvent(scrubber, pointerEvent("lostpointercapture", { pointerId: 2, clientX: 50 }));
+    expect(scrubber.classList.contains("dragging")).toBe(false);
+    await fireEvent(scrubber, pointerEvent("pointerdown", { pointerId: 2, clientX: 50 }));
     active.unmount();
-    expect(document.documentElement.classList.contains("pager-dragging")).toBe(false);
+    expect(document.documentElement.contains(scrubber)).toBe(false);
   });
 });
