@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import AppSelect from "$lib/components/AppSelect.svelte";
   import { getPreviewCapability, type PreviewCapability } from "$lib/history/api";
   import { openAutoPasteSettings } from "$lib/onboarding/api";
