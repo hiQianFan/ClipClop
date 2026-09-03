@@ -158,6 +158,8 @@ The scale is **fixed px, not fluid** — correct for a product UI viewed at cons
 ### Named Rules
 **The Content-Is-Mono Rule.** If the text is something the user copied, or a path, count, or key, it is monospace. If it is a label the app authored, it is sans. No exceptions.
 
+**The No-Middle-Dot Rule.** Do not use `·` as a visual separator in product UI. Separate metadata with spacing, alignment, line breaks, or distinct text roles instead.
+
 **The Fixed-Scale Rule.** No `clamp()` type in the app UI. A heading that shrinks inside a narrow pane looks broken, not responsive.
 
 ## 4. Elevation
