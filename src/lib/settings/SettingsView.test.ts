@@ -9,6 +9,7 @@ const { preview, updateSettings, listReleaseNotes, openRepository, platform, qui
     errorSource: null as null | "download" | "install" | "relaunch",
     displayStatus: null as null | "current" | "available" | "skipped",
     lastUpdateCheck: null as string | null,
+    hasUpdate: true,
   },
   updateSettings: vi.fn(async (settings) => settings),
   listReleaseNotes: vi.fn(async () => [{
@@ -52,7 +53,7 @@ vi.mock("$lib/updater/api", () => ({
 vi.mock("$lib/updater/store.svelte", () => ({
   updateStore: {
     get appVersion() { return "0.7.2"; },
-    get update() { return { version: "0.7.3", currentVersion: "0.7.2", date: null, notes: "" }; },
+    get update() { return preview.hasUpdate ? { version: "0.7.3", currentVersion: "0.7.2", date: null, notes: "" } : null; },
     get phase() { return preview.phase; },
     get progress() { return preview.progress; },
     get busy() { return preview.phase === "downloading" || preview.phase === "installing"; },
@@ -169,11 +170,12 @@ it("keeps save available on the About category", async () => {
 
 async function show(
   phase: string,
-  { progress = null, errorSource = null, displayStatus = null, lastUpdateCheck = null }: {
+  { progress = null, errorSource = null, displayStatus = null, lastUpdateCheck = null, hasUpdate = true }: {
     progress?: number | null;
     errorSource?: null | "download" | "install" | "relaunch";
     displayStatus?: null | "current" | "available" | "skipped";
     lastUpdateCheck?: string | null;
+    hasUpdate?: boolean;
   } = {},
 ) {
   preview.phase = phase;
@@ -181,12 +183,24 @@ async function show(
   preview.errorSource = errorSource;
   preview.displayStatus = displayStatus;
   preview.lastUpdateCheck = lastUpdateCheck;
+  preview.hasUpdate = hasUpdate;
   const view = render(SettingsView, { props: { initialTab: "updates", onclose() {}, oncleared() {}, onquickstart() {} } });
   await waitFor(() => expect(screen.getByRole("heading", { name: "Software Update" })).toBeTruthy());
   expect(view.container.querySelectorAll(".update-rail")).toHaveLength(1);
 }
 
 describe("software update status rail", () => {
+  it("shows the persisted check time after updater state resets", async () => {
+    await show("idle", { lastUpdateCheck: "2026-08-30T14:32:00+08:00", hasUpdate: false });
+    expect(screen.getAllByText(/Last checked:/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Not checked yet")).toBeNull();
+  });
+
+  it("uses an honest placeholder before the first check", async () => {
+    await show("idle", { hasUpdate: false });
+    expect(screen.getAllByText("Waiting for first check").length).toBeGreaterThan(0);
+  });
+
   it("shows skip and download when an update is available", async () => {
     await show("idle");
     expect(screen.getByRole("button", { name: "Skip this version" })).toBeTruthy();

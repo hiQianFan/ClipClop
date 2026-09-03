@@ -18,7 +18,7 @@
       case "current": return t("settings.updateCurrent"); case "skipped": return t("settings.skippedVersion", { version: updateStore.skippedVersion ?? "" });
       case "downloading": return t("settings.downloadingVersion", { version: update?.version ?? "" }); case "downloaded": return t("settings.downloadedVersion", { version: update?.version ?? "" }); case "installing": return t("settings.installing");
       case "error": return updateStore.errorSource === "unsupported" ? t("settings.devUpdate") : updateStore.errorSource === "install" ? t("settings.installFailedTitle") : updateStore.errorSource === "relaunch" ? t("settings.restartFailedTitle") : updateStore.errorSource === "download" ? t("settings.downloadFailedTitle") : t("settings.checkFailedTitle");
-      default: return update ? t("settings.newVersion", { version: update.version }) : t("settings.notChecked");
+      default: return update ? t("settings.newVersion", { version: update.version }) : lastChecked;
     }
   });
   const detail = $derived(phase === "checking" && updateStore.displayStatus ? t("settings.checkingLong") : phase === "current" ? lastChecked : phase !== "error" ? "" : updateStore.errorSource === "download" || updateStore.errorSource === "check" ? t("settings.checkConnection") : updateStore.errorSource === "install" ? t("settings.packageRetained") : updateStore.errorSource === "relaunch" ? t("settings.updateInstalled") : "");
