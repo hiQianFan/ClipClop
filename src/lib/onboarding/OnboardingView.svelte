@@ -3,16 +3,16 @@
   import { DropdownMenu } from "bits-ui";
   import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import { getPreviewCapability, type PreviewCapability } from "$lib/history/api";
   import PageScrubber from "$lib/history/PageScrubber.svelte";
   import { currentPlatform, defaultShortcut } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
-  import { openFilePreviewSettings, type LanguagePreference } from "$lib/settings/api";
+  import { openFilePreviewSettings, openQuicklookInstallPage, type LanguagePreference } from "$lib/settings/api";
   import {
     openAutoPasteSettings,
     previewOnboardingExample,
     saveLanguagePreference,
     saveOnboardingState,
-    supportsOnboardingPreview,
     type OnboardingExample,
     type OnboardingState,
     type OnboardingStep,
@@ -28,7 +28,7 @@
   const platform = currentPlatform();
   const steps: OnboardingStep[] = platform === "macos"
     ? ["overview", "practice", "auto_paste"]
-    : ["overview", "practice"];
+    : ["overview", "system_preview", "practice"];
   const examples: OnboardingExample[] = ["image", "text", "link"];
   const practicePages = 3;
   const starting = untrack(() => $state.snapshot(initial)) as OnboardingState;
@@ -47,6 +47,8 @@
   let previewOpen = $state(false);
   let finishing = $state(false);
   let reducedMotion = $state(false);
+  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed", version: null });
+  let previewChecking = $state(platform === "windows");
   let saveQueue = Promise.resolve();
   const announcement = $derived(t("onboarding.stepLabel", {
     current: steps.indexOf(step) + 1,
@@ -55,6 +57,7 @@
     status: t("onboarding.current"),
   }));
   const isLastStep = $derived(mode === "auto_paste" || step === steps[steps.length - 1]);
+  const practicePreviewAvailable = $derived(platform === "macos" || previewCapability.provider === "quicklook");
 
   onMount(() => {
     reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -79,6 +82,7 @@
   async function enter(next: OnboardingStep, save = true) {
     if (step === "practice" && next !== "practice") await closePreviewIfOpen();
     step = next;
+    if (next === "system_preview") void refreshPreviewCapability();
     if (!journey.visited_steps.includes(next)) journey.visited_steps = [...journey.visited_steps, next];
     if (save) {
       try { await persist(); } catch (reason) { error = localizedError(reason); }
@@ -116,8 +120,10 @@
       event.preventDefault();
       void selectExample(visible[Number(event.key) - 1]!);
     } else if (event.key === " " || event.code === "Space") {
-      event.preventDefault();
-      if (supportsOnboardingPreview(platform)) void togglePreview();
+      if (practicePreviewAvailable) {
+        event.preventDefault();
+        void togglePreview();
+      }
     } else if (event.key === "Enter") {
       event.preventDefault();
       pastedImage = selected === "image";
@@ -150,9 +156,31 @@
     try {
       const outcome = await previewOnboardingExample(selected, !previewOpen);
       previewOpen = outcome === "native_opened";
+      if (outcome === "not_previewable" && platform === "windows") {
+        error = t("onboarding.preview.unavailable");
+      }
     } catch (reason) {
       error = localizedError(reason);
     }
+  }
+
+  async function refreshPreviewCapability() {
+    previewChecking = true;
+    error = "";
+    try {
+      previewCapability = await getPreviewCapability();
+    } catch (reason) {
+      previewCapability = { provider: "unavailable", reason: "detection_failed", version: null };
+      error = localizedError(reason);
+    } finally {
+      previewChecking = false;
+    }
+  }
+
+  async function openQuicklookInstaller() {
+    error = "";
+    try { await openQuicklookInstallPage(); }
+    catch (reason) { error = localizedError(reason); }
   }
 
   async function closePreviewIfOpen() {
@@ -263,6 +291,9 @@
       previewOpen = false;
       if (step === "practice") void tick().then(() => sandboxList?.focus());
     }
+    if (platform === "windows" && step === "system_preview" && !previewChecking) {
+      void refreshPreviewCapability();
+    }
   }
 
   function exampleText(example = selected) {
@@ -328,7 +359,7 @@
         <div><dt><ShortcutHint shortcut="ArrowUp" {platform} variant="compact" /><ShortcutHint shortcut="ArrowDown" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.select")}</dd></div>
         <div><dt><ShortcutHint shortcut="ArrowLeft" {platform} variant="compact" /><ShortcutHint shortcut="ArrowRight" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.page")}</dd></div>
         <div><dt><ShortcutHint shortcut="1" {platform} variant="compact" />–<ShortcutHint shortcut="3" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.quickSelect")}</dd></div>
-        {#if supportsOnboardingPreview(platform)}<div><dt><ShortcutHint shortcut="Space" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
+        {#if practicePreviewAvailable}<div><dt><ShortcutHint shortcut="Space" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.preview")}</dd></div>{/if}
         <div><dt><ShortcutHint shortcut="Enter" {platform} variant="compact" /></dt><dd>{t("onboarding.practice.paste")}</dd></div>
       </dl>
     </div>
@@ -372,6 +403,45 @@
       <small class="capability-note">
         {t("onboarding.auto.fallback")} {t("onboarding.auto.systemPreviewPrefix")} <ShortcutHint shortcut="Space" {platform} variant="compact" /> {t("onboarding.auto.systemPreviewSuffix")}
       </small>
+    </div>
+  {:else if step === "system_preview"}
+    <div class="center capability-step">
+      <h1>{t("onboarding.preview.title")}</h1>
+      <p>{t("onboarding.preview.body")}</p>
+      <div class="capabilities preview-setup" aria-live="polite">
+        <div class="capability-row">
+          <span>
+            <strong>{t("settings.systemPreview")}</strong>
+            {#if previewChecking}
+              <small>{t("settings.quicklookCheckingHelp")}</small>
+            {:else if previewCapability.provider === "quicklook"}
+              <small>{t("settings.quicklookReady")}</small>
+            {:else if previewCapability.reason === "unsupported_install"}
+              <small>{t("settings.quicklookUnsupported")}</small>
+            {:else if previewCapability.reason === "elevated"}
+              <small>{t("settings.peekElevated")}</small>
+            {:else if previewCapability.reason === "not_installed"}
+              <small>{t("settings.quicklookNotInstalled")}</small>
+            {:else}
+              <small>{t("settings.quicklookUnavailable")}</small>
+            {/if}
+          </span>
+          {#if previewChecking}
+            <small class="preview-status">{t("settings.quicklookChecking")}</small>
+          {:else if previewCapability.provider === "quicklook"}
+            <small class="preview-status success">{t("settings.quicklookAvailableStatus")}</small>
+          {:else if previewCapability.reason === "not_installed"}
+            <button onclick={() => void openQuicklookInstaller()}>{t("settings.quicklookInstall")}</button>
+          {:else if previewCapability.reason === "unsupported_install"}
+            <button onclick={() => void openQuicklookInstaller()}>{t("settings.quicklookInstallDesktop")}</button>
+          {:else if previewCapability.reason === "elevated"}
+            <small class="preview-status">{t("settings.quicklookRestrictedStatus")}</small>
+          {:else}
+            <button onclick={() => void refreshPreviewCapability()}>{t("settings.quicklookRetry")}</button>
+          {/if}
+        </div>
+      </div>
+      <small class="capability-note">{t("onboarding.preview.optional")}</small>
     </div>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -450,6 +520,8 @@
   .capability-row button{flex:none;min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
   .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
   .capability-row button:active{background:var(--bg-selected)}
+  .preview-status{flex:none;min-height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--hairline);border-radius:var(--radius-md);white-space:nowrap}
+  .preview-status.success{border-color:color-mix(in srgb,var(--success) 35%,var(--hairline));color:var(--success)}
   .capability-note{margin-top:14px}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */

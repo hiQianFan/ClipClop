@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { LanguagePreference } from "$lib/settings/api";
 
-export type OnboardingStep = "overview" | "practice" | "auto_paste" | "file_preview";
+export type OnboardingStep = "overview" | "practice" | "auto_paste" | "file_preview" | "system_preview";
 export type OnboardingExample = "image" | "link" | "text";
 export type OnboardingState = {
   completed_revision: number | null;
