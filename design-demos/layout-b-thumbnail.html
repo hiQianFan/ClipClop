@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>布局方案B：大缩略图 + 时间分组 - ClipClop Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-shell: #1a1816;
+      --bg-raised: #22201e;
+      --bg-hover: #28262a;
+      --bg-selected: #2f2d2a;
+      --hairline: #38342f;
+      --text-1: #ecedee;
+      --text-2: #aeb3b7;
+      --text-3: #8a9095;
+      --action: #f4e8d8;
+      --accent: #d4a574;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --mono: "SF Mono", "Cascadia Mono", ui-monospace, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: #0a0a0a;
+      color: var(--text-1);
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .workspace {
+      width: 100%;
+      max-width: 1200px;
+      height: 700px;
+      background: var(--bg-shell);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+      display: grid;
+      grid-template-columns: 380px 1fr;  /* 左侧更宽，容纳大缩略图 */
+      grid-template-rows: 48px 1fr;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      grid-column: 1 / -1;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+
+    .titlebar h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .search-input {
+      flex: 1;
+      height: 32px;
+      background: var(--bg-shell);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
+      padding: 0 12px;
+      color: var(--text-1);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    /* 左侧：时间分组 + 大缩略图 */
+    .list-pane {
+      background: var(--bg-raised);
+      border-right: 1px solid var(--hairline);
+      padding: 16px 12px;
+      overflow-y: auto;
+    }
+
+    .time-group {
+      margin-bottom: 24px;
+    }
+
+    .time-group-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 0 8px 8px;
+      border-bottom: 2px solid var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .clip-row {
+      display: flex;
+      gap: 12px;
+      padding: 10px 8px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 140ms ease-out;
+      margin-bottom: 6px;
+    }
+
+    .clip-row:hover {
+      background: var(--bg-hover);
+    }
+
+    .clip-row.selected {
+      background: var(--bg-selected);
+    }
+
+    .clip-thumbnail {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-md);
+      background: var(--bg-shell);
+      border: 1px solid var(--hairline);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .clip-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .clip-thumbnail .icon {
+      font-size: 24px;
+      color: var(--accent);
+    }
+
+    .clip-thumbnail .color-preview {
+      width: 100%;
+      height: 100%;
+    }
+
+    .clip-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .clip-title {
+      font-size: 13px;
+      font-family: var(--mono);
+      color: var(--text-1);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    .clip-meta {
+      font-size: 11px;
+      color: var(--text-3);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .clip-meta span:not(:last-child)::after {
+      content: '·';
+      margin-left: 8px;
+      color: var(--hairline);
+    }
+
+    /* 右侧：紧凑预览 */
+    .preview-pane {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-shell);
+    }
+
+    .preview-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--hairline);
+      background: var(--bg-raised);
+    }
+
+    .preview-title {
+      font-size: 12px;
+      color: var(--text-3);
+      margin-bottom: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .preview-subtitle {
+      font-size: 14px;
+      color: var(--text-1);
+      font-weight: 600;
+    }
+
+    .preview-body {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .preview-text {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-1);
+    }
+
+    .preview-actions {
+      padding: 16px 20px;
+      border-top: 1px solid var(--hairline);
+      display: flex;
+      gap: 8px;
+      background: var(--bg-raised);
+    }
+
+    .action-btn {
+      flex: 1;
+      height: 40px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--hairline);
+      background: var(--bg-shell);
+      color: var(--text-1);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+    }
+
+    .action-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+    }
+
+    .action-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg-shell);
+      font-weight: 600;
+    }
+
+    .action-btn.primary:hover {
+      background: #e0b584;
+    }
+  </style>
+</head>
+<body>
+  <div class="workspace">
+    <div class="titlebar">
+      <h1>ClipClop</h1>
+      <input type="search" class="search-input" placeholder="搜索剪贴板内容...">
+    </div>
+
+    <div class="list-pane">
+      <div class="time-group">
+        <div class="time-group-header">今天</div>
+
+        <div class="clip-row selected">
+          <div class="clip-thumbnail">
+            <span class="icon">📝</span>
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">Hello World from VSCode</div>
+            <div class="clip-meta">
+              <span>文本</span>
+              <span>VSCode</span>
+              <span>刚刚</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="clip-row">
+          <div class="clip-thumbnail">
+            <div class="color-preview" style="background: #3b82f6;"></div>
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">#3b82f6</div>
+            <div class="clip-meta">
+              <span>颜色</span>
+              <span>Chrome</span>
+              <span>2分钟前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="clip-row">
+          <div class="clip-thumbnail">
+            <span class="icon">🔗</span>
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">https://github.com/user/repo</div>
+            <div class="clip-meta">
+              <span>链接</span>
+              <span>Firefox</span>
+              <span>5分钟前</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="clip-row">
+          <div class="clip-thumbnail">
+            <img src="data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='64' height='64' fill='%233b82f6'/%3E%3Ctext x='32' y='38' font-size='32' text-anchor='middle' fill='white'%3E📷%3C/text%3E%3C/svg%3E" alt="">
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">screenshot-2024.png</div>
+            <div class="clip-meta">
+              <span>图片</span>
+              <span>Finder</span>
+              <span>10分钟前</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="time-group">
+        <div class="time-group-header">昨天</div>
+
+        <div class="clip-row">
+          <div class="clip-thumbnail">
+            <span class="icon">📄</span>
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">document.pdf · 1.2 MB</div>
+            <div class="clip-meta">
+              <span>文件</span>
+              <span>Preview</span>
+              <span>昨天 18:24</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="clip-row">
+          <div class="clip-thumbnail">
+            <span class="icon">💻</span>
+          </div>
+          <div class="clip-info">
+            <div class="clip-title">npm install @types/node</div>
+            <div class="clip-meta">
+              <span>代码</span>
+              <span>Terminal</span>
+              <span>昨天 16:15</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-pane">
+      <div class="preview-header">
+        <div class="preview-title">文本 · VSCode</div>
+        <div class="preview-subtitle">刚刚复制</div>
+      </div>
+      <div class="preview-body">
+        <div class="preview-text">Hello World from VSCode</div>
+      </div>
+      <div class="preview-actions">
+        <button class="action-btn">预览</button>
+        <button class="action-btn">删除</button>
+        <button class="action-btn primary">复制并粘贴</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

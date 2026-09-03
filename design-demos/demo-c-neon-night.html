@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>方向C：霓虹夜幕风 - ClipClop Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* 霓虹夜幕风配色 - 深黑背景 + 霓虹青辉光 */
+      --bg-shell: #0a0c0e;
+      --bg-raised: #14161a;
+      --bg-hover: #1a1e26;
+      --bg-selected: #1f2430;
+      --hairline: #252932;
+      --text-1: #f0f4f8;
+      --text-2: #aeb3b7;
+      --text-3: #8a9095;
+      --action: #00e5ff;
+      --action-hover: #33ebff;
+      --action-on: #0a0c0e;
+      --action-glow: rgba(0, 229, 255, 0.4);
+      --danger: #ff6b72;
+
+      /* 保守圆角 */
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      --radius-xl: 14px;
+
+      --mono: "SF Mono", "Cascadia Mono", ui-monospace, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: #000000;
+      color: var(--text-1);
+      padding: 40px;
+      min-height: 100vh;
+      display: flex;
+      gap: 20px;
+    }
+
+    .demo-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--action);
+      margin-bottom: 10px;
+      text-align: center;
+      text-shadow: 0 0 20px var(--action-glow);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-2);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    /* QuickPanel Demo */
+    .quick-panel {
+      background: var(--bg-raised);
+      border-radius: var(--radius-xl);
+      padding: 10px;
+      box-shadow:
+        0 0 40px rgba(0, 229, 255, 0.15),
+        0 2px 5px rgba(0,0,0,.5);
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .quick-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        linear-gradient(
+          to bottom,
+          transparent 50%,
+          rgba(0,229,255,0.02) 50%
+        );
+      background-size: 100% 4px;
+      animation: scanline 8s linear infinite;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    @keyframes scanline {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 100%; }
+    }
+
+    .quick-panel > * {
+      position: relative;
+      z-index: 2;
+    }
+
+    .header {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px 0 12px;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .brand img {
+      width: 20px;
+      height: 20px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 16px var(--action-glow);
+    }
+
+    .brand strong {
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--action);
+      text-shadow: 0 0 10px var(--action-glow);
+    }
+
+    .navigation {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-3);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .page-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .page-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-3);
+      opacity: 0.3;
+      transition: all 140ms ease-out;
+    }
+
+    .page-dot.active {
+      background: var(--action);
+      opacity: 1;
+      box-shadow: 0 0 8px var(--action-glow);
+    }
+
+    .quick-list {
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .quick-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: var(--radius-lg);
+      background: transparent;
+      border-left: 3px solid transparent;
+      transition: all 140ms cubic-bezier(.16,1,.3,1);
+      cursor: pointer;
+      color: var(--text-1);
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .quick-item:hover {
+      background: var(--bg-hover);
+      border-left-color: rgba(0, 229, 255, 0.3);
+    }
+
+    .quick-item.selected {
+      background: var(--bg-selected);
+      border-left-color: var(--action);
+      padding-left: 9px;
+      box-shadow: inset 4px 0 8px rgba(0, 229, 255, 0.1);
+    }
+
+    .number {
+      width: 16px;
+      color: var(--action);
+      font-weight: 650;
+      text-align: center;
+    }
+
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--hairline);
+      flex-shrink: 0;
+    }
+
+    .summary {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav-footer {
+      padding: 6px;
+      border-top: 1px solid var(--hairline);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .nav-button {
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      border-radius: var(--radius-md);
+      background: transparent;
+      color: var(--text-1);
+      border: none;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+    }
+
+    .nav-button:hover {
+      background: var(--bg-hover);
+      border-left: 2px solid rgba(0, 229, 255, 0.3);
+      padding-left: 6px;
+    }
+
+    .nav-button.primary {
+      background: var(--action);
+      color: var(--action-on);
+      font-weight: 600;
+      box-shadow: 0 0 16px var(--action-glow);
+    }
+
+    .nav-button.primary:hover {
+      background: var(--action-hover);
+      box-shadow: 0 0 24px var(--action-glow);
+    }
+
+    /* HistoryWorkspace Demo */
+    .history-panel {
+      background: var(--bg-shell);
+      border-radius: var(--radius-xl);
+      box-shadow:
+        0 0 40px rgba(0, 229, 255, 0.15),
+        0 2px 5px rgba(0,0,0,.5);
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: 42px 1fr 48px;
+      height: 500px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .history-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        linear-gradient(
+          to bottom,
+          transparent 50%,
+          rgba(0,229,255,0.015) 50%
+        );
+      background-size: 100% 4px;
+      animation: scanline 10s linear infinite;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .history-panel > * {
+      position: relative;
+      z-index: 2;
+    }
+
+    .app-titlebar {
+      grid-column: 1 / -1;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      justify-content: space-between;
+    }
+
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .titlebar-left img {
+      width: 18px;
+      height: 18px;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 0 12px var(--action-glow);
+    }
+
+    .titlebar-left strong {
+      color: var(--action);
+      text-shadow: 0 0 8px var(--action-glow);
+    }
+
+    .search-bar {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-1);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 0 8px;
+    }
+
+    .search-bar::placeholder {
+      color: var(--text-3);
+    }
+
+    .history-list {
+      background: var(--bg-raised);
+      border-right: 1px solid var(--hairline);
+      padding: 8px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      padding: 10px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 4px;
+      background: transparent;
+      border-left: 3px solid transparent;
+      transition: all 140ms ease-out;
+      cursor: pointer;
+    }
+
+    .history-item:hover {
+      background: var(--bg-hover);
+      border-left-color: rgba(0, 229, 255, 0.3);
+    }
+
+    .history-item.selected {
+      background: var(--bg-selected);
+      border-left-color: var(--action);
+      padding-left: 7px;
+      box-shadow: inset 4px 0 8px rgba(0, 229, 255, 0.1);
+    }
+
+    .item-preview {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-1);
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .item-meta {
+      font-size: 11px;
+      color: var(--text-3);
+      font-family: var(--mono);
+    }
+
+    .preview-pane {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .preview-content {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--text-1);
+    }
+
+    .action-bar {
+      grid-column: 1 / -1;
+      background: var(--bg-raised);
+      border-top: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      gap: 8px;
+    }
+
+    .action-button {
+      height: 32px;
+      padding: 0 16px;
+      border-radius: var(--radius-md);
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+    }
+
+    .action-button.primary {
+      background: var(--action);
+      color: var(--action-on);
+      box-shadow: 0 0 16px var(--action-glow);
+    }
+
+    .action-button.primary:hover {
+      background: var(--action-hover);
+      box-shadow: 0 0 24px var(--action-glow);
+    }
+
+    .action-button.ghost {
+      background: transparent;
+      color: var(--text-2);
+      border-left: 2px solid transparent;
+    }
+
+    .action-button.ghost:hover {
+      background: var(--bg-hover);
+      color: var(--text-1);
+      border-left-color: rgba(0, 229, 255, 0.3);
+      padding-left: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <h1>方向C：霓虹夜幕风</h1>
+    <p class="subtitle">深黑背景 + 霓虹青辉光 + 扫描线动画 + 赛博朋克美学</p>
+
+    <div class="quick-panel">
+      <div class="header">
+        <span class="brand">
+          <img src="data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='20' height='20' rx='4' fill='%2300e5ff'/%3E%3Cpath d='M6 6h8v2H6zm0 4h8v2H6zm0 4h5v2H6z' fill='%230a0c0e'/%3E%3C/svg%3E" alt="ClipClop">
+          <strong>ClipClop</strong>
+        </span>
+        <div class="navigation">
+          <div class="page-dots">
+            <span class="page-dot active"></span>
+            <span class="page-dot"></span>
+            <span class="page-dot"></span>
+          </div>
+          <span>1/3</span>
+        </div>
+      </div>
+
+      <div class="quick-list">
+        <button class="quick-item selected">
+          <span class="number">1</span>
+          <span class="summary">Hello World from VSCode</span>
+        </button>
+        <button class="quick-item">
+          <span class="number">2</span>
+          <span class="swatch" style="background: #3b82f6;"></span>
+          <span class="summary">#3b82f6</span>
+        </button>
+        <button class="quick-item">
+          <span class="number">3</span>
+          <span class="summary">https://github.com/user/repo</span>
+        </button>
+        <button class="quick-item">
+          <span class="number">4</span>
+          <span class="summary">export const config = { theme: 'dark' }</span>
+        </button>
+        <button class="quick-item">
+          <span class="number">5</span>
+          <span class="summary">document.png · 2.4MB</span>
+        </button>
+      </div>
+
+      <div class="nav-footer">
+        <button class="nav-button primary">
+          <span>打开历史记录</span>
+        </button>
+        <button class="nav-button">
+          <span>设置</span>
+          <span style="color: var(--text-3); font-size: 11px;">⌘,</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="history-panel">
+      <div class="app-titlebar">
+        <div class="titlebar-left">
+          <img src="data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='20' height='20' rx='4' fill='%2300e5ff'/%3E%3Cpath d='M6 6h8v2H6zm0 4h8v2H6zm0 4h5v2H6z' fill='%230a0c0e'/%3E%3C/svg%3E" alt="">
+          <strong style="font-size: 13px;">剪贴板历史</strong>
+        </div>
+        <input type="search" class="search-bar" placeholder="搜索内容...">
+      </div>
+
+      <div class="history-list">
+        <div class="history-item selected">
+          <div class="item-preview">Hello World from VSCode</div>
+          <div class="item-meta">文本 · 刚刚</div>
+        </div>
+        <div class="history-item">
+          <div class="item-preview">#3b82f6</div>
+          <div class="item-meta">颜色 · 2分钟前</div>
+        </div>
+        <div class="history-item">
+          <div class="item-preview">https://github.com/user/repo</div>
+          <div class="item-meta">链接 · 5分钟前</div>
+        </div>
+        <div class="history-item">
+          <div class="item-preview">export const config = { ... }</div>
+          <div class="item-meta">代码 · 10分钟前</div>
+        </div>
+      </div>
+
+      <div class="preview-pane">
+        <div class="preview-content">
+          Hello World from VSCode<br><br>
+          霓虹夜幕风格，深黑背景配合霓虹青辉光，带有扫描线动画，呈现赛博朋克美学。
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <div style="display: flex; gap: 8px;">
+          <button class="action-button ghost">预览</button>
+          <button class="action-button ghost">删除</button>
+        </div>
+        <button class="action-button primary">复制并粘贴</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

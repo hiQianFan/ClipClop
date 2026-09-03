@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClipClop 设计方案对比</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: #000;
+      color: #ecedee;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .intro {
+      text-align: center;
+      color: #aeb3b7;
+      margin-bottom: 40px;
+      font-size: 15px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+      margin-bottom: 60px;
+    }
+
+    .card {
+      background: #1a1c1e;
+      border-radius: 16px;
+      padding: 24px;
+      border: 2px solid #2c2f32;
+      transition: all 200ms ease-out;
+    }
+
+    .card:hover {
+      border-color: #3a3d42;
+      transform: translateY(-2px);
+    }
+
+    .card h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .badge.current {
+      background: #2a2d30;
+      color: #8a9095;
+    }
+
+    .badge.recommended {
+      background: #d4a574;
+      color: #1a1816;
+    }
+
+    .badge.experimental {
+      background: #00e5ff;
+      color: #0a0c0e;
+    }
+
+    .card p {
+      color: #aeb3b7;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .preview {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #2c2f32;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .features {
+      list-style: none;
+      margin-bottom: 16px;
+    }
+
+    .features li {
+      font-size: 13px;
+      color: #aeb3b7;
+      padding-left: 20px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+
+    .features li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #6EE7B7;
+    }
+
+    .pros-cons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .pros, .cons {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .pros {
+      background: rgba(110, 231, 183, 0.08);
+      border: 1px solid rgba(110, 231, 183, 0.2);
+    }
+
+    .cons {
+      background: rgba(255, 107, 114, 0.08);
+      border: 1px solid rgba(255, 107, 114, 0.2);
+    }
+
+    .pros h4, .cons h4 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .pros h4 { color: #6EE7B7; }
+    .cons h4 { color: #ff6b72; }
+
+    .pros ul, .cons ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .pros li, .cons li {
+      color: #aeb3b7;
+      margin-bottom: 4px;
+      padding-left: 0;
+    }
+
+    .pros li::before { content: '+ '; color: #6EE7B7; }
+    .cons li::before { content: '− '; color: #ff6b72; }
+
+    .cta {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      height: 36px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: #eceef0;
+      color: #1a1c1e;
+    }
+
+    .btn-primary:hover {
+      background: #ffffff;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #aeb3b7;
+      border: 1px solid #3a3d42;
+    }
+
+    .btn-secondary:hover {
+      background: #242628;
+      color: #ecedee;
+    }
+
+    .comparison-table {
+      background: #1a1c1e;
+      border-radius: 16px;
+      padding: 24px;
+      border: 2px solid #2c2f32;
+      margin-bottom: 40px;
+    }
+
+    .comparison-table h3 {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #2c2f32;
+      font-size: 13px;
+    }
+
+    th {
+      color: #ecedee;
+      font-weight: 600;
+    }
+
+    td {
+      color: #aeb3b7;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .color-swatch {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-right: 8px;
+      border: 1px solid #2c2f32;
+    }
+
+    .footer {
+      text-align: center;
+      color: #8a9095;
+      font-size: 13px;
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #2c2f32;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 ClipClop 设计方案对比</h1>
+    <p class="intro">
+      在保持功能和布局不变的前提下，探索四种不同的视觉风格方向。<br>
+      点击"查看Demo"可以看到完整的交互式原型。
+    </p>
+
+    <div class="grid">
+      <!-- 当前设计 -->
+      <div class="card">
+        <h2>
+          当前设计
+          <span class="badge current">基准</span>
+        </h2>
+        <p>冷中性灰配色，极度克制的单一行动色系统，小圆角设计</p>
+        <iframe class="preview" src="demo-current.html"></iframe>
+
+        <ul class="features">
+          <li>冷灰色调（#17181a → #2a2d30）</li>
+          <li>单一近白行动色（#eceef0）</li>
+          <li>保守圆角（4/6/8/14px）</li>
+          <li>无品牌辅助色</li>
+        </ul>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>优势</h4>
+            <ul>
+              <li>专业克制</li>
+              <li>高对比度</li>
+              <li>简洁清晰</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>劣势</h4>
+            <ul>
+              <li>与Raycast相似度90%</li>
+              <li>缺乏品牌记忆点</li>
+              <li>略显冰冷</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="cta">
+          <a href="demo-current.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+
+      <!-- 方向A -->
+      <div class="card">
+        <h2>
+          方向A：温暖工业风
+          <span class="badge recommended">推荐</span>
+        </h2>
+        <p>微暖灰 + 琥珀金辅助色，柔和圆角，轻微质感，保持专业但增加温度</p>
+        <iframe class="preview" src="demo-a-warm-industrial.html"></iframe>
+
+        <ul class="features">
+          <li>暖灰色调（#1a1816 → #2f2d2a）</li>
+          <li>暖奶油行动色（#f4e8d8）</li>
+          <li>琥珀金辅助色（#d4a574）</li>
+          <li>更友好的圆角（12/18px）</li>
+          <li>icon光晕、微妙内阴影</li>
+        </ul>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>优势</h4>
+            <ul>
+              <li>差异化明显</li>
+              <li>温暖但不失专业</li>
+              <li>琥珀金可成为品牌色</li>
+              <li>普适性强</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>劣势</h4>
+            <ul>
+              <li>需要调整light theme</li>
+              <li>略微偏向设计感</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="cta">
+          <a href="demo-a-warm-industrial.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+
+      <!-- 方向B -->
+      <div class="card">
+        <h2>方向B：极简线条风</h2>
+        <p>扁平背景，强化边框，线条图标，建筑图纸般的极度克制</p>
+        <iframe class="preview" src="demo-b-minimal-line.html"></iframe>
+
+        <ul class="features">
+          <li>压缩背景层次（两层）</li>
+          <li>2px边框代替填充</li>
+          <li>线条风格图标</li>
+          <li>选中用边框而非背景</li>
+          <li>移除所有阴影</li>
+        </ul>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>优势</h4>
+            <ul>
+              <li>极度克制</li>
+              <li>Wireframe美学</li>
+              <li>适合极客用户</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>劣势</h4>
+            <ul>
+              <li>可能过于冷淡</li>
+              <li>边框可能显杂乱</li>
+              <li>需要重做icon</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="cta">
+          <a href="demo-b-minimal-line.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+
+      <!-- 方向C -->
+      <div class="card">
+        <h2>
+          方向C：霓虹夜幕风
+          <span class="badge experimental">实验性</span>
+        </h2>
+        <p>深黑背景，霓虹青辉光，扫描线动画，赛博朋克美学</p>
+        <iframe class="preview" src="demo-c-neon-night.html"></iframe>
+
+        <ul class="features">
+          <li>接近纯黑背景（#0a0c0e）</li>
+          <li>霓虹青行动色（#00e5ff）</li>
+          <li>辉光效果（box-shadow）</li>
+          <li>扫描线动画</li>
+          <li>左边框高光</li>
+        </ul>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>优势</h4>
+            <ul>
+              <li>极具辨识度</li>
+              <li>开发者美学</li>
+              <li>视觉冲击力强</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>劣势</h4>
+            <ul>
+              <li>风格化过强</li>
+              <li>不适合所有用户</li>
+              <li>可能影响可读性</li>
+              <li>light theme难以适配</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="cta">
+          <a href="demo-c-neon-night.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="comparison-table">
+      <h3>📊 关键指标对比</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>当前设计</th>
+            <th>方向A</th>
+            <th>方向B</th>
+            <th>方向C</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>与Raycast差异度</strong></td>
+            <td>10%</td>
+            <td>70%</td>
+            <td>60%</td>
+            <td>95%</td>
+          </tr>
+          <tr>
+            <td><strong>品牌记忆点</strong></td>
+            <td>弱</td>
+            <td>强（琥珀金）</td>
+            <td>中（线条风格）</td>
+            <td>极强（霓虹青）</td>
+          </tr>
+          <tr>
+            <td><strong>实施难度</strong></td>
+            <td>-</td>
+            <td>低（1-2h）</td>
+            <td>中（需改icon）</td>
+            <td>中（动画+辉光）</td>
+          </tr>
+          <tr>
+            <td><strong>普适性</strong></td>
+            <td>高</td>
+            <td>高</td>
+            <td>中</td>
+            <td>低</td>
+          </tr>
+          <tr>
+            <td><strong>专业感</strong></td>
+            <td>高</td>
+            <td>高</td>
+            <td>极高</td>
+            <td>中</td>
+          </tr>
+          <tr>
+            <td><strong>温暖度</strong></td>
+            <td>低</td>
+            <td>高</td>
+            <td>极低</td>
+            <td>中</td>
+          </tr>
+          <tr>
+            <td><strong>主色调</strong></td>
+            <td><span class="color-swatch" style="background: #17181a;"></span>冷灰</td>
+            <td><span class="color-swatch" style="background: #1a1816;"></span>暖灰</td>
+            <td><span class="color-swatch" style="background: #1a1c1e;"></span>中性灰</td>
+            <td><span class="color-swatch" style="background: #0a0c0e;"></span>深黑</td>
+          </tr>
+          <tr>
+            <td><strong>行动色</strong></td>
+            <td><span class="color-swatch" style="background: #eceef0;"></span>近白</td>
+            <td><span class="color-swatch" style="background: #f4e8d8;"></span>奶油白</td>
+            <td><span class="color-swatch" style="background: #ffffff;"></span>纯白</td>
+            <td><span class="color-swatch" style="background: #00e5ff;"></span>霓虹青</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="comparison-table">
+      <h3>💡 推荐理由</h3>
+      <p style="color: #aeb3b7; margin-bottom: 16px;">
+        <strong style="color: #d4a574;">方向A（温暖工业风）</strong>是最佳选择，原因如下：
+      </p>
+      <ul class="features">
+        <li><strong>差异化有效：</strong>暖灰+琥珀金与Raycast的冷灰+近白形成明确对比</li>
+        <li><strong>品牌建设：</strong>琥珀金可以成为ClipClop的signature色，用在icon、进度指示、loading状态</li>
+        <li><strong>实施成本低：</strong>只需修改CSS变量和圆角值，1-2小时完成</li>
+        <li><strong>保持专业：</strong>温暖不等于不专业，依然是克制的工具美学</li>
+        <li><strong>普适性强：</strong>适合所有用户群体，不会像方向C那样挑用户</li>
+        <li><strong>可扩展：</strong>light theme可以同步调整为暖色调，保持一致性</li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      <p>ClipClop Design Exploration · 2024</p>
+      <p style="margin-top: 8px;">在浏览器中打开各个Demo页面可以看到完整的交互效果</p>
+    </div>
+  </div>
+</body>
+</html>

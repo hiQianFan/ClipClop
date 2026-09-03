@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClipClop 布局方案对比 - 保持功能不变</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: #000;
+      color: #ecedee;
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-align: center;
+      color: #d4a574;
+    }
+
+    .intro {
+      text-align: center;
+      color: #aeb3b7;
+      margin-bottom: 40px;
+      font-size: 15px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .card {
+      background: #1a1c1e;
+      border-radius: 16px;
+      padding: 20px;
+      border: 2px solid #2c2f32;
+      transition: all 200ms ease-out;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card:hover {
+      border-color: #d4a574;
+      transform: translateY(-2px);
+    }
+
+    .card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #d4a574;
+    }
+
+    .card-subtitle {
+      font-size: 13px;
+      color: #8a9095;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .preview-frame {
+      width: 100%;
+      height: 380px;
+      border: 1px solid #2c2f32;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      background: #0a0a0a;
+    }
+
+    .features {
+      list-style: none;
+      margin-bottom: 16px;
+      flex: 1;
+    }
+
+    .features li {
+      font-size: 13px;
+      color: #aeb3b7;
+      padding-left: 20px;
+      position: relative;
+      margin-bottom: 6px;
+    }
+
+    .features li::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #d4a574;
+      font-weight: bold;
+    }
+
+    .highlight {
+      background: rgba(212, 165, 116, 0.1);
+      border-left: 3px solid #d4a574;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+
+    .highlight-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #d4a574;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .highlight-text {
+      font-size: 13px;
+      color: #ecedee;
+      line-height: 1.5;
+    }
+
+    .cta {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      height: 36px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: #d4a574;
+      color: #1a1816;
+    }
+
+    .btn-primary:hover {
+      background: #e0b584;
+    }
+
+    .comparison-section {
+      background: #1a1c1e;
+      border-radius: 16px;
+      padding: 32px;
+      border: 2px solid #2c2f32;
+      margin-bottom: 40px;
+    }
+
+    .comparison-section h3 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #d4a574;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .comparison-item {
+      background: #22201e;
+      border: 1px solid #38342f;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .comparison-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #8a9095;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .comparison-value {
+      font-size: 16px;
+      color: #ecedee;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 14px;
+      text-align: left;
+      border-bottom: 1px solid #2c2f32;
+      font-size: 13px;
+    }
+
+    th {
+      color: #d4a574;
+      font-weight: 600;
+      background: #22201e;
+    }
+
+    td {
+      color: #aeb3b7;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .emphasis {
+      color: #d4a574;
+      font-weight: 600;
+    }
+
+    .footer {
+      text-align: center;
+      color: #8a9095;
+      font-size: 13px;
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #2c2f32;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 ClipClop 布局方案对比</h1>
+    <p class="intro">
+      保持"左列表+右预览"的合理架构，但通过<strong style="color: #d4a574;">空间比例、信息密度、视觉分组、预览布局</strong>四个维度建立差异化。<br>
+      所有方案功能完全相同，只改变视觉呈现和交互节奏。
+    </p>
+
+    <div class="grid">
+      <!-- 方案A -->
+      <div class="card">
+        <h2>方案A：左右均衡</h2>
+        <p class="card-subtitle">1:1比例 · 卡片式列表 · 顶部工具栏</p>
+        <iframe class="preview-frame" src="layout-a-balanced.html"></iframe>
+
+        <div class="highlight">
+          <div class="highlight-title">核心差异</div>
+          <div class="highlight-text">左右各占50%，列表项是独立卡片，工具栏在预览区顶部</div>
+        </div>
+
+        <ul class="features">
+          <li><strong>空间比例：</strong>左右均衡（1:1）</li>
+          <li><strong>列表项：</strong>高80px的卡片，带编号徽章</li>
+          <li><strong>信息密度：</strong>两行（内容+元数据）</li>
+          <li><strong>视觉分组：</strong>卡片间8px间隙，明确边界</li>
+          <li><strong>预览布局：</strong>工具栏在上方</li>
+          <li><strong>选中效果：</strong>卡片边框+外阴影</li>
+        </ul>
+
+        <div class="cta">
+          <a href="layout-a-balanced.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+
+      <!-- 方案B -->
+      <div class="card">
+        <h2>方案B：大缩略图</h2>
+        <p class="card-subtitle">时间分组 · 64×64缩略图 · 横向展开</p>
+        <iframe class="preview-frame" src="layout-b-thumbnail.html"></iframe>
+
+        <div class="highlight">
+          <div class="highlight-title">核心差异</div>
+          <div class="highlight-text">左侧380px宽容纳大缩略图，时间分组标签，预览区紧凑</div>
+        </div>
+
+        <ul class="features">
+          <li><strong>空间比例：</strong>左宽右窄（380px:剩余）</li>
+          <li><strong>列表项：</strong>64×64大缩略图+横向信息</li>
+          <li><strong>信息密度：</strong>高（缩略图+标题+三元素meta）</li>
+          <li><strong>视觉分组：</strong>时间分组标签（今天/昨天）</li>
+          <li><strong>预览布局：</strong>顶部标题+底部操作</li>
+          <li><strong>选中效果：</strong>行高亮</li>
+        </ul>
+
+        <div class="cta">
+          <a href="layout-b-thumbnail.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+
+      <!-- 方案C -->
+      <div class="card">
+        <h2>方案C：表格式</h2>
+        <p class="card-subtitle">2:1比例 · 多列表格 · 极致紧凑</p>
+        <iframe class="preview-frame" src="layout-c-wide-list.html"></iframe>
+
+        <div class="highlight">
+          <div class="highlight-title">核心差异</div>
+          <div class="highlight-text">列表占2/3，五列表格展示，预览区只占1/3，信息密度最高</div>
+        </div>
+
+        <ul class="features">
+          <li><strong>空间比例：</strong>左宽右窄（2:1）</li>
+          <li><strong>列表项：</strong>表格行，五列信息</li>
+          <li><strong>信息密度：</strong>极高（#/内容/类型/来源/时间）</li>
+          <li><strong>视觉分组：</strong>表头固定，hairline分隔</li>
+          <li><strong>预览布局：</strong>紧凑分块+纵向按钮</li>
+          <li><strong>选中效果：</strong>左边框高亮</li>
+        </ul>
+
+        <div class="cta">
+          <a href="layout-c-wide-list.html" target="_blank" class="btn btn-primary">查看Demo</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="comparison-section">
+      <h3>📊 详细对比</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>方案A：左右均衡</th>
+            <th>方案B：大缩略图</th>
+            <th>方案C：表格式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>空间比例</strong></td>
+            <td>1:1（各50%）</td>
+            <td>380px : 剩余</td>
+            <td>2:1（列表占67%）</td>
+          </tr>
+          <tr>
+            <td><strong>列表项高度</strong></td>
+            <td>80px（卡片）</td>
+            <td>76px（缩略图行）</td>
+            <td>44px（表格行）</td>
+          </tr>
+          <tr>
+            <td><strong>信息密度</strong></td>
+            <td>中（两行信息）</td>
+            <td>高（缩略图+多元素）</td>
+            <td>极高（五列展开）</td>
+          </tr>
+          <tr>
+            <td><strong>视觉分组</strong></td>
+            <td>卡片间隙</td>
+            <td>时间分组标签</td>
+            <td>表头+hairline</td>
+          </tr>
+          <tr>
+            <td><strong>预览区特征</strong></td>
+            <td>工具栏在上</td>
+            <td>标题+操作</td>
+            <td>紧凑分块</td>
+          </tr>
+          <tr>
+            <td><strong>扫一眼能看到</strong></td>
+            <td>6-7条</td>
+            <td>7-8条</td>
+            <td>12-14条</td>
+          </tr>
+          <tr>
+            <td><strong>差异化程度</strong></td>
+            <td class="emphasis">70%</td>
+            <td class="emphasis">80%</td>
+            <td class="emphasis">85%</td>
+          </tr>
+          <tr>
+            <td><strong>适合场景</strong></td>
+            <td>平衡展示</td>
+            <td>视觉内容多</td>
+            <td>高频查找</td>
+          </tr>
+          <tr>
+            <td><strong>实施难度</strong></td>
+            <td>中（需改组件）</td>
+            <td>中高（缩略图逻辑）</td>
+            <td>低（CSS调整）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="comparison-section">
+      <h3>💡 核心洞察</h3>
+      <p style="color: #aeb3b7; margin-bottom: 20px; font-size: 15px; line-height: 1.7;">
+        这三个方案都是"左列表+右预览"，但<strong style="color: #d4a574;">视觉感受完全不同</strong>：
+      </p>
+      <div class="comparison-grid">
+        <div class="comparison-item">
+          <div class="comparison-label">方案A</div>
+          <div class="comparison-value">强调预览</div>
+          <p style="font-size: 12px; color: #8a9095; margin-top: 8px;">
+            左右对等，适合需要仔细阅读内容的场景
+          </p>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">方案B</div>
+          <div class="comparison-value">强调视觉</div>
+          <p style="font-size: 12px; color: #8a9095; margin-top: 8px;">
+            大缩略图+时间轴，适合图片/文件为主的工作流
+          </p>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">方案C</div>
+          <div class="comparison-value">强调效率</div>
+          <p style="font-size: 12px; color: #8a9095; margin-top: 8px;">
+            表格式密集信息，适合高频查找定位
+          </p>
+        </div>
+        <div class="comparison-item">
+          <div class="comparison-label">当前设计</div>
+          <div class="comparison-value">Raycast风格</div>
+          <p style="font-size: 12px; color: #8a9095; margin-top: 8px;">
+            300px:剩余，单行列表，右侧居中预览
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="comparison-section">
+      <h3>🎯 建议</h3>
+      <p style="color: #aeb3b7; margin-bottom: 16px; font-size: 15px; line-height: 1.7;">
+        如果要<strong style="color: #d4a574;">在保持布局合理性的前提下最大化差异化</strong>，我推荐：
+      </p>
+      <ul class="features" style="margin-bottom: 20px;">
+        <li><strong style="color: #d4a574;">方案B（大缩略图+时间分组）</strong> — 视觉差异最明显，用户一眼就能看出"这不是Raycast"</li>
+        <li>结合方案A的温暖配色（琥珀金#d4a574）</li>
+        <li>保留当前的键盘导航和快捷键逻辑（功能不变）</li>
+        <li>实施成本中等（主要是缩略图加载和时间分组逻辑）</li>
+      </ul>
+      <p style="color: #8a9095; font-size: 13px; line-height: 1.6;">
+        <strong>为什么不是方案C？</strong>表格式虽然效率高，但对于剪贴板这种"内容为王"的工具，牺牲了内容可读性。大部分用户不是在"找某个特定条目"，而是在"浏览最近复制的东西"，所以视觉优先度 > 信息密度。
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>ClipClop Layout Exploration · 2024</p>
+      <p style="margin-top: 8px;">点击每个方案的"查看Demo"按钮可以看到完整的交互效果</p>
+    </div>
+  </div>
+</body>
+</html>

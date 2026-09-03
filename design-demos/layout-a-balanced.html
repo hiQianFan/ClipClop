@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>布局方案A：左右均衡 + 卡片式列表 - ClipClop Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-shell: #1a1816;
+      --bg-raised: #22201e;
+      --bg-hover: #28262a;
+      --bg-selected: #2f2d2a;
+      --hairline: #38342f;
+      --text-1: #ecedee;
+      --text-2: #aeb3b7;
+      --text-3: #8a9095;
+      --action: #f4e8d8;
+      --accent: #d4a574;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --mono: "SF Mono", "Cascadia Mono", ui-monospace, Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: #0a0a0a;
+      color: var(--text-1);
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .workspace {
+      width: 100%;
+      max-width: 1200px;
+      height: 700px;
+      background: var(--bg-shell);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+      display: grid;
+      grid-template-columns: 1fr 1fr;  /* 关键：左右均衡 45% vs 55% */
+      grid-template-rows: 48px 1fr 56px;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      grid-column: 1 / -1;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+    }
+
+    .titlebar h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .search-input {
+      flex: 1;
+      height: 32px;
+      background: var(--bg-shell);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
+      padding: 0 12px;
+      color: var(--text-1);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .search-input::placeholder {
+      color: var(--text-3);
+    }
+
+    /* 左侧：卡片式列表 */
+    .list-pane {
+      background: var(--bg-raised);
+      border-right: 1px solid var(--hairline);
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;  /* 卡片之间明显间隙 */
+    }
+
+    .clip-card {
+      background: var(--bg-shell);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      cursor: pointer;
+      transition: all 160ms ease-out;
+      min-height: 80px;  /* 更高的卡片 */
+    }
+
+    .clip-card:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .clip-card.selected {
+      background: var(--bg-selected);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 4px 8px rgba(212,165,116,0.15);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card-number {
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      color: var(--bg-shell);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .card-type {
+      font-size: 11px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .card-time {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-3);
+      font-family: var(--mono);
+    }
+
+    .card-content {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-1);
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      margin-bottom: 6px;
+    }
+
+    .card-source {
+      font-size: 11px;
+      color: var(--text-3);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .card-source::before {
+      content: '←';
+      color: var(--accent);
+    }
+
+    /* 右侧：工具栏在上的预览 */
+    .preview-pane {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .preview-toolbar {
+      height: 48px;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+    }
+
+    .toolbar-btn {
+      height: 32px;
+      padding: 0 14px;
+      background: var(--bg-shell);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 140ms ease-out;
+    }
+
+    .toolbar-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+      color: var(--text-1);
+    }
+
+    .toolbar-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg-shell);
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    .toolbar-btn.primary:hover {
+      background: #e0b584;
+    }
+
+    .preview-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .preview-text {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-1);
+    }
+
+    .preview-meta {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--hairline);
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .meta-label {
+      color: var(--text-3);
+      font-weight: 600;
+    }
+
+    .meta-value {
+      color: var(--text-1);
+      font-family: var(--mono);
+    }
+
+    .action-bar {
+      grid-column: 1 / -1;
+      background: var(--bg-raised);
+      border-top: 1px solid var(--hairline);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-3);
+    }
+
+    .status-text {
+      font-family: var(--mono);
+    }
+
+    .status-text strong {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="workspace">
+    <div class="titlebar">
+      <h1>ClipClop</h1>
+      <input type="search" class="search-input" placeholder="搜索剪贴板内容...">
+    </div>
+
+    <div class="list-pane">
+      <div class="clip-card selected">
+        <div class="card-header">
+          <span class="card-number">1</span>
+          <span class="card-type">文本</span>
+          <span class="card-time">刚刚</span>
+        </div>
+        <div class="card-content">Hello World from VSCode</div>
+        <div class="card-source">VSCode</div>
+      </div>
+
+      <div class="clip-card">
+        <div class="card-header">
+          <span class="card-number">2</span>
+          <span class="card-type">颜色</span>
+          <span class="card-time">2分钟前</span>
+        </div>
+        <div class="card-content">#3b82f6</div>
+        <div class="card-source">Chrome</div>
+      </div>
+
+      <div class="clip-card">
+        <div class="card-header">
+          <span class="card-number">3</span>
+          <span class="card-type">链接</span>
+          <span class="card-time">5分钟前</span>
+        </div>
+        <div class="card-content">https://github.com/user/repo/issues/42</div>
+        <div class="card-source">Firefox</div>
+      </div>
+
+      <div class="clip-card">
+        <div class="card-header">
+          <span class="card-number">4</span>
+          <span class="card-type">代码</span>
+          <span class="card-time">10分钟前</span>
+        </div>
+        <div class="card-content">export const config = {
+  theme: 'dark',
+  fontSize: 14
+}</div>
+        <div class="card-source">Terminal</div>
+      </div>
+
+      <div class="clip-card">
+        <div class="card-header">
+          <span class="card-number">5</span>
+          <span class="card-type">文件</span>
+          <span class="card-time">15分钟前</span>
+        </div>
+        <div class="card-content">screenshot-2024.png · 2.4 MB</div>
+        <div class="card-source">Finder</div>
+      </div>
+    </div>
+
+    <div class="preview-pane">
+      <div class="preview-toolbar">
+        <button class="toolbar-btn">预览</button>
+        <button class="toolbar-btn">删除</button>
+        <button class="toolbar-btn primary">复制并粘贴</button>
+      </div>
+      <div class="preview-content">
+        <div class="preview-text">Hello World from VSCode</div>
+        <div class="preview-meta">
+          <span class="meta-label">类型</span>
+          <span class="meta-value">纯文本</span>
+          <span class="meta-label">来源</span>
+          <span class="meta-value">VSCode</span>
+          <span class="meta-label">时间</span>
+          <span class="meta-value">2024-01-15 14:23:45</span>
+          <span class="meta-label">大小</span>
+          <span class="meta-value">24 字节</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <span class="status-text">共 <strong>128</strong> 条记录 · 第 <strong>1</strong> 页</span>
+    </div>
+  </div>
+</body>
+</html>
