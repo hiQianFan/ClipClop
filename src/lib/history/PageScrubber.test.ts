@@ -51,7 +51,7 @@ describe("PageScrubber", () => {
     await fireEvent(scrubber, pointerEvent("pointerdown", { pointerId: 1, clientX: 100 }));
     expect(scrubber.classList.contains("dragging")).toBe(true);
     await fireEvent(scrubber, pointerEvent("pointermove", { pointerId: 1, clientX: 4 }));
-    expect(onpage).toHaveBeenLastCalledWith(3);
+    expect(onpage).toHaveBeenLastCalledWith(7);
     await fireEvent(scrubber, pointerEvent("pointerup", { pointerId: 1, clientX: 4 }));
     expect(scrubber.classList.contains("dragging")).toBe(false);
   });

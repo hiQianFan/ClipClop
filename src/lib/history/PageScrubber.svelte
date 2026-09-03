@@ -65,11 +65,12 @@
   function startPageDrag(event: PointerEvent) {
     if (disabled || event.button !== 0) return;
     event.preventDefault();
+    const startPage = currentPage();
     draggingPage = true;
     dragPointer = event.pointerId;
     dragStartX = event.clientX;
-    dragStartPage = currentPage();
-    dragPage = currentPage();
+    dragStartPage = startPage;
+    dragPage = startPage;
     dragOffset = 0;
     if (event.currentTarget instanceof HTMLElement) event.currentTarget.setPointerCapture(event.pointerId);
   }
