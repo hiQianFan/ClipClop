@@ -228,9 +228,7 @@ impl ExternalPreviewService {
         match detail.summary.content_type {
             ContentType::File => {
                 let path = normalized_file_path(&detail, index).ok_or(AppError::NotFound)?;
-                if !path.is_file() {
-                    return Err(AppError::NotFound);
-                }
+                ensure_preview_path_exists(&path)?;
                 Ok(path)
             }
             ContentType::Image => {
@@ -286,10 +284,12 @@ fn open_path(app: &AppHandle, path: impl AsRef<Path>) -> AppResult<()> {
 
 fn open_file(app: &AppHandle, detail: &crate::history::ClipDetail, index: usize) -> AppResult<()> {
     let path = normalized_file_path(detail, index).ok_or(AppError::NotFound)?;
-    if !path.is_file() {
-        return Err(AppError::NotFound);
-    }
+    ensure_preview_path_exists(&path)?;
     open_path(app, path)
+}
+
+fn ensure_preview_path_exists(path: &Path) -> AppResult<()> {
+    path.exists().then_some(()).ok_or(AppError::NotFound)
 }
 
 fn preview_path(app: &AppHandle, id: &str, extension: &str) -> AppResult<PathBuf> {
@@ -370,6 +370,17 @@ mod tests {
         assert!(!temp.path().join("selected.png").exists());
         assert!(!temp.path().join("selected.txt").exists());
         assert!(temp.path().join("other.png").exists());
+    }
+
+    #[test]
+    fn quicklook_accepts_file_bundles_and_regular_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("document.txt");
+        std::fs::write(&file, b"text").unwrap();
+
+        assert!(ensure_preview_path_exists(&file).is_ok());
+        assert!(ensure_preview_path_exists(temp.path()).is_ok());
+        assert!(ensure_preview_path_exists(&temp.path().join("missing")).is_err());
     }
 
     #[test]

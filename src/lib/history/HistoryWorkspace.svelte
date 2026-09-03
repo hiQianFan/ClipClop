@@ -11,7 +11,7 @@
   import ClipPreview from "$lib/history/ClipPreview.svelte";
   import AppTitleBar from "$lib/history/AppTitleBar.svelte";
   import HistoryActionBar from "$lib/history/HistoryActionBar.svelte";
-  import { getSettings, quitApp } from "$lib/settings/api";
+  import { getSettings, openFilePreviewSettings, quitApp } from "$lib/settings/api";
   import { currentPlatform } from "$lib/settings/shortcuts";
   import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
@@ -724,6 +724,7 @@
     sourceIconUrl={preview.sourceIconUrl}
     fileThumbnailUrls={preview.fileThumbnailUrls}
     fileByteSizes={preview.fileByteSizes}
+    fileDirectories={preview.fileDirectories}
     {fileIndex}
     {trimWhitespace}
     {previousFileShortcut}
@@ -732,6 +733,7 @@
     onfilekeydown={onFileNavigatorKeydown}
     onfilefocus={() => mode = "file-tablist"}
     onopenorigin={() => void openSelectedLink(true)}
+    onfileaccess={() => void openFilePreviewSettings()}
     oninert={() => enterBrowse()}
   />
 

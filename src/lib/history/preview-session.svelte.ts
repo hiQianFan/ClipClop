@@ -6,7 +6,7 @@ import {
 } from "./api";
 import type { ClipDetail, ClipSummary } from "./types";
 
-export type PreviewResource = { data_url: string | null; byte_size: number | null; access_denied: boolean };
+export type PreviewResource = { data_url: string | null; byte_size: number | null; access_denied: boolean; is_directory?: boolean };
 
 export type PreviewApi = {
   getClipAsset(id: string): Promise<PreviewResource>;
@@ -31,6 +31,7 @@ export class PreviewSession {
   thumbnailUrls = $state<Record<string, string>>({});
   fileThumbnailUrls = $state<Array<string | null>>([]);
   fileByteSizes = $state<Array<number | null>>([]);
+  fileDirectories = $state<boolean[]>([]);
 
   #api: PreviewApi;
   #assets = new Map<string, PreviewResource>();
@@ -55,6 +56,7 @@ export class PreviewSession {
     this.sourceIconUrl = null;
     this.fileThumbnailUrls = [];
     this.fileByteSizes = [];
+    this.fileDirectories = [];
   }
 
   resetPage() {
@@ -187,6 +189,7 @@ export class PreviewSession {
     if (index === null) return;
     this.fileThumbnailUrls[index] = asset.data_url;
     if (asset.byte_size !== null) this.fileByteSizes[index] = asset.byte_size;
+    this.fileDirectories[index] = asset.is_directory ?? false;
   }
 
   #isCurrent(selectionVersion: number, fileVersion: number) {

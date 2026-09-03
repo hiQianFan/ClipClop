@@ -173,7 +173,7 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
             )));
         }
     }
-    let image = context.get_image().ok();
+    let image = clipboard_image(context);
     // Photos also advertises protected file promises for copied images. Prefer
     // the image payload so capture does not trigger a Photos access prompt.
     let files = image
@@ -285,6 +285,18 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
         content_hash: hex::encode(hasher.finalize()),
         created_at: Utc::now(),
     }))
+}
+
+fn clipboard_image(context: &ClipboardContext) -> Option<clipboard_rs::RustImageData> {
+    ["public.png", "PNG", "image/png", "public.tiff", "TIFF", "image/tiff"]
+        .into_iter()
+        .find_map(|format| {
+            context
+                .get_buffer(format)
+                .ok()
+                .and_then(|payload| clipboard_rs::RustImageData::from_bytes(&payload).ok())
+        })
+        .or_else(|| context.get_image().ok())
 }
 
 fn classify_text(text: &str) -> ContentType {

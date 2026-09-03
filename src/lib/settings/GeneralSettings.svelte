@@ -53,7 +53,7 @@
 {#if platform === "macos"}<div class="row"><span><strong>{t("settings.trayClick")}</strong><small>{t("settings.trayClickHelp")}</small></span><AppSelect value={settings.tray_click_action} items={trayItems} ariaLabel={t("settings.trayClick")} onchange={(value) => settings.tray_click_action = value as TrayClickAction} /></div>{/if}
 <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
 {#if platform === "macos"}<div class="row"><span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small></span><button onclick={() => void run(openAutoPasteSettings)}>{t("settings.manage")}</button></div>{/if}
-{#if platform === "macos"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelp")}</small></span><button onclick={() => void run(openFilePreviewSettings)}>{t("settings.manage")}</button></div>{/if}
+{#if platform === "macos"}<div class="row"><span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelp")}</small></span><button onclick={() => void run(openFilePreviewSettings)}>{t("settings.grant")}</button></div>{/if}
 {#if platform === "windows"}
   <div class="row">
     <span>

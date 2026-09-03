@@ -20,6 +20,17 @@ const detail: ClipDetail = {
 const page: HistoryPage = { items: [detail], page: 1, page_size: 10, total: 1, total_pages: 1 };
 
 describe("ClipPreview file tabs", () => {
+  it("shows the app mark when clipboard history is empty", () => {
+    const { container } = render(ClipPreview, { props: {
+      detail: null, selectedId: null, page: { ...page, items: [], total: 0, total_pages: 0 }, noMatches: false, pending: false,
+      assetUrl: null, thumbnailUrl: null, fileAccessDenied: false, sourceIconUrl: null,
+      fileThumbnailUrls: [], fileByteSizes: [], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
+    } });
+    expect(container.querySelector('.brand-empty img')?.getAttribute('src')).toBe('/app-icon-rounded.png');
+  });
+
   it("uses the thumbnail while the full image preview is pending", () => {
     const image = { ...detail, id: "image", content_type: "image" as const, metadata: { width: 10, height: 10 } };
     const { container } = render(ClipPreview, { props: {
@@ -30,6 +41,20 @@ describe("ClipPreview file tabs", () => {
       onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
     expect(container.querySelector("img.asset.thumbnail")?.getAttribute("src")).toBe("thumbnail");
+  });
+
+  it("presents copied image files as visual content without repeating their path", () => {
+    const photo = { ...detail, metadata: { files: ["/Users/me/Pictures/photo.jpeg"] } };
+    const { container } = render(ClipPreview, { props: {
+      detail: photo, selectedId: photo.id, page: { ...page, items: [photo] }, noMatches: false, pending: false,
+      assetUrl: "photo-preview", thumbnailUrl: null, fileAccessDenied: false, sourceIconUrl: null,
+      fileThumbnailUrls: [], fileByteSizes: [1024], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
+    } });
+
+    expect(container.querySelector("img.asset")?.getAttribute("src")).toBe("photo-preview");
+    expect(container.querySelector(".meta-file")).toBeNull();
   });
 
   it("activates adjacent files once, does not loop, and forwards Escape", async () => {
@@ -67,6 +92,22 @@ describe("ClipPreview file tabs", () => {
 
     expect(container.textContent).toContain("First copied");
     expect(container.textContent).toContain("Last used");
+    expect(container.querySelector(".file-path")?.textContent).toBe("/tmp/one.txt");
+    expect(container.querySelector(".meta-file")).toBeNull();
+  });
+
+  it("offers Full Disk Access when a file read is denied", async () => {
+    const onfileaccess = vi.fn();
+    render(ClipPreview, { props: {
+      detail, selectedId: detail.id, page, noMatches: false, pending: false, assetUrl: null, thumbnailUrl: null,
+      fileAccessDenied: true, sourceIconUrl: null, fileThumbnailUrls: [null, null],
+      fileByteSizes: [null, null], fileIndex: 0, trimWhitespace: false,
+      previousFileShortcut: "Command+ArrowLeft", nextFileShortcut: "Command+ArrowRight", onfile() {},
+      onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, onfileaccess, oninert() {},
+    } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Open Full Disk Access Settings" }));
+    expect(onfileaccess).toHaveBeenCalledOnce();
   });
 
   it("renders a keyboard-accessible domain action and neutral remote source icon", async () => {

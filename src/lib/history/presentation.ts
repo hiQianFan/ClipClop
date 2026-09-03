@@ -9,6 +9,7 @@ type MetadataLabels = {
   hostname: string;
   type: string;
   characters: string;
+  folder: string;
 };
 export type MetadataFact = { label: string; value: string; action?: "open-origin" };
 
@@ -28,6 +29,7 @@ export function metadataFacts(
   fileByteSizes: Array<number | null>,
   labels: MetadataLabels,
   formatNumber: NumberFormatter,
+  fileDirectories: boolean[] = [],
 ) {
   const facts: MetadataFact[] = [];
   if (detail.content_type === "image") {
@@ -48,7 +50,7 @@ export function metadataFacts(
     } else {
       const name = fileName(files[0] ?? detail.preview);
       const extension = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";
-      facts.push({ label: labels.type, value: extension ? extension.toUpperCase() : labels.file });
+      facts.push({ label: labels.type, value: fileDirectories[fileIndex] ? labels.folder : extension ? extension.toUpperCase() : labels.file });
       if (typeof sizes[0] === "number") facts.push({ label: labels.size, value: formatBytes(sizes[0], formatNumber) });
     }
   } else if (detail.content_type === "color") {

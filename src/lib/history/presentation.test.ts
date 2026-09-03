@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts } from "./presentation";
 import type { ClipDetail } from "./types";
 
-const labels = { dimensions: "Dimensions", size: "Size", file: "File", files: "Files", hostname: "Domain", type: "Type", characters: "Characters" };
+const labels = { dimensions: "Dimensions", size: "Size", file: "File", files: "Files", hostname: "Domain", type: "Type", characters: "Characters", folder: "Folder" };
 
 function detail(content_type: ClipDetail["content_type"], metadata: ClipDetail["metadata"] = {}, plain_text: string | null = null): ClipDetail {
   return {
@@ -88,6 +88,9 @@ describe("clip view helpers", () => {
     ]);
     expect(metadataFacts(detail("file", { files: ["/tmp/README"] }), 0, [], labels, String)).toEqual([
       { label: "Type", value: "File" },
+    ]);
+    expect(metadataFacts(detail("file", { files: ["/tmp/clipclop.io"] }), 0, [], labels, String, [true])).toEqual([
+      { label: "Type", value: "Folder" },
     ]);
     expect(metadataFacts(detail("file", { files: ["a", "b"], file_sizes: [1024, 1024] }), 0, [], labels, String)).toEqual([
       { label: "Files", value: "2" }, { label: "Size", value: "2 KB" },

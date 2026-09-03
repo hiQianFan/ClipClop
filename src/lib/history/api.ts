@@ -23,15 +23,15 @@ export function getClip(id: string): Promise<ClipDetail> {
   return invoke("get_clip", { id });
 }
 
-export function getClipAsset(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
+export function getClipAsset(id: string): Promise<PreviewResource> {
   return invoke("get_clip_asset", { id });
 }
 
-export function getClipFileAsset(id: string, index: number): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
+export function getClipFileAsset(id: string, index: number): Promise<PreviewResource> {
   return invoke("get_clip_file_asset", { id, index });
 }
 
-export function getClipThumbnail(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
+export function getClipThumbnail(id: string): Promise<PreviewResource> {
   return invoke("get_clip_thumbnail", { id });
 }
 
@@ -62,9 +62,11 @@ export function openClipLink(id: string, originOnly = false): Promise<void> {
   return invoke("open_clip_link", { id, originOnly });
 }
 
-export function getSourceAppIcon(id: string): Promise<{ data_url: string | null; byte_size: number | null; access_denied: boolean }> {
+export function getSourceAppIcon(id: string): Promise<PreviewResource> {
   return invoke("get_source_app_icon", { id });
 }
+
+export type PreviewResource = { data_url: string | null; byte_size: number | null; access_denied: boolean; is_directory: boolean };
 
 export function hidePanel(): Promise<void> {
   return invoke("hide_panel");

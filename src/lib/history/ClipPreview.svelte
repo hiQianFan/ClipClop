@@ -19,6 +19,7 @@
     sourceIconUrl,
     fileThumbnailUrls,
     fileByteSizes,
+    fileDirectories = [],
     fileIndex,
     trimWhitespace,
     previousFileShortcut,
@@ -27,6 +28,7 @@
     onfilekeydown,
     onfilefocus,
     onopenorigin,
+    onfileaccess = () => {},
     oninert,
   }: {
     detail: ClipDetail | null;
@@ -40,6 +42,7 @@
     sourceIconUrl: string | null;
     fileThumbnailUrls: Array<string | null>;
     fileByteSizes: Array<number | null>;
+    fileDirectories?: boolean[];
     fileIndex: number;
     trimWhitespace: boolean;
     previousFileShortcut: string;
@@ -48,19 +51,22 @@
     onfilekeydown: (event: KeyboardEvent) => void;
     onfilefocus: () => void;
     onopenorigin: () => void;
+    onfileaccess?: () => void;
     oninert: () => void;
   } = $props();
   const shortcutPlatform = $derived<ShortcutPlatform>(previousFileShortcut.startsWith("Command") ? "macos" : "windows");
+  const selectedFilePath = $derived(detail?.content_type === "file" ? filePaths(detail)[fileIndex] ?? detail.preview : "");
 </script>
 
-<section role="group" class:pending class:file-preview={detail?.content_type === "file"} class="preview" aria-live="polite" aria-busy={pending} onpointerdown={(event) => { if (!(event.target as Element).closest("button, a, input, [role='tab']")) oninert(); }}>
+<section role="group" class:pending class="preview" aria-live="polite" aria-busy={pending} onpointerdown={(event) => { if (!(event.target as Element).closest("button, a, input, [role='tab']")) oninert(); }}>
   {#if detail}
-    <div class:text-preview={!["color", "file", "image"].includes(detail.content_type)} class="preview-body">
+    <div class:text-preview={!['color', 'file', 'image'].includes(detail.content_type)} class:file-path-preview={detail.content_type === "file" && !assetUrl && !fileAccessDenied} class="preview-body">
       {#if detail.content_type === "color"}
         <div class="color-preview"><span style:background={detail.preview}></span><code>{detail.preview}</code></div>
       {:else if detail.content_type === "file"}
         {#if assetUrl}<img class="asset" src={assetUrl} alt={t("history.fileThumbnail")} />
-        {:else}<div class="file-preview-placeholder">{t(fileAccessDenied ? "history.fileAccessDenied" : "history.systemPreviewHint")}</div>{/if}
+        {:else if fileAccessDenied}<div class="file-preview-placeholder"><span>{t("history.fileAccessDenied")}</span><button onclick={onfileaccess}>{t("history.grantFullDiskAccess")}</button></div>
+        {:else}<pre class="file-path">{selectedFilePath}</pre>{/if}
       {:else if detail.content_type === "image"}
         {#if assetUrl || thumbnailUrl}<div class="asset-frame"><img class:thumbnail={!assetUrl} class="asset" src={assetUrl ?? thumbnailUrl ?? undefined} decoding="async" alt={t("history.imagePreview")} /></div>
         {:else}<div class="image-placeholder">{t("history.image")} · {typeof detail.metadata.width === "number" ? formatNumber(detail.metadata.width) : "?"}×{typeof detail.metadata.height === "number" ? formatNumber(detail.metadata.height) : "?"}</div>{/if}
@@ -86,12 +92,6 @@
       </nav>
     {/if}
     <div class="preview-meta">
-      {#if detail.content_type === "file"}
-        <div class="meta-file">
-          <span title={filePaths(detail)[fileIndex] ?? detail.preview}>{fileName(filePaths(detail)[fileIndex] ?? detail.preview, t("meta.file"))}</span>
-          {#if filePaths(detail)[fileIndex]}<code title={filePaths(detail)[fileIndex]}>{filePaths(detail)[fileIndex]}</code>{/if}
-        </div>
-      {/if}
       <div class="meta-summary">
         <div class="meta-source">
           {#if detail.source_app}
@@ -104,7 +104,7 @@
           {/if}
         </div>
         <dl class="meta-facts">
-          {#each metadataFacts(detail, fileIndex, fileByteSizes, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), files: t("meta.files"), hostname: t("meta.hostname"), type: t("meta.type"), characters: t("meta.characters") }, formatNumber) as fact}
+          {#each metadataFacts(detail, fileIndex, fileByteSizes, { dimensions: t("meta.dimensions"), size: t("meta.size"), file: t("meta.file"), files: t("meta.files"), hostname: t("meta.hostname"), type: t("meta.type"), characters: t("meta.characters"), folder: t("meta.folder") }, formatNumber, fileDirectories) as fact}
             <div><dt>{fact.label}</dt><dd>{#if fact.action === "open-origin"}<button class="domain" title={fact.value} aria-label={t("history.openDomain", { domain: fact.value })} onclick={onopenorigin}>{fact.value}</button>{:else}{fact.value}{/if}</dd></div>
           {/each}
         </dl>
@@ -112,6 +112,8 @@
     </div>
   {:else if selectedId}
     <div class="preview-loading"><span>{t("history.previewLoading")}</span><pre>{page.items.find((item) => item.id === selectedId) ? clipPreview(page.items.find((item) => item.id === selectedId)!, t("meta.file")) : ""}</pre></div>
+  {:else if page.items.length === 0 && !noMatches}
+    <div class="empty brand-empty"><img src="/app-icon-rounded.png" alt="" /></div>
   {:else}
     <div class="empty">{t(page.items.length === 0 ? (noMatches ? "history.noMatchesPreview" : "history.emptyPreview") : "history.select")}</div>
   {/if}
@@ -122,20 +124,19 @@
   .preview.pending { contain:content; }
   .preview-body { flex:1; min-height:0; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:20px; }
   .preview-body.text-preview { align-items:flex-start; justify-content:flex-start; overflow:auto; }
+  .preview-body.file-path-preview { align-items:flex-start; justify-content:flex-start; overflow:auto; }
   .preview-body.text-preview pre { max-height:none; overflow:visible; }
   pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:var(--fs-body)/var(--lh-relaxed) var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
-  .preview-meta { height:64px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
-  .preview.file-preview .preview-meta { height:96px; display:grid; grid-template-rows:minmax(0, 1fr) auto; gap:7px; padding-block:10px; }
-  .meta-summary { min-width:0; width:100%; display:grid; grid-template-columns:minmax(0, 1fr) 200px; align-items:center; gap:20px; }
+  .preview-meta { height:72px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
+  .meta-summary { min-width:0; width:100%; display:grid; grid-template-columns:minmax(0, 1fr) 220px; align-items:center; gap:20px; }
   .meta-source { min-width:0; display:flex; align-items:center; gap:8px; }
   .source-details { min-width:0; display:flex; flex-direction:column; gap:2px; color:var(--text-2); font:var(--fs-ui)/var(--lh-tight) var(--mono); }
-  .source-details span, .meta-file > span, .meta-file code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .source-details time { color:var(--text-3); font-size:var(--fs-caption); }
-  .meta-file { min-width:0; width:100%; display:flex; flex-direction:column; gap:3px; color:var(--text-2); font:var(--fs-meta)/var(--lh-snug) var(--mono); }
-  .meta-facts { min-width:0; width:200px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:0; }
-  .meta-facts div { min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:2px; white-space:nowrap; }
+  .source-details span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .source-details time { color:var(--text-3); font-size:var(--fs-caption); line-height:var(--lh-flush); }
+  .meta-facts { min-width:0; width:220px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin:0; }
+  .meta-facts div { min-width:0; display:flex; flex-direction:column; align-items:flex-end; gap:3px; white-space:nowrap; }
   .meta-facts dt { color:var(--text-3); font:var(--fs-caption)/var(--lh-flush) var(--mono); }
-  .meta-facts dt, .meta-facts dd { max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+  .meta-facts dt, .meta-facts dd { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .meta-facts dd { margin:0; color:var(--text-2); font:var(--fs-meta)/var(--lh-tight) var(--mono); font-variant-numeric:tabular-nums; }
   .domain { display:block; max-width:100%; margin:0; padding:0; overflow:hidden; color:inherit; background:transparent; font:inherit; text-overflow:ellipsis; white-space:nowrap; }
   .domain:hover, .domain:focus-visible { color:var(--text-1); text-decoration:underline; }
@@ -149,7 +150,11 @@
   .asset { display:block; max-width:100%; max-height:100%; border-radius:var(--radius-lg); object-fit:contain; }
   .asset.thumbnail { image-rendering:auto; filter:blur(5px); transform:scale(1.02); }
   .image-placeholder, .empty { flex:1; display:grid; place-items:center; color:var(--text-3); }
-  .file-preview-placeholder { color:var(--text-3); font-size:var(--fs-ui); }
+  .brand-empty img { width:min(42%, 168px); height:auto; }
+  .file-preview-placeholder { display:flex; align-items:center; gap:10px; color:var(--text-3); font-size:var(--fs-ui); }
+  .file-preview-placeholder button { min-height:32px; padding:0 12px; color:var(--text-2); background:transparent; white-space:nowrap; }
+  .file-preview-placeholder button:hover { color:var(--text-1); background:var(--bg-hover); }
+  .file-path { max-width:100%; color:var(--text-2); }
   .file-nav { height:58px; flex:none; display:flex; align-items:center; gap:8px; padding:6px 20px; border-top:1px solid var(--hairline); }
   :global(.file-tabs) { min-width:0; flex:1; }
   :global(.file-strip) { min-width:0; flex:1; display:flex; gap:6px; overflow-x:auto; }

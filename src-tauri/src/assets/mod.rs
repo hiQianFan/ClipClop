@@ -23,6 +23,7 @@ pub struct PreviewResource {
     pub data_url: Option<String>,
     pub byte_size: Option<u64>,
     pub access_denied: bool,
+    pub is_directory: bool,
 }
 
 impl AssetService {
@@ -43,6 +44,7 @@ impl AssetService {
             ),
             byte_size: None,
             access_denied: false,
+            is_directory: false,
         })
     }
 
@@ -53,10 +55,8 @@ impl AssetService {
         }
         let flavors = self.history.flavors(id)?;
         let path = normalized_file_path(&detail, index);
-        let access_denied = path.as_deref().is_some_and(|path| {
-            std::fs::File::open(path)
-                .is_err_and(|error| error.kind() == std::io::ErrorKind::PermissionDenied)
-        });
+        let access_denied = file_access_denied(path.as_deref());
+        let is_directory = path.as_deref().is_some_and(|path| path.is_dir());
         Ok(PreviewResource {
             data_url: platform::preview_asset(&flavors, path.as_deref()),
             byte_size: path
@@ -64,6 +64,7 @@ impl AssetService {
                 .filter(|metadata| metadata.is_file())
                 .map(|metadata| metadata.len()),
             access_denied,
+            is_directory,
         })
     }
 
@@ -73,6 +74,7 @@ impl AssetService {
             data_url: platform::thumbnail_asset(&self.history.flavors(id)?),
             byte_size: None,
             access_denied: false,
+            is_directory: false,
         })
     }
 
@@ -83,6 +85,7 @@ impl AssetService {
                 data_url: None,
                 byte_size: None,
                 access_denied: false,
+                is_directory: false,
             });
         };
         let mut cache = self
@@ -103,8 +106,22 @@ impl AssetService {
             data_url,
             byte_size: None,
             access_denied: false,
+            is_directory: false,
         })
     }
+}
+
+#[cfg(target_os = "macos")]
+fn file_access_denied(path: Option<&std::path::Path>) -> bool {
+    path.is_some_and(|path| {
+        std::fs::File::open(path)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::PermissionDenied)
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn file_access_denied(_path: Option<&std::path::Path>) -> bool {
+    false
 }
 
 #[cfg(test)]
@@ -126,12 +143,14 @@ mod tests {
                 data_url: Some("data:image/png;base64,AA==".into()),
                 byte_size: Some(1),
                 access_denied: false,
+                is_directory: false,
             })
             .unwrap(),
             serde_json::json!({
                 "data_url": "data:image/png;base64,AA==",
                 "byte_size": 1,
-                "access_denied": false
+                "access_denied": false,
+                "is_directory": false
             })
         );
     }
