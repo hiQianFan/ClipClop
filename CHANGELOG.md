@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-09-03
+
+### Added
+
+- Windows 系统预览改用 QuickLook，支持通过 Space 预览文本、图片、链接、颜色和文件。
+- 设置页显示 QuickLook 的安装、版本、兼容性和权限状态，并提供桌面版安装入口。
+
+### Changed
+
+- 系统预览快捷键改为窗口级处理，不再受列表或按钮焦点限制。
+- QuickLook 打开与关闭时，ClipClop 会协调窗口置顶层级与关闭动画，保持两个窗口的视觉顺序一致。
+- 设置页标题栏支持拖动窗口。
+
+### Removed
+
+- 移除 Windows PowerToys Peek 的检测、版本判断、启动和键盘 Hook 逻辑。
+
 ## [0.8.2] - 2026-09-01
 
 ### Changed
