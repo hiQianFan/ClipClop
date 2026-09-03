@@ -208,6 +208,9 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
             log::warn!("show_panel: webview focus request failed: {error}");
         }
         lifecycle.mark_focused(label);
+        if label == QUICK_LABEL {
+            let _ = window.emit("quick_panel_shown", ());
+        }
         return;
     }
 
