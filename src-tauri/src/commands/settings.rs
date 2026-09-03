@@ -62,11 +62,8 @@ pub fn open_repository(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn open_powertoys_install_page(app: AppHandle) -> AppResult<()> {
-    open_url(
-        &app,
-        "https://learn.microsoft.com/windows/powertoys/install",
-    )
+pub fn open_quicklook_install_page(app: AppHandle) -> AppResult<()> {
+    open_url(&app, "https://github.com/QL-Win/QuickLook#-get-started")
 }
 
 #[tauri::command]

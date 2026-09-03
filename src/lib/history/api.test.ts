@@ -21,16 +21,19 @@ describe("history host contracts", () => {
   });
 
   it("reads preview capability from the host", async () => {
-    invoke.mockResolvedValue({ provider: "powertoys_peek", reason: null });
-    await expect(getPreviewCapability()).resolves.toEqual({ provider: "powertoys_peek", reason: null });
+    invoke.mockResolvedValue({ provider: "quicklook", reason: null });
+    await expect(getPreviewCapability()).resolves.toEqual({ provider: "quicklook", reason: null });
     expect(invoke).toHaveBeenCalledWith("get_preview_capability");
   });
 
-  it("limits PowerToys Peek to files without narrowing macOS Quick Look", () => {
-    expect(canPreviewClip({ provider: "powertoys_peek", reason: null }, "file")).toBe(true);
-    expect(canPreviewClip({ provider: "powertoys_peek", reason: null }, "text")).toBe(false);
-    expect(canPreviewClip({ provider: "macos_quicklook", reason: null }, "text")).toBe(true);
-    expect(canPreviewClip({ provider: "unavailable", reason: "not_installed" }, "file")).toBe(false);
+  it("offers every persisted clip type to either native preview provider", () => {
+    for (const provider of ["quicklook", "macos_quicklook"] as const) {
+      for (const contentType of ["file", "image", "text", "link", "color"]) {
+        expect(canPreviewClip({ provider, reason: null, version: provider === "quicklook" ? "4.5.0.0" : null }, contentType)).toBe(true);
+      }
+    }
+    expect(canPreviewClip({ provider: "quicklook", reason: null, version: "4.5.0.0" }, undefined)).toBe(false);
+    expect(canPreviewClip({ provider: "unavailable", reason: "not_installed", version: null }, "file")).toBe(false);
   });
 
   it("asks Rust to open either the full stored link or its origin", async () => {

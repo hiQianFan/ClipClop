@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings, listReleaseNotes, openRepository, platform } = vi.hoisted(() => ({
+const { preview, updateSettings, listReleaseNotes, openRepository, platform, quicklook } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -16,6 +16,11 @@ const { preview, updateSettings, listReleaseNotes, openRepository, platform } = 
   }]),
   openRepository: vi.fn(),
   platform: { value: "windows" as "windows" | "macos" },
+  quicklook: { value: { provider: "unavailable", reason: "not_installed", version: null } as {
+    provider: "macos_quicklook" | "quicklook" | "unavailable";
+    reason: null | "not_installed" | "unsupported_install" | "elevated" | "detection_failed";
+    version: string | null;
+  } },
 }));
 
 vi.mock("./api", () => ({
@@ -28,11 +33,11 @@ vi.mock("./api", () => ({
     skipped_update_version: null,
   }),
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
-  openFilePreviewSettings: vi.fn(), openLogDir: vi.fn(), openRepository,
+  openFilePreviewSettings: vi.fn(), openQuicklookInstallPage: vi.fn(), openLogDir: vi.fn(), openRepository,
 }));
 vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),
-  getPreviewCapability: async () => ({ provider: "unavailable", reason: "not_installed" }),
+  getPreviewCapability: async () => quicklook.value,
 }));
 vi.mock("$lib/onboarding/api", () => ({ openAutoPasteSettings: vi.fn() }));
 vi.mock("./shortcuts", async (importOriginal) => ({
@@ -63,7 +68,14 @@ import SettingsView from "./SettingsView.svelte";
 
 afterEach(() => {
   platform.value = "windows";
+  quicklook.value = { provider: "unavailable", reason: "not_installed", version: null };
   cleanup();
+});
+
+it("provides a non-interactive drag region in the settings header", () => {
+  const { container } = render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(container.querySelector(".settings-header [data-tauri-drag-region]")).toBeTruthy();
+  expect(container.querySelector("button[data-tauri-drag-region]")).toBeNull();
 });
 
 it("keeps loading and saving owned by SettingsView across categories", async () => {
@@ -114,13 +126,33 @@ it("keeps shortcut recording validation, cancellation, defaults, and saving wire
 
 it("renders the platform-specific preview entry", async () => {
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
-  expect(await screen.findByRole("button", { name: "Learn and install" })).toBeTruthy();
+  expect(await screen.findByText("System preview")).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Install QuickLook" })).toBeTruthy();
   cleanup();
   platform.value = "macos";
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   await screen.findByRole("heading", { name: "General" });
   expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(2);
-  expect(screen.queryByRole("button", { name: "Learn and install" })).toBeNull();
+  expect(screen.queryByText("System preview")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Install QuickLook" })).toBeNull();
+});
+
+it("separates QuickLook status labels from recovery actions", async () => {
+  quicklook.value = { provider: "quicklook", reason: null, version: "4.5.0.0" };
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByText("QuickLook 4.5.0.0")).toBeTruthy();
+  expect(screen.getByText("Available")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Available" })).toBeNull();
+
+  cleanup();
+  quicklook.value = { provider: "unavailable", reason: "unsupported_install", version: null };
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByRole("button", { name: "Install desktop version" })).toBeTruthy();
+
+  cleanup();
+  quicklook.value = { provider: "unavailable", reason: "detection_failed", version: null };
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByRole("button", { name: "Check again" })).toBeTruthy();
 });
 
 it("opens the repository from the GitHub icon", async () => {

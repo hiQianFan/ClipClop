@@ -235,6 +235,7 @@
 <div class="settings-shell">
   <header class="settings-header">
     <button class="back-button pressable" aria-label={t("common.back")} onclick={onclose}><ArrowLeft size={15} aria-hidden="true" /><strong>{t("settings.title")}</strong></button>
+    <span class="header-drag" data-tauri-drag-region></span>
     <span class="header-status" aria-live="polite" aria-atomic="true">{status}</span>
     <button class="save-button pressable" class:saved={saveSucceeded} onclick={() => void save()} disabled={!settings || saving} aria-label={saving ? t("settings.saving") : saveSucceeded ? t("settings.saved") : t("common.save")} aria-busy={saving}>{#if saving}<LoaderCircle size={15} class="save-spinner" aria-hidden="true" />{:else if saveSucceeded}<Check size={15} aria-hidden="true" />{:else}<Save size={15} aria-hidden="true" />{/if}</button>
   </header>
@@ -312,4 +313,5 @@
   .settings-shell :global(.clear-confirmation strong){min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .settings-shell :global(.clear-confirmation button){min-width:92px;min-height:32px;padding:0 12px}
   .settings-shell :global(.clear-confirmation .danger){color:var(--danger-on);background:var(--danger-fill);font-weight:600}
+  .header-drag{min-width:24px;flex:1;align-self:stretch}
 </style>

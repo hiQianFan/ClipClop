@@ -172,6 +172,11 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
         return;
     };
 
+    #[cfg(target_os = "windows")]
+    if let Err(error) = window.set_always_on_top(true) {
+        log::warn!("show_panel: failed to restore topmost state: {error}");
+    }
+
     lifecycle.begin_show(label, window.is_focused().unwrap_or(false));
 
     if label == QUICK_LABEL {
@@ -343,6 +348,10 @@ pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, 
     let lifecycle = app.state::<PanelLifecycleState>();
     let label = panel.label().to_string();
     if focused {
+        #[cfg(target_os = "windows")]
+        if let Err(error) = panel.set_always_on_top(true) {
+            log::warn!("failed to restore focused panel topmost state: {error}");
+        }
         app.state::<PreviewState>().set_active(false);
         lifecycle.mark_focused(&label);
         log::debug!("panel focus acquired");
@@ -377,6 +386,51 @@ pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, 
                 }
             }
         });
+    });
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn yield_topmost_for_preview(app: &tauri::AppHandle) {
+    let lifecycle = app.state::<PanelLifecycleState>();
+    for label in [MAIN_LABEL, QUICK_LABEL] {
+        if !lifecycle.is_shown(label) {
+            continue;
+        }
+        if let Some(window) = app.get_webview_window(label) {
+            if let Err(error) = window.set_always_on_top(false) {
+                log::warn!("failed to yield panel topmost state for QuickLook: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn restore_visible_panel_topmost(app: &tauri::AppHandle) {
+    let lifecycle = app.state::<PanelLifecycleState>();
+    for label in [MAIN_LABEL, QUICK_LABEL] {
+        if !lifecycle.is_shown(label) {
+            continue;
+        }
+        if let Some(window) = app.get_webview_window(label) {
+            if let Err(error) = window.set_always_on_top(true) {
+                log::warn!("failed to restore panel topmost state after QuickLook: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn restore_topmost_after_preview_transition(app: &tauri::AppHandle) {
+    const QUICKLOOK_CLOSE_TRANSITION: Duration = Duration::from_millis(260);
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(QUICKLOOK_CLOSE_TRANSITION);
+        let app_for_main = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            restore_visible_panel_topmost(&app_for_main);
+        }) {
+            log::warn!("failed to schedule panel topmost restoration: {error}");
+        }
     });
 }
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { canPreviewClip, getClipThumbnail, getPreviewCapability, hidePanel, pasteClip, previewClip, queryHistory, setQuickSelection, type PreviewCapability } from "./api";
+  import { getClipThumbnail, hidePanel, pasteClip, previewClip, queryHistory, setQuickSelection } from "./api";
   import { fileName } from "./presentation";
   import type { ClipSummary, HistoryPage } from "./types";
   import { localizedError, t } from "$lib/i18n/index.svelte";
@@ -22,7 +22,6 @@
   let thumbnails = $state<Record<string, string>>({});
   let loading = $state(true);
   let error = $state("");
-  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed" });
   let list = $state<HTMLDivElement>();
   let pageScrubber: PageScrubber;
   let scrubberPage = $state<number | null>(null);
@@ -45,11 +44,9 @@
     motionQuery?.addEventListener("change", updateReducedMotion);
     window.addEventListener("pointerup", restoreAfterPointer, true);
     void loadPage(1, "first");
-    void refreshPreviewCapability();
     const unlisten = listen("history_changed", () => void loadPage(1, "first"));
     const unlistenShown = listen("quick_panel_shown", () => {
       void loadPage(1, "first");
-      void refreshPreviewCapability();
       requestAnimationFrame(() => list?.focus());
     });
     requestAnimationFrame(() => list?.focus());
@@ -60,11 +57,6 @@
       unlistenShown.then((fn) => fn());
     };
   });
-
-  async function refreshPreviewCapability() {
-    try { previewCapability = await getPreviewCapability(); }
-    catch { previewCapability = { provider: "unavailable", reason: "detection_failed" }; }
-  }
 
   async function loadPage(target: number, edge: "first" | "last") {
     const version = ++requestVersion;
@@ -126,9 +118,12 @@
   }
 
   function onkeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
     const index = items.findIndex((item) => item.id === selectedId);
     const selected = items[Math.max(index, 0)];
-    const canPreview = canPreviewClip(previewCapability, selected?.content_type);
+    // A capability snapshot is presentation state, not an execution gate. The
+    // backend revalidates QuickLook and the selected path for every request.
+    const canPreview = selected?.content_type !== undefined;
     const action = routeQuickKey(event.key, index, items.length, canPreview, currentPage, totalPages);
     if (!action) return;
     event.preventDefault();
@@ -138,6 +133,10 @@
     else if (action.type === "page") {
       turnPage(action.page < currentPage ? -1 : 1);
     } else selectedId = items[action.index]?.id ?? null;
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === " " || event.code === "Space") onkeydown(event);
   }
 
   function selectFromList(id: string) {
@@ -168,7 +167,7 @@
   }
 </script>
 
-<svelte:window onblur={clearWindowFocus} onfocus={restoreWindowFocus} />
+<svelte:window onkeydown={onWindowKeydown} onblur={clearWindowFocus} onfocus={restoreWindowFocus} />
 
 <main class="quick-shell">
   <section class="quick-panel" aria-label={t("quick.title")}>

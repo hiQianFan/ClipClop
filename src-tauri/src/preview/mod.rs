@@ -19,7 +19,7 @@ use crate::{
 #[serde(rename_all = "snake_case")]
 pub enum PreviewProvider {
     MacosQuicklook,
-    PowertoysPeek,
+    Quicklook,
     Unavailable,
 }
 
@@ -27,14 +27,16 @@ pub enum PreviewProvider {
 #[serde(rename_all = "snake_case")]
 pub enum PreviewUnavailableReason {
     NotInstalled,
+    UnsupportedInstall,
     Elevated,
     DetectionFailed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct PreviewCapability {
     pub provider: PreviewProvider,
     pub reason: Option<PreviewUnavailableReason>,
+    pub version: Option<String>,
 }
 
 impl PreviewCapability {
@@ -42,6 +44,7 @@ impl PreviewCapability {
         Self {
             provider,
             reason: None,
+            version: None,
         }
     }
 
@@ -50,7 +53,14 @@ impl PreviewCapability {
         Self {
             provider: PreviewProvider::Unavailable,
             reason: Some(reason),
+            version: None,
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn with_version(mut self, version: String) -> Self {
+        self.version = Some(version);
+        self
     }
 }
 
@@ -58,11 +68,11 @@ pub fn capability() -> PreviewCapability {
     platform::capability()
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 const ONBOARDING_LOGO: &[u8] = include_bytes!("../../../static/app-icon.png");
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 const ONBOARDING_TEXT: &[u8] = b"ClipClop";
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 const ONBOARDING_LINK: &[u8] = b"https://github.com/hiQianFan/ClipClop";
 
 #[derive(Clone)]
@@ -160,7 +170,7 @@ impl ExternalPreviewService {
         state: &PreviewState,
         example: OnboardingExample,
     ) -> AppResult<bool> {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let (name, extension, bytes) = onboarding_preview(example);
             let path = preview_path(app, name, extension)?;
@@ -169,7 +179,7 @@ impl ExternalPreviewService {
             std::fs::write(&path, bytes).map_err(|error| AppError::Platform(error.to_string()))?;
             platform::toggle_quicklook(app, state, &path)
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (app, example);
             platform::toggle_quicklook(app, state, &PathBuf::new())
@@ -223,7 +233,7 @@ impl ExternalPreviewService {
                 }
                 Ok(path)
             }
-            ContentType::Image if cfg!(target_os = "macos") => {
+            ContentType::Image => {
                 let flavors = self.history.flavors(id)?;
                 let png = flavors
                     .iter()
@@ -233,9 +243,7 @@ impl ExternalPreviewService {
                 self.publish_preview(id, &path, &png.payload)?;
                 Ok(path)
             }
-            ContentType::Text | ContentType::Color | ContentType::Link
-                if cfg!(target_os = "macos") =>
-            {
+            ContentType::Text | ContentType::Color | ContentType::Link => {
                 let path = preview_path(app, id, "txt")?;
                 self.publish_preview(
                     id,
@@ -247,7 +255,6 @@ impl ExternalPreviewService {
                 )?;
                 Ok(path)
             }
-            _ => Err(AppError::NotFound),
         }
     }
 }
@@ -262,7 +269,7 @@ fn web_url(value: &str) -> AppResult<url::Url> {
     }
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn onboarding_preview(example: OnboardingExample) -> (&'static str, &'static str, &'static [u8]) {
     match example {
         OnboardingExample::Image => ("onboarding-image", "png", ONBOARDING_LOGO),

@@ -17,7 +17,8 @@ export const saveLanguagePreference = (language: LanguagePreference) =>
   invoke<LanguagePreference>("set_language_preference", { language });
 
 export type PreviewOutcome = "native_opened" | "native_closed" | "not_previewable";
-export const supportsOnboardingPreview = (platform: "macos" | "windows") => platform === "macos";
+export const supportsOnboardingPreview = (platform: "macos" | "windows") =>
+  platform === "macos" || platform === "windows";
 // Sets native Quick Look to the requested state over a built-in example (no clipboard/DB access).
 export const previewOnboardingExample = (example: OnboardingExample, open: boolean) =>
   invoke<PreviewOutcome>("preview_onboarding_example", { example, open });

@@ -41,8 +41,9 @@ export type PreviewOutcome =
   | "not_previewable";
 
 export type PreviewCapability = {
-  provider: "macos_quicklook" | "powertoys_peek" | "unavailable";
-  reason: null | "not_installed" | "elevated" | "detection_failed";
+  provider: "macos_quicklook" | "quicklook" | "unavailable";
+  reason: null | "not_installed" | "unsupported_install" | "elevated" | "detection_failed";
+  version: string | null;
 };
 
 export function getPreviewCapability(): Promise<PreviewCapability> {
@@ -50,8 +51,7 @@ export function getPreviewCapability(): Promise<PreviewCapability> {
 }
 
 export function canPreviewClip(capability: PreviewCapability, contentType: string | undefined) {
-  return capability.provider === "macos_quicklook"
-    || (capability.provider === "powertoys_peek" && contentType === "file");
+  return contentType !== undefined && capability.provider !== "unavailable";
 }
 
 export function previewClip(id: string, index = 0): Promise<PreviewOutcome> {

@@ -26,7 +26,7 @@
   const isMac = currentPlatform() === "macos";
   let mode = $state<InteractionMode>("browse");
   let previewExternal = false;
-  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed" });
+  let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed", version: null });
   let confirmationInvoker: HTMLElement | null = null;
   let fileIndex = $state(0);
   let trimWhitespace = $state(false);
@@ -102,11 +102,15 @@
 
   async function refreshPreviewCapability() {
     try { previewCapability = await getPreviewCapability(); }
-    catch { previewCapability = { provider: "unavailable", reason: "detection_failed" }; }
+    catch { previewCapability = { provider: "unavailable", reason: "detection_failed", version: null }; }
   }
 
   function canPreviewSelected() {
     return canPreviewClip(previewCapability, session.detail?.content_type);
+  }
+
+  function canRequestPreviewSelected() {
+    return session.detail?.content_type !== undefined;
   }
 
   async function syncSettings() {
@@ -507,7 +511,7 @@
       event.preventDefault();
       if (session.page.page < session.page.total_pages) listbox?.turnPage(1);
     }
-    else if ((event.key === " " || event.code === "Space") && canPreviewSelected()) {
+    else if ((event.key === " " || event.code === "Space") && canRequestPreviewSelected()) {
       event.preventDefault();
       void viewSelectedClip();
     }
@@ -596,6 +600,18 @@
   }
 
   function onWindowKeydown(event: KeyboardEvent) {
+    if (
+      !event.defaultPrevented &&
+      (event.key === " " || event.code === "Space") &&
+      !event.ctrlKey && !event.metaKey && !event.altKey &&
+      view === "history" && mode === "browse" &&
+      !menuOpen && !appMenuOpen && !deletePending &&
+      canRequestPreviewSelected()
+    ) {
+      event.preventDefault();
+      void viewSelectedClip();
+      return;
+    }
     const action = routeWindowKey(event, { view, mode, deletePending, menuOpen, appMenuOpen });
     if (!action) return;
     event.preventDefault();

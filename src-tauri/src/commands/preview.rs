@@ -47,6 +47,7 @@ pub fn preview_clip(
     id: String,
     index: Option<usize>,
 ) -> AppResult<PreviewOutcome> {
+    log::info!("preview requested: index={}", index.unwrap_or(0));
     preview_clip::preview(
         &app,
         &preview_state,
