@@ -133,7 +133,8 @@ it("renders the platform-specific preview entry", async () => {
   platform.value = "macos";
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   await screen.findByRole("heading", { name: "General" });
-  expect(screen.getAllByRole("button", { name: "Manage" })).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "Manage" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Open Settings" })).toBeTruthy();
   expect(screen.queryByText("System preview")).toBeNull();
   expect(screen.queryByRole("button", { name: "Install QuickLook" })).toBeNull();
 });

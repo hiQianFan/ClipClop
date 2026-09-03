@@ -288,15 +288,22 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
 }
 
 fn clipboard_image(context: &ClipboardContext) -> Option<clipboard_rs::RustImageData> {
-    ["public.png", "PNG", "image/png", "public.tiff", "TIFF", "image/tiff"]
-        .into_iter()
-        .find_map(|format| {
-            context
-                .get_buffer(format)
-                .ok()
-                .and_then(|payload| clipboard_rs::RustImageData::from_bytes(&payload).ok())
-        })
-        .or_else(|| context.get_image().ok())
+    [
+        "public.png",
+        "PNG",
+        "image/png",
+        "public.tiff",
+        "TIFF",
+        "image/tiff",
+    ]
+    .into_iter()
+    .find_map(|format| {
+        context
+            .get_buffer(format)
+            .ok()
+            .and_then(|payload| clipboard_rs::RustImageData::from_bytes(&payload).ok())
+    })
+    .or_else(|| context.get_image().ok())
 }
 
 fn classify_text(text: &str) -> ContentType {
