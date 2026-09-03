@@ -18,24 +18,24 @@ colors:
   danger-on: "#ffffff"
 typography:
   heading:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif"
-    fontSize: "18px"
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable, Segoe UI, system-ui, sans-serif"
+    fontSize: "20px"
     fontWeight: 680
     lineHeight: 1.3
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "SF Mono, Cascadia Mono, ui-monospace, Menlo, monospace"
-    fontSize: "13px"
+    fontFamily: "ui-monospace, SF Mono, Cascadia Code, JetBrains Mono, Consolas, monospace"
+    fontSize: "14px"
     fontWeight: 400
-    lineHeight: 1.5
+    lineHeight: 1.6
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, sans-serif"
-    fontSize: "12px"
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable, Segoe UI, system-ui, sans-serif"
+    fontSize: "13px"
     fontWeight: 600
-    lineHeight: 1.4
+    lineHeight: 1.5
   caption:
-    fontFamily: "SF Mono, Cascadia Mono, ui-monospace, Menlo, monospace"
-    fontSize: "10px"
+    fontFamily: "ui-monospace, SF Mono, Cascadia Code, JetBrains Mono, Consolas, monospace"
+    fontSize: "11px"
     fontWeight: 400
     lineHeight: 1
 rounded:
@@ -140,20 +140,20 @@ A near-neutral, faintly cool graphite palette. There is no brand hue — restrai
 
 ## 3. Typography
 
-**Content Font:** SF Mono / Cascadia Mono / ui-monospace (with Menlo fallback)
-**Chrome Font:** system-ui stack — -apple-system, BlinkMacSystemFont, Segoe UI
+**Content Font:** ui-monospace / SF Mono / Cascadia Code (with JetBrains Mono and Consolas fallback)
+**Chrome Font:** system-ui stack — -apple-system, BlinkMacSystemFont, Segoe UI Variable, Segoe UI
 
 **Character:** A deliberate two-family split by *role*, not by decoration. Monospace carries anything the user copied or that must align (snippets, paths, keycaps, counts, timestamps); the platform sans carries anything that is chrome (headings, nav, toggle labels). This is the opposite of a display/body pairing — both families are utilitarian, and the contrast axis is content-vs-chrome.
 
-The scale is **fixed px, not fluid** — correct for a product UI viewed at consistent DPI. Steps are close at the bottom (10 / 11 / 12 / 13 px) because at small sizes a single pixel is a real hierarchy step in a dense tool; they open up only for the single heading role.
+The scale is **fixed px, not fluid** — correct for a product UI viewed at consistent DPI. Steps are close at the bottom (11 / 12 / 13 / 14 px) because at small sizes a single pixel is a real hierarchy step in a dense tool; they open up only for the single heading role.
 
 ### Hierarchy
-- **Heading** (sans, 680, 18px, lh 1.3, tracking −0.01em): The one heading size — settings section titles (h1) and the onboarding hero share it.
-- **Emphasis** (sans, 600, 14px): Window and update-card titles — the one mid-weight step.
-- **Body** (mono, 400, 13px, lh 1.5): Clipboard snippets, search input, preview text. Preview prose runs at lh 1.65.
-- **UI Label** (sans, 600, 12px, lh 1.4): The workhorse — nav, buttons, toggle labels, menu items.
-- **Meta** (mono, 400, 11px): Secondary meta, hints, file sub-rows.
-- **Caption** (mono, 400, 10px, lh 1): Timestamps, metric labels, keycaps.
+- **Heading** (sans, 680, 20px, lh 1.3, tracking −0.01em): The one heading size — settings section titles (h1) and the onboarding hero share it.
+- **Emphasis** (sans, 600, 15px): Window and update-card titles — the one mid-weight step.
+- **Body** (mono, 400, 14px, lh 1.6): Clipboard snippets, search input, preview text. Preview prose runs at lh 1.75.
+- **UI Label** (sans, 600, 13px, lh 1.5): The workhorse — nav, buttons, toggle labels, menu items.
+- **Meta** (mono, 400, 12px): Secondary meta, hints, file sub-rows.
+- **Caption** (mono, 400, 11px, lh 1): Timestamps, metric labels, keycaps.
 
 ### Named Rules
 **The Content-Is-Mono Rule.** If the text is something the user copied, or a path, count, or key, it is monospace. If it is a label the app authored, it is sans. No exceptions.
