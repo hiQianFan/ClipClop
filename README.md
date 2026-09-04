@@ -3,9 +3,9 @@
 
   # ClipClop
 
-  **Your clipboard, always one shortcut away.**
+  **Two quick steps, always within reach.**
 
-  Clipboard history without breaking your flow.
+  Everything you copy, saved locally forever. Never lost.
 
   [![Quality](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
   [![Release](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
@@ -14,7 +14,7 @@
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
   [![License](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-  [Download](https://github.com/hiQianFan/ClipClop/releases) · [Features](#speed-shouldnt-cost-you-privacy) · [Privacy](#privacy-and-security-you-can-verify) · [简体中文](README.zh-CN.md)
+  [Download](https://clipclop.io/download) · [Features](#speed-shouldnt-cost-you-privacy) · [Privacy](#privacy-and-security-you-can-verify) · [简体中文](README.zh-CN.md)
 </div>
 
 ## Never lose a copy again
@@ -44,7 +44,7 @@ The global shortcut is customizable. If direct paste is unavailable, ClipClop le
 
 ## Download
 
-Download the latest version from [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases):
+Download the latest version from the [ClipClop website](https://clipclop.io/download):
 
 - **macOS:** Universal DMG for Apple Silicon and Intel
 - **Windows:** x64 installer

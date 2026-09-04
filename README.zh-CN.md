@@ -3,9 +3,9 @@
 
   # ClipClop
 
-  **马不停贴。**
+  **马不停贴，哒哒两步，快速粘贴。**
 
-  剪贴历史，一键即达。
+  复制过的内容，本地永久保存，永不丢失。
 
   [![构建状态](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
   [![版本](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
@@ -14,7 +14,7 @@
   [![Stars](https://img.shields.io/github/stars/hiQianFan/ClipClop?style=flat)](https://github.com/hiQianFan/ClipClop/stargazers)
   [![开源许可](https://img.shields.io/github/license/hiQianFan/ClipClop)](LICENSE)
 
-  [下载](https://github.com/hiQianFan/ClipClop/releases) · [产品亮点](#快不必以隐私为代价) · [隐私](#隐私与安全公开可验证) · [English](README.md)
+  [下载](https://clipclop.io/download) · [产品亮点](#快不必以隐私为代价) · [隐私](#隐私与安全公开可验证) · [English](README.md)
 </div>
 
 ## 不再弄丢复制过的内容
@@ -44,7 +44,7 @@ ClipClop 记住你复制过的文本、链接、颜色、图片和文件。按�
 
 ## 下载
 
-前往 [GitHub Releases](https://github.com/hiQianFan/ClipClop/releases) 下载最新版本：
+前往 [ClipClop 官网](https://clipclop.io/download)下载最新版本：
 
 - **macOS：**同时支持 Apple Silicon 与 Intel 的 Universal DMG
 - **Windows：**x64 安装程序
