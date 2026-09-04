@@ -119,8 +119,10 @@
       restoreBrowsePosition = settings.restore_browse_position;
       preserveSearchConditions = settings.preserve_search_conditions;
       trimWhitespace = settings.trim_whitespace;
+      return true;
     } catch (reason) {
       error = localizedError(reason);
+      return false;
     }
   }
 
@@ -397,7 +399,10 @@
   }
 
   async function closeSettingsView() {
-    await syncSettings();
+    if (await syncSettings() && !restoreBrowsePosition) {
+      await resetToLatest();
+      return;
+    }
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     view = "history";
     mode = "browse";
