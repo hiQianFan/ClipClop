@@ -3,7 +3,7 @@
 
   # ClipClop
 
-  **Two quick steps, always within reach.**
+  **Clip-clip, clop-clop. Two steps, fast.**
 
   Everything you copy, saved locally forever. Never lost.
 
@@ -58,7 +58,7 @@ ClipClop has no account, telemetry, advertising, cloud clipboard, or network enr
 
 ClipClop is fully open source, so anyone can inspect how clipboard content is handled, where data is stored, and when the app accesses the network. Open source is not an automatic guarantee of security, but it makes ClipClop's privacy boundaries and security claims verifiable rather than something you have to take on trust.
 
-Delete individual items, clear the history, limit it by age and item count, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice](PRIVACY.md).
+Delete individual items, clear the history, limit it by age and item count, or quit ClipClop to stop capture. For the exact data-handling details, read the [privacy notice](https://clipclop.io/privacy) ([repo version](PRIVACY.md)).
 
 <details>
 <summary><strong>For contributors</strong></summary>
