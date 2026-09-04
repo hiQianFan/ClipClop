@@ -53,7 +53,7 @@ pub fn open_log_dir(app: AppHandle) -> AppResult<()> {
 
 #[tauri::command]
 pub fn open_release_page(app: AppHandle) -> AppResult<()> {
-    open_url(&app, "https://github.com/hiQianFan/ClipClop/releases")
+    open_url(&app, "https://clipclop.io/changelog")
 }
 
 #[tauri::command]

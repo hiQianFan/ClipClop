@@ -195,7 +195,7 @@ jobs:
 
           mac_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$mac_signature")"
           windows_manifest_signature="$(tr -d '\r\n' < "$manifest_dir/$windows_signature")"
-          release_base="https://clipclop.mapin.net/releases/v$RELEASE_VERSION"
+          release_base="https://clipclop.io/releases/v$RELEASE_VERSION"
           release_notes_file="docs/release-notes/v$RELEASE_VERSION.md"
           test -s "$release_notes_file"
           release_notes="$(cat "$release_notes_file")"
