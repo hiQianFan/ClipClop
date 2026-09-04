@@ -110,19 +110,12 @@ it("rolls editable settings back when saving fails", async () => {
   await waitFor(() => expect((screen.getByRole("switch", { name: "Launch at login" }) as HTMLInputElement).checked).toBe(false));
 });
 
-it("keeps shortcut recording validation, cancellation, defaults, and saving wired", async () => {
-  updateSettings.mockClear();
+it("shows the global shortcut as reference-only", async () => {
   render(SettingsView, { props: { initialTab: "shortcuts", onclose() {}, oncleared() {}, onquickstart() {} } });
   await screen.findByRole("heading", { name: "Shortcuts" });
-  const change = screen.getByRole("button", { name: "Change" });
-  await fireEvent.click(change);
-  await fireEvent.keyDown(change, { key: "v", code: "KeyV", ctrlKey: true });
-  expect(screen.getByRole("alert").textContent).toContain("common system or window shortcut");
-  await fireEvent.keyDown(change, { key: "Escape" });
-  expect(screen.getByText("Shortcut recording cancelled")).toBeTruthy();
-  await fireEvent.click(screen.getByRole("button", { name: "Restore default" }));
-  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
-  await waitFor(() => expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ hotkey: "Ctrl+Alt+C" })));
+  expect(screen.getByLabelText("Current shortcut: Control plus Shift plus V")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Restore default" })).toBeNull();
 });
 
 it("renders the platform-specific preview entry", async () => {

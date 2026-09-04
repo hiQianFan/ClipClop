@@ -28,14 +28,12 @@
   const appVersion = $derived(updateStore.appVersion);
   let confirmClear = $state(false);
   let navFocusRing = $state(false);
-  let recording = $state(false);
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
   let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
   let confirmClearButton = $state<HTMLButtonElement | null>(null);
-  let recorder = $state<HTMLButtonElement>();
   const platform: ShortcutPlatform = currentPlatform();
   const retentionItems = $derived([
     ...[1, 7, 30, 90].map((count) => ({ value: String(count), label: t("settings.days", { count: formatNumber(count) }) })),
@@ -94,7 +92,6 @@
 
   function selectTab(next: Tab) {
     tab = next;
-    recording = false;
   }
 
   async function focusDetail() {
@@ -118,7 +115,6 @@
   function onContentKeydown(event: KeyboardEvent) {
     if (
       event.key !== "ArrowLeft"
-      || recording
       || event.defaultPrevented
       || event.target instanceof HTMLInputElement
       || event.target instanceof HTMLSelectElement
@@ -144,7 +140,6 @@
       savedSettings = { ...saved };
       setLanguagePreference(saved.language);
       applyTheme(saved.theme);
-      recording = false;
       saveSucceeded = true;
       saveFeedbackTimer = setTimeout(() => saveSucceeded = false, 1600);
     } catch (reason) {
@@ -154,7 +149,6 @@
         setLanguagePreference(savedSettings.language);
       }
       status = t("settings.saveFailed", { error: localizedError(reason) });
-      if (tab === "shortcuts") recorder?.focus();
     } finally {
       saving = false;
     }
@@ -220,8 +214,7 @@
     if (event.defaultPrevented) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      if (recording) { recording = false; status = t("settings.recordCancelled"); }
-      else if (confirmClear) cancelClear();
+      if (confirmClear) cancelClear();
       else onclose();
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -269,7 +262,7 @@
           <div class="row"><span><strong>{t("settings.theme")}</strong><small>{t("settings.appearanceHelp")}</small></span><AppSelect value={settings.theme} items={themeItems} ariaLabel={t("settings.theme")} onchange={changeTheme} /></div>
           <div class="row"><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><AppSelect value={settings.language} items={languageItems} ariaLabel={t("settings.language")} onchange={changeLanguage} /></div>
         {:else if panelTab === "shortcuts"}
-          <ShortcutSettings bind:settings {platform} onstatus={(message) => status = message} bind:heading={sectionHeading} bind:recorder bind:recording />
+          <ShortcutSettings {settings} {platform} bind:heading={sectionHeading} />
         {:else if panelTab === "updates"}
           <UpdateSettings bind:settings onchecked={checkUpdates} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else}
@@ -314,4 +307,6 @@
   .settings-shell :global(.clear-confirmation button){min-width:92px;min-height:32px;padding:0 12px}
   .settings-shell :global(.clear-confirmation .danger){color:var(--danger-on);background:var(--danger-fill);font-weight:600}
   .header-drag{min-width:24px;flex:1;align-self:stretch}
+  .settings-header{gap:10px}
+  .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
 </style>
