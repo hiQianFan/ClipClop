@@ -15,3 +15,8 @@
 - Use `@iconify/svelte/dist/OfflineIcon.svelte` with locally imported `@iconify-icons/simple-icons/*` data for brand logos.
 - Never pass string icon names to Iconify; they fetch from the public API at runtime and break the app's offline-first contract.
 - Do not hand-author SVG markup when either approved source contains the icon. Keep accessible names on the owning control; decorative icon components use `aria-hidden="true"`.
+
+## Python tooling
+
+- Run project Python scripts through `uv`; do not call the system `python` or `python3` directly.
+- In restricted environments, point uv's cache and Python install directory at a writable project or temporary directory instead of the user home directory.
