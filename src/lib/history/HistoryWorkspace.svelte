@@ -13,7 +13,7 @@
   import HistoryActionBar from "$lib/history/HistoryActionBar.svelte";
   import { getSettings, openFilePreviewSettings, quitApp } from "$lib/settings/api";
   import { currentPlatform } from "$lib/settings/shortcuts";
-  import { effectiveLocale, localizedError, t } from "$lib/i18n/index.svelte";
+  import { effectiveLocale, localizedError, localizedPasteOutcome, t } from "$lib/i18n/index.svelte";
   import SettingsView from "$lib/settings/SettingsView.svelte";
   import { updateStore } from "$lib/updater/store.svelte";
   import OnboardingView from "$lib/onboarding/OnboardingView.svelte";
@@ -215,7 +215,7 @@
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
     try {
-      await pasteClip(session.selectedId, plainText);
+      error = localizedPasteOutcome(await pasteClip(session.selectedId, plainText));
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();

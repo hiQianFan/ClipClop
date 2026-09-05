@@ -25,6 +25,7 @@ pub fn open_auto_paste_settings(app: AppHandle) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     {
         use tauri_plugin_opener::OpenerExt;
+        crate::paste::request_accessibility_permission();
         app.opener()
             .open_url(
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",

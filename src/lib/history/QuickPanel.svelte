@@ -4,7 +4,7 @@
   import { getClipThumbnail, hidePanel, pasteClip, previewClip, queryHistory, setQuickSelection } from "./api";
   import { fileName } from "./presentation";
   import type { ClipSummary, HistoryPage } from "./types";
-  import { localizedError, t } from "$lib/i18n/index.svelte";
+  import { localizedError, localizedPasteOutcome, t } from "$lib/i18n/index.svelte";
   import { quitApp } from "$lib/settings/api";
   import { currentPlatform } from "$lib/settings/shortcuts";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
@@ -111,7 +111,7 @@
     if (!item) return;
     selectedId = item.id;
     try {
-      await pasteClip(item.id);
+      error = localizedPasteOutcome(await pasteClip(item.id));
     } catch (reason) {
       error = localizedError(reason) || t("quick.copyFailed");
     }

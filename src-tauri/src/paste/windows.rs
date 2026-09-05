@@ -18,6 +18,10 @@ use windows_sys::Win32::{
 
 const MODIFIER_RELEASE_TIMEOUT: Duration = Duration::from_millis(1_000);
 
+pub(super) fn can_inject() -> bool {
+    true
+}
+
 pub(super) fn capture_target() -> Option<PasteTarget> {
     unsafe {
         let hwnd = GetForegroundWindow();

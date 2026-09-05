@@ -20,6 +20,7 @@ const FIRST_RESPONDER_SETTLE_DELAY: Duration = Duration::from_millis(60);
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     fn CGPreflightPostEventAccess() -> bool;
+    fn CGRequestPostEventAccess() -> bool;
     fn CGEventSourceCreate(state_id: i32) -> *mut c_void;
     fn CGEventCreateKeyboardEvent(
         source: *mut c_void,
@@ -29,6 +30,16 @@ extern "C" {
     fn CGEventSetFlags(event: *mut c_void, flags: u64);
     fn CGEventPost(tap: u32, event: *mut c_void);
     fn CFRelease(value: *const c_void);
+}
+
+pub(super) fn can_inject() -> bool {
+    unsafe { CGPreflightPostEventAccess() }
+}
+
+pub(super) fn request_accessibility_permission() {
+    unsafe {
+        CGRequestPostEventAccess();
+    }
 }
 
 pub(super) fn capture_target() -> Option<PasteTarget> {
@@ -85,7 +96,7 @@ pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
         return PasteOutcome::CopiedFocusFailed;
     }
 
-    if !unsafe { CGPreflightPostEventAccess() } {
+    if !can_inject() {
         log::warn!("automatic paste event access denied: target_pid={pid}");
         return PasteOutcome::CopiedPermissionRequired;
     }

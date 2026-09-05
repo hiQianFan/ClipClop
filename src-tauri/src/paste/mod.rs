@@ -76,6 +76,10 @@ impl PasteController {
         Some(InFlightGuard(&self.in_flight))
     }
 
+    pub(crate) fn can_inject(&self) -> bool {
+        platform::can_inject()
+    }
+
     pub(crate) fn paste_to_target(&self, _guard: InFlightGuard<'_>) -> PasteOutcome {
         let target = self.target.lock().ok().and_then(|target| *target);
         let Some(target) = target else {
@@ -83,6 +87,11 @@ impl PasteController {
         };
         platform::paste(target)
     }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn request_accessibility_permission() {
+    macos::request_accessibility_permission();
 }
 
 pub(crate) struct InFlightGuard<'a>(&'a AtomicBool);

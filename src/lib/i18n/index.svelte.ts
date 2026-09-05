@@ -1,5 +1,6 @@
 import { en, zhCN, type MessageKey } from "./catalogs";
 import type { LanguagePreference } from "$lib/settings/api";
+import type { PasteOutcome } from "$lib/history/api";
 
 export type EffectiveLocale = "en" | "zh-CN";
 type PlaceholderNames<Value extends string> =
@@ -80,6 +81,18 @@ function errorCode(reason: unknown) {
 
 export function localizedError(reason: unknown) {
   return t(errorKeys[errorCode(reason)] ?? "error.unknown");
+}
+
+export function localizedPasteOutcome(outcome: PasteOutcome) {
+  const keys = {
+    copied_permission_required: "paste.permission",
+    copied_target_lost: "paste.targetLost",
+    copied_focus_failed: "paste.focusFailed",
+    copied_injection_failed: "paste.injectionFailed",
+    already_in_progress: "paste.inProgress",
+    copied_unsupported_platform: "paste.unsupported",
+  } as const;
+  return outcome === "pasted" ? "" : t(keys[outcome]);
 }
 
 // The updater surfaces plain Error/string failures from the Tauri plugin (network,
