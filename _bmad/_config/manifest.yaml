@@ -1,0 +1,59 @@
+installation:
+  version: 6.12.0
+  installDate: 2026-09-05T06:18:18.593Z
+  lastUpdated: 2026-09-05T06:18:18.593Z
+  installShims: false
+modules:
+  - name: core
+    version: 6.12.0
+    installDate: 2026-09-05T06:18:18.261Z
+    lastUpdated: 2026-09-05T06:18:18.588Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: bmm
+    version: 6.12.0
+    installDate: 2026-09-05T06:18:18.326Z
+    lastUpdated: 2026-09-05T06:18:18.588Z
+    source: built-in
+    npmPackage: null
+    repoUrl: null
+  - name: cis
+    version: v0.3.2
+    installDate: 2026-09-05T06:18:18.339Z
+    lastUpdated: 2026-09-05T06:18:18.589Z
+    source: external
+    npmPackage: bmad-creative-intelligence-suite
+    repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
+    channel: stable
+    sha: 97298b22fee1c7e482710d3a8414adb5cfccccd9
+  - name: tea
+    version: v1.24.0
+    installDate: 2026-09-05T06:18:18.513Z
+    lastUpdated: 2026-09-05T06:18:18.590Z
+    source: external
+    npmPackage: bmad-method-test-architecture-enterprise
+    repoUrl: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
+    channel: stable
+    sha: 7ba2130193c473b53d2e323b4da9a80697eef88e
+  - name: bmad-loop
+    version: v0.11.1
+    installDate: 2026-09-05T06:18:18.521Z
+    lastUpdated: 2026-09-05T06:18:18.591Z
+    source: external
+    npmPackage: null
+    repoUrl: https://github.com/bmad-code-org/bmad-loop
+    channel: stable
+    sha: bb7cebec4ee4f0fa2783a56ffd0b1b8bc67c4ec5
+  - name: bmb
+    version: v2.2.2
+    installDate: 2026-09-05T06:18:18.552Z
+    lastUpdated: 2026-09-05T06:18:18.593Z
+    source: external
+    npmPackage: bmad-builder
+    repoUrl: https://github.com/bmad-code-org/bmad-builder
+    channel: stable
+    sha: 4a1422274a2acb0fb0ec0511753da6263948f072
+ides:
+  - claude-code
+  - codex
