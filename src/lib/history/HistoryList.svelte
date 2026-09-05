@@ -220,6 +220,7 @@
   :global(.clear-filters) { width:100%; margin-top:10px; border-top:1px solid var(--hairline); border-radius:0 0 var(--radius-md) var(--radius-md); }
   .list { flex:1; min-height:0; display:flex; flex-direction:column; gap:1px; padding:6px; overflow-y:auto; }
   .list:focus-visible { outline:none; }
+  .empty:focus, .empty-state:focus { outline:none; }
   .empty-state { flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:24px; color:var(--text-2); text-align:center; }
   .empty-state strong { color:var(--text-1); font:600 var(--fs-body)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
   .empty-state span { max-width:28ch; font:var(--fs-ui)/var(--lh-normal) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }

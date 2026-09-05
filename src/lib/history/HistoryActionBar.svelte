@@ -2,6 +2,7 @@
   import { AlertDialog, DropdownMenu } from "bits-ui";
   import { t } from "$lib/i18n/index.svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import ActionToolbar from "$lib/components/ActionToolbar.svelte";
 
   let {
     selected,
@@ -68,18 +69,18 @@
 </script>
 
 <AlertDialog.Root open={deletePending} onOpenChange={ondeleteopenchange}>
-  <footer class="actions">
+  <ActionToolbar class="actions">
     {#if deletePending}
       <AlertDialog.Content class="confirmation" aria-label={t("history.confirmDeleteLabel")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); onrestorefocus(); }}>
         <span>{t("history.confirmDelete")}<small>{t("history.confirmDeleteHelp")}</small></span>
-        <AlertDialog.Cancel class="ghost pressable" onclick={oncanceldelete}>{t("common.cancel")} <ShortcutHint shortcut="Escape" variant="compact" /></AlertDialog.Cancel>
-        <AlertDialog.Action bind:ref={confirmButton} class="destructive pressable" onclick={onconfirmdelete}>{t("history.delete")} <ShortcutHint shortcut="Enter" platform={isMac ? "macos" : "windows"} inherit /></AlertDialog.Action>
+        <AlertDialog.Cancel class="toolbar-button pressable" onclick={oncanceldelete}>{t("common.cancel")} <ShortcutHint shortcut="Escape" variant="compact" /></AlertDialog.Cancel>
+        <AlertDialog.Action bind:ref={confirmButton} class="toolbar-button destructive pressable" onclick={onconfirmdelete}>{t("history.delete")} <ShortcutHint shortcut="Enter" platform={isMac ? "macos" : "windows"} inherit /></AlertDialog.Action>
       </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
       <DropdownMenu.Root open={menuOpen} onOpenChange={onmenuopenchange}>
         <div class="menu-wrap">
-          <DropdownMenu.Trigger bind:ref={menuButton} class={`ghost action-menu-trigger pressable${menuOpen ? " expanded" : ""}`} disabled={!selected}>
+          <DropdownMenu.Trigger bind:ref={menuButton} class={`toolbar-button secondary action-menu-trigger pressable${menuOpen ? " expanded" : ""}`} disabled={!selected}>
             {#snippet child({ props: triggerProps })}
               <button
                 {...triggerProps}
@@ -101,20 +102,15 @@
           </DropdownMenu.ContentStatic>
         </div>
       </DropdownMenu.Root>
-      <button class="copy pressable" onclick={onpaste} disabled={!selected}><ShortcutHint shortcut="Enter" platform={isMac ? "macos" : "windows"} inherit /> {t("history.paste")}</button>
+      <button class="toolbar-button primary pressable" onclick={onpaste} disabled={!selected}><ShortcutHint shortcut="Enter" platform={isMac ? "macos" : "windows"} inherit /> {t("history.paste")}</button>
     {/if}
-  </footer>
+  </ActionToolbar>
 </AlertDialog.Root>
 
 <style>
-  .actions { grid-column:2; grid-row:3; display:flex; align-items:center; justify-content:flex-end; gap:12px; padding:0 16px; border-top:1px solid var(--hairline); }
-  .copy, .actions :global(.ghost), .actions :global(.destructive) { display:flex; align-items:center; gap:6px; border-radius:var(--radius-md); color:var(--text-2); background:transparent; padding:7px 10px; }
-  .copy { color:var(--action-on); background:var(--action); padding-inline:15px; font-weight:650; }
-  .copy:hover { background:var(--action-hover); }
-  .actions :global(.ghost:hover), .actions :global(.ghost.expanded) { color:var(--text-1); background:var(--bg-hover); }
-  .actions :global(.action-menu-trigger) { border:1px solid var(--hairline); }
-  .actions :global(.ghost:active), .actions :global(.ghost.expanded:active) { background:var(--bg-selected); }
-  .actions :global(.destructive) { color:var(--danger-on); background:var(--danger-fill); font-weight:600; }
+  :global(.actions) { grid-column:2; grid-row:3; }
+  .actions :global(.action-menu-trigger.expanded) { color:var(--text-1); background:var(--bg-hover); }
+  .actions :global(.action-menu-trigger:active), .actions :global(.action-menu-trigger.expanded:active) { background:var(--bg-selected); }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
   .menu-wrap :global(.menu) { position:absolute; right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
@@ -127,8 +123,6 @@
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
   .actions :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  .actions :global(.confirmation button) { min-width:92px; min-height:32px; justify-content:center; padding:0 12px; }
-  .actions :global(.confirmation .ghost) { border:1px solid var(--hairline); }
   .actions :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
   .actions :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
 </style>
