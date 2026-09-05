@@ -88,8 +88,18 @@ pub fn hide_panel(app: AppHandle, panel: WebviewWindow) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn show_full_panel(app: AppHandle, selected_id: Option<String>, settings: Option<bool>) {
-    window::open_full_panel(&app, selected_id, settings.unwrap_or(false));
+pub fn show_full_panel(
+    app: AppHandle,
+    selected_id: Option<String>,
+    settings: Option<bool>,
+    permission_guide: Option<bool>,
+) {
+    window::open_full_panel(
+        &app,
+        selected_id,
+        settings.unwrap_or(false),
+        permission_guide.unwrap_or(false),
+    );
 }
 
 #[tauri::command]

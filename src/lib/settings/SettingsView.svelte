@@ -19,7 +19,7 @@
   type Tab = "general" | "history" | "appearance" | "shortcuts" | "updates" | "about";
   const tabs: Tab[] = ["general", "history", "appearance", "shortcuts", "updates", "about"];
 
-  let { initialTab = "general", onclose, oncleared, onquickstart }: { initialTab?: Tab; onclose: () => void; oncleared: () => void; onquickstart: () => void } = $props();
+  let { initialTab = "general", onclose, oncleared, onquickstart, onautopaste = onquickstart }: { initialTab?: Tab; onclose: () => void; oncleared: () => void; onquickstart: () => void; onautopaste?: () => void } = $props();
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("general");
   let status = $state("");
@@ -247,7 +247,7 @@
     <Tabs.Content value={panelTab} class={`settings-content${panelTab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
       {#if settings}
         {#if panelTab === "general"}
-          <GeneralSettings bind:settings {platform} {onquickstart} onerror={(message) => status = message} bind:heading={sectionHeading} />
+          <GeneralSettings bind:settings {platform} {onquickstart} {onautopaste} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else if panelTab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>

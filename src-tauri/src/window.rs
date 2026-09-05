@@ -63,6 +63,7 @@ pub struct QuickSelectionState(Mutex<Option<String>>);
 struct MainPanelRequest {
     selected_id: Option<String>,
     settings: bool,
+    permission_guide: bool,
 }
 
 impl QuickSelectionState {
@@ -122,7 +123,12 @@ pub(crate) fn show_full_panel(app: &tauri::AppHandle) {
     emit_main_request(app, MainPanelRequest::default());
 }
 
-pub(crate) fn open_full_panel(app: &tauri::AppHandle, selected_id: Option<String>, settings: bool) {
+pub(crate) fn open_full_panel(
+    app: &tauri::AppHandle,
+    selected_id: Option<String>,
+    settings: bool,
+    permission_guide: bool,
+) {
     if app.state::<PanelLifecycleState>().is_shown(QUICK_LABEL) {
         let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
     }
@@ -132,6 +138,7 @@ pub(crate) fn open_full_panel(app: &tauri::AppHandle, selected_id: Option<String
         MainPanelRequest {
             selected_id,
             settings,
+            permission_guide,
         },
     );
 }
@@ -337,7 +344,7 @@ pub(crate) fn toggle_panel(app: &tauri::AppHandle) {
     if lifecycle.is_shown(QUICK_LABEL) {
         let selected_id = app.state::<QuickSelectionState>().get();
         let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
-        open_full_panel(app, selected_id, false);
+        open_full_panel(app, selected_id, false, false);
     } else if lifecycle.is_shown(MAIN_LABEL) {
         if let Err(error) = hide_panel(app, MAIN_LABEL, HideReason::Shortcut) {
             log::warn!("failed to hide panel from shortcut: {error}");

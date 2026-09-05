@@ -38,6 +38,14 @@ pub enum PasteOutcome {
     CopiedUnsupportedPlatform,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InjectionPermission {
+    Ready,
+    PermissionRequired,
+    Unsupported,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) enum PasteTarget {
     #[cfg(target_os = "macos")]
@@ -92,6 +100,19 @@ impl PasteController {
 #[cfg(target_os = "macos")]
 pub(crate) fn request_accessibility_permission() {
     macos::request_accessibility_permission();
+}
+
+pub(crate) fn injection_permission() -> InjectionPermission {
+    #[cfg(target_os = "macos")]
+    {
+        return if macos::can_inject() {
+            InjectionPermission::Ready
+        } else {
+            InjectionPermission::PermissionRequired
+        };
+    }
+    #[cfg(not(target_os = "macos"))]
+    InjectionPermission::Unsupported
 }
 
 pub(crate) struct InFlightGuard<'a>(&'a AtomicBool);

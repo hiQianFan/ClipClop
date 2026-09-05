@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip, queryHistory } from "./api";
+import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip, queryHistory, showFullPanel } from "./api";
 
 describe("history host contracts", () => {
   beforeEach(() => invoke.mockReset());
@@ -53,6 +53,15 @@ describe("history host contracts", () => {
     await queryHistory("", 3, undefined, 7);
     expect(invoke).toHaveBeenLastCalledWith("query_history", {
       request: expect.objectContaining({ page: 3, page_size: 7 }),
+    });
+  });
+
+  it("can ask the main panel to open the permission guide", async () => {
+    await showFullPanel("clip-1", false, true);
+    expect(invoke).toHaveBeenCalledWith("show_full_panel", {
+      selectedId: "clip-1",
+      settings: false,
+      permissionGuide: true,
     });
   });
 });

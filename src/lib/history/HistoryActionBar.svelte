@@ -11,6 +11,7 @@
     hasPlainText,
     isMac,
     error,
+    permissionRecovery = false,
     menuOpen,
     deletePending,
     actionMenuShortcut,
@@ -27,6 +28,7 @@
     oncanceldelete,
     onconfirmdelete,
     onpaste,
+    onpermission,
     onrestorefocus,
   }: {
     selected: boolean;
@@ -35,6 +37,7 @@
     hasPlainText: boolean;
     isMac: boolean;
     error: string;
+    permissionRecovery?: boolean;
     menuOpen: boolean;
     deletePending: boolean;
     actionMenuShortcut: string;
@@ -51,6 +54,7 @@
     oncanceldelete: () => void;
     onconfirmdelete: () => void;
     onpaste: () => void;
+    onpermission: () => void;
     onrestorefocus: () => void;
   } = $props();
 
@@ -78,6 +82,7 @@
       </AlertDialog.Content>
     {:else}
       {#if error}<span class="message error" title={error}>{error}</span>{/if}
+      {#if permissionRecovery}<button class="toolbar-button secondary pressable" onclick={onpermission}>{t("history.handlePermission")}</button>{/if}
       <DropdownMenu.Root open={menuOpen} onOpenChange={onmenuopenchange}>
         <div class="menu-wrap">
           <DropdownMenu.Trigger bind:ref={menuButton} class={`toolbar-button secondary action-menu-trigger pressable${menuOpen ? " expanded" : ""}`} disabled={!selected}>

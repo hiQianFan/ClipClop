@@ -29,6 +29,12 @@ afterEach(() => {
 });
 
 describe("Onboarding language menu", () => {
+  it("does not expose macOS permission actions on other platforms", () => {
+    render(OnboardingView, { props: { initial, mode: "auto_paste", onfinish() {} } });
+    expect(screen.queryByRole("button", { name: "Open Accessibility Settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show Current App in Finder" })).toBeNull();
+  });
+
   it("preserves special open focus, resets click focus, and lets Tab leave", async () => {
     render(OnboardingView, { props: { initial, mode: "quick_start", onfinish() {} } });
     const trigger = screen.getByRole("button", { name: /language/i });

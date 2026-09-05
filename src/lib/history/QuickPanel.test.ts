@@ -6,6 +6,7 @@ import type { ClipSummary, HistoryPage } from "./types";
 const host = vi.hoisted(() => ({
   queryHistory: vi.fn(),
   previewClip: vi.fn(),
+  pasteClip: vi.fn(),
   listeners: new Map<string, () => void>(),
 }));
 
@@ -20,7 +21,7 @@ vi.mock("./api", () => ({
   getClipThumbnail: vi.fn(async () => ({ data_url: null, byte_size: null, access_denied: false })),
   getPreviewCapability: vi.fn(async () => ({ provider: "unavailable", reason: "not_installed" })),
   hidePanel: vi.fn(),
-  pasteClip: vi.fn(),
+  pasteClip: host.pasteClip,
   previewClip: host.previewClip,
   performPagerHaptic: vi.fn(),
   queryHistory: host.queryHistory,
@@ -60,13 +61,14 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function show() {
-  return render(QuickPanel, { props: { onfull() {}, onsettings() {} } });
+function show(overrides: Record<string, unknown> = {}) {
+  return render(QuickPanel, { props: { onfull() {}, onsettings() {}, onpermissionguide() {}, ...overrides } });
 }
 
 beforeEach(() => {
   host.queryHistory.mockReset();
   host.previewClip.mockReset();
+  host.pasteClip.mockReset();
   host.listeners.clear();
 });
 
@@ -192,5 +194,16 @@ describe("QuickPanel pagination", () => {
     await Promise.resolve();
     expect(screen.queryByText("stale")).toBeNull();
     expect(host.queryHistory).toHaveBeenLastCalledWith("", 1, undefined, 10);
+  });
+
+  it("opens the full permission guide after a degraded paste", async () => {
+    const onpermissionguide = vi.fn();
+    host.queryHistory.mockResolvedValueOnce(page(1, 1, 1));
+    host.pasteClip.mockResolvedValueOnce("copied_permission_required");
+    show({ onpermissionguide });
+    const option = await screen.findByRole("option");
+    await fireEvent.doubleClick(option);
+    await fireEvent.click(await screen.findByRole("button", { name: "Handle permission" }));
+    expect(onpermissionguide).toHaveBeenCalledOnce();
   });
 });

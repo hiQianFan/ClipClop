@@ -72,8 +72,8 @@ export function hidePanel(): Promise<void> {
   return invoke("hide_panel");
 }
 
-export function showFullPanel(selectedId: string | null = null, settings = false): Promise<void> {
-  return invoke("show_full_panel", { selectedId, settings });
+export function showFullPanel(selectedId: string | null = null, settings = false, permissionGuide = false): Promise<void> {
+  return invoke("show_full_panel", { selectedId, settings, permissionGuide });
 }
 
 export function setQuickSelection(id: string | null): Promise<void> {

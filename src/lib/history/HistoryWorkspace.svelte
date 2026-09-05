@@ -34,12 +34,13 @@
   let preserveSearchConditions = $state(false);
   let expandedId = $state<string | null>(null);
   let error = $state("");
+  let pastePermissionRequired = $state(false);
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
   let settingsTab = $state<"general" | "updates" | "about">("general");
   let onboarding = $state<OnboardingState | null>(null);
-  let onboardingMode = $state<"first_run" | "quick_start" | "auto_paste">("first_run");
+  let onboardingMode = $state<"first_run" | "quick_start" | "auto_paste" | "auto_paste_recovery">("first_run");
   let deletePending = $state(false);
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
@@ -58,11 +59,12 @@
   const previousFileShortcut = isMac ? "Command+ArrowLeft" : "Ctrl+ArrowLeft";
   const nextFileShortcut = isMac ? "Command+ArrowRight" : "Ctrl+ArrowRight";
   const actionMenuShortcut = isMac ? "Command+K" : "Ctrl+K";
-  type MainPanelRequest = { selectedId: string | null; settings: boolean };
+  type MainPanelRequest = { selectedId: string | null; settings: boolean; permissionGuide: boolean };
 
   $effect(() => {
     effectiveLocale();
     error = "";
+    pastePermissionRequired = false;
   });
 
   onMount(() => {
@@ -152,6 +154,7 @@
 
   async function refresh(targetPage = session.page.page, selectLatest = false) {
     error = "";
+    pastePermissionRequired = false;
     const previousSelection = session.selectedId;
     preview.resetPage();
     const applied = await session.refresh(targetPage, selectLatest);
@@ -203,6 +206,7 @@
     // Auto-selecting the first row must not touch its original file. Only a
     // user click/key selection or preview request opts into that read.
     const readOriginalFile = readSelectedFile && next.content_type === "file";
+    pastePermissionRequired = false;
     try {
       await preview.loadSelection(id, next, readOriginalFile);
       if (next.content_type === "image") void preview.prefetchAdjacentImages(session.page.items, id);
@@ -215,8 +219,10 @@
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
     try {
-      error = localizedPasteOutcome(await pasteClip(session.selectedId, plainText));
-    } catch (reason) { error = localizedError(reason); }
+      const outcome = await pasteClip(session.selectedId, plainText);
+      pastePermissionRequired = outcome === "copied_permission_required";
+      error = localizedPasteOutcome(outcome);
+    } catch (reason) { pastePermissionRequired = false; error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
   }
@@ -228,6 +234,7 @@
   async function copyOnly(plainText = false) {
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
+    pastePermissionRequired = false;
     try {
       const moved = await copyClip(session.selectedId, plainText);
       await refresh(moved ? 1 : session.page.page, moved);
@@ -392,6 +399,12 @@
     view = "onboarding";
   }
 
+  function openAutoPasteGuide(fromSettings = false) {
+    onboardingMode = fromSettings ? "auto_paste" : "auto_paste_recovery";
+    onboarding = { completed_revision: 1, current_step: "auto_paste", visited_steps: ["auto_paste"], selected_example: null };
+    view = "onboarding";
+  }
+
   async function finishOnboarding(returnToSettings: boolean) {
     await syncSettings();
     view = returnToSettings ? "settings" : "history";
@@ -434,6 +447,11 @@
   async function onPanelShown(request: MainPanelRequest) {
     void refreshPreviewCapability();
     listbox?.closeFilters();
+    if (request.permissionGuide) {
+      if (request.selectedId) await focusHistoryItem(request.selectedId);
+      openAutoPasteGuide();
+      return;
+    }
     if (request.settings) {
       await openSettingsView();
       return;
@@ -749,6 +767,7 @@
     hasPlainText={session.detail?.plain_text != null}
     {isMac}
     {error}
+    permissionRecovery={pastePermissionRequired}
     {menuOpen}
     {deletePending}
     {actionMenuShortcut}
@@ -765,10 +784,11 @@
     oncanceldelete={cancelDelete}
     onconfirmdelete={confirmDelete}
     onpaste={() => void pasteSelected()}
+    onpermission={() => openAutoPasteGuide()}
     onrestorefocus={focusConfirmationInvoker}
   />
   {:else}
-    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} />
+    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} onautopaste={() => openAutoPasteGuide(true)} />
   {/if}
   {/if}
 </main>

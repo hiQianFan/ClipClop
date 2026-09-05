@@ -11,10 +11,11 @@
   import { routeQuickKey } from "./quick-keyboard";
   import PageScrubber from "./PageScrubber.svelte";
 
-  let { selectedId = $bindable<string | null>(null), onfull, onsettings }: {
+  let { selectedId = $bindable<string | null>(null), onfull, onsettings, onpermissionguide }: {
     selectedId?: string | null;
     onfull: () => void;
     onsettings: () => void;
+    onpermissionguide: () => void;
   } = $props();
   const slotCount = Math.max(1, Math.min(10, Math.floor((window.innerHeight - 188) / 40)));
   const platform = currentPlatform();
@@ -22,6 +23,7 @@
   let thumbnails = $state<Record<string, string>>({});
   let loading = $state(true);
   let error = $state("");
+  let permissionRequired = $state(false);
   let list = $state<HTMLDivElement>();
   let pageScrubber: PageScrubber;
   let scrubberPage = $state<number | null>(null);
@@ -61,6 +63,7 @@
   async function loadPage(target: number, edge: "first" | "last") {
     const version = ++requestVersion;
     loading = true;
+    permissionRequired = false;
     try {
       const result = await queryHistory("", target, undefined, slotCount);
       if (version !== requestVersion) return;
@@ -78,6 +81,7 @@
     } catch (reason) {
       if (version === requestVersion) {
         pageScrubber?.reset();
+        permissionRequired = false;
         error = localizedError(reason);
       }
     } finally {
@@ -111,8 +115,11 @@
     if (!item) return;
     selectedId = item.id;
     try {
-      error = localizedPasteOutcome(await pasteClip(item.id));
+      const outcome = await pasteClip(item.id);
+      permissionRequired = outcome === "copied_permission_required";
+      error = localizedPasteOutcome(outcome);
     } catch (reason) {
+      permissionRequired = false;
       error = localizedError(reason) || t("quick.copyFailed");
     }
   }
@@ -159,9 +166,12 @@
   async function preview(item: ClipSummary | undefined) {
     if (!item) return;
     selectedId = item.id;
+    permissionRequired = false;
+    error = "";
     try {
       await previewClip(item.id);
     } catch (reason) {
+      permissionRequired = false;
       error = localizedError(reason);
     }
   }
@@ -207,7 +217,7 @@
         {/each}
       {/if}
     </div>
-    {#if error && items.length > 0}<p class="inline-error" role="alert">{error}</p>{/if}
+    {#if error && items.length > 0}<p class="inline-error" role="alert"><span>{error}</span>{#if permissionRequired}<button onclick={onpermissionguide}>{t("history.handlePermission")}</button>{/if}</p>{/if}
     <nav aria-label={t("quick.title")}>
       <button onclick={onfull}><span>{t("quick.openHistory")}</span></button>
       <button onclick={onsettings}><span>{t("history.settings")}</span><ShortcutHint shortcut={platform === "macos" ? "Command+," : "Ctrl+,"} {platform} /></button>
@@ -241,7 +251,8 @@
   .image-thumb img{width:100%;height:100%;object-fit:cover}
   .state{width:100%;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);background:transparent;font-size:var(--fs-ui)}
   .skeleton{display:block;margin:2px 0;border-radius:var(--radius-lg);background:color-mix(in srgb,var(--text-3) 12%,transparent)}
-  .inline-error{margin:0;padding:6px 12px;color:var(--danger);font-size:var(--fs-meta)}
+  .inline-error{margin:0;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--danger);font-size:var(--fs-meta)}
+  .inline-error button{flex:none;padding:4px 8px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-meta)}
   nav{flex:none;padding:5px 6px 6px;border-top:1px solid var(--hairline)}
   nav button{width:100%;height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;border-radius:var(--radius-md);color:var(--text-1);background:transparent;text-align:left;font-size:var(--fs-ui);font-weight:500}
   nav button:hover,nav button:focus-visible{background:var(--bg-hover)}

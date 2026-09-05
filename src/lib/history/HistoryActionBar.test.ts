@@ -10,6 +10,7 @@ const props = {
   hasPlainText: false,
   isMac: true,
   error: "",
+  permissionRecovery: false,
   menuOpen: true,
   deletePending: false,
   actionMenuShortcut: "Command+K",
@@ -26,6 +27,7 @@ const props = {
   oncanceldelete() {},
   onconfirmdelete() {},
   onpaste() {},
+  onpermission() {},
   onrestorefocus() {},
 };
 
@@ -64,6 +66,13 @@ describe("HistoryActionBar actions", () => {
     const view = render(HistoryActionBar, { props: { ...props, deletePending: true } });
     expect(view.container.textContent).toContain("Delete this item from ClipClop?");
     expect(view.container.querySelector(".action-menu-trigger")).toBeNull();
+  });
+
+  it("offers an action when automatic paste permission is missing", async () => {
+    const onpermission = vi.fn();
+    render(HistoryActionBar, { props: { ...props, menuOpen: false, error: "Copied", permissionRecovery: true, onpermission } });
+    await fireEvent.click(screen.getByRole("button", { name: "Handle permission" }));
+    expect(onpermission).toHaveBeenCalledOnce();
   });
 
   it("wires menu actions and returns the trigger as the delete invoker", async () => {

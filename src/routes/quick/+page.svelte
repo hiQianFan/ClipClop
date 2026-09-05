@@ -9,4 +9,5 @@
   bind:selectedId
   onfull={() => void showFullPanel(selectedId)}
   onsettings={() => void showFullPanel(selectedId, true)}
+  onpermissionguide={() => void showFullPanel(selectedId, false, true)}
 />

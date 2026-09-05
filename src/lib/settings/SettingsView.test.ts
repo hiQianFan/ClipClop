@@ -40,7 +40,9 @@ vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),
   getPreviewCapability: async () => quicklook.value,
 }));
-vi.mock("$lib/onboarding/api", () => ({ openAutoPasteSettings: vi.fn() }));
+vi.mock("$lib/onboarding/api", () => ({
+  getAutoPastePermissionStatus: vi.fn(async () => ({ status: "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" })),
+}));
 vi.mock("./shortcuts", async (importOriginal) => ({
   ...await importOriginal<typeof import("./shortcuts")>(),
   currentPlatform: () => platform.value,

@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
+  import { relaunch } from "@tauri-apps/plugin-process";
+  import { error as logError, info as logInfo } from "@tauri-apps/plugin-log";
   import { DropdownMenu } from "bits-ui";
   import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
@@ -10,15 +12,20 @@
   import { openFilePreviewSettings, openQuicklookInstallPage, type LanguagePreference } from "$lib/settings/api";
   import {
     openAutoPasteSettings,
+    getAutoPastePermissionStatus,
     previewOnboardingExample,
     saveLanguagePreference,
     saveOnboardingState,
+    revealCurrentApp,
+    shouldRestartAfterPermissionCheck,
+    type AutoPastePermissionStatus,
+    type AutoPastePermissionViewStatus,
     type OnboardingExample,
     type OnboardingState,
     type OnboardingStep,
   } from "./api";
 
-  type Mode = "first_run" | "quick_start" | "auto_paste";
+  type Mode = "first_run" | "quick_start" | "auto_paste" | "auto_paste_recovery";
   let { initial, mode = "first_run", onfinish }: {
     initial: OnboardingState;
     mode?: Mode;
@@ -33,7 +40,7 @@
   const practicePages = 3;
   const starting = untrack(() => $state.snapshot(initial)) as OnboardingState;
   let journey = $state<OnboardingState>(starting);
-  let step = $state<OnboardingStep>(untrack(() => mode === "auto_paste" || starting.current_step === "file_preview") ? "auto_paste" : starting.current_step ?? "overview");
+  let step = $state<OnboardingStep>(untrack(() => mode === "auto_paste" || mode === "auto_paste_recovery" || starting.current_step === "file_preview") ? "auto_paste" : starting.current_step ?? "overview");
   let selected = $state<OnboardingExample>(starting.selected_example ?? "image");
   let practicePage = $state(1);
   let inputValue = $state("");
@@ -50,19 +57,89 @@
   let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed", version: null });
   let previewChecking = $state(platform === "windows");
   let saveQueue = Promise.resolve();
+  let autoPastePermission = $state<Omit<AutoPastePermissionStatus, "status"> & { status: AutoPastePermissionViewStatus }>({ status: platform === "macos" ? "unknown" : "unsupported", app_location: platform === "macos" ? "development" : "unsupported", app_path: null });
+  let permissionChecking = $state(false);
+  let permissionLoadFailed = $state(false);
+  let focusCheckQueued = false;
+  let awaitingPermission = $state(false);
+  let restartPending = $state(false);
+  let restartCancelled = $state(false);
+  let restartAttempted = $state(false);
+  let restartFailed = $state(false);
+  let restartTimer: ReturnType<typeof setTimeout> | undefined;
   const announcement = $derived(t("onboarding.stepLabel", {
     current: steps.indexOf(step) + 1,
     total: steps.length,
     name: t(`onboarding.step.${step}` as "onboarding.step.overview"),
     status: t("onboarding.current"),
   }));
-  const isLastStep = $derived(mode === "auto_paste" || step === steps[steps.length - 1]);
+  const isLastStep = $derived(mode === "auto_paste" || mode === "auto_paste_recovery" || step === steps[steps.length - 1]);
   const practicePreviewAvailable = $derived(platform === "macos" || previewCapability.provider === "quicklook");
 
   onMount(() => {
     reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     void enter(step, false);
   });
+  onDestroy(() => clearTimeout(restartTimer));
+
+  async function refreshAutoPastePermission(fromFocus: boolean) {
+    if (permissionChecking) {
+      if (fromFocus) focusCheckQueued = true;
+      return;
+    }
+    permissionChecking = true;
+    permissionLoadFailed = false;
+    try {
+      const next = await getAutoPastePermissionStatus();
+      if (!next?.status) return;
+      const becameReady = shouldRestartAfterPermissionCheck(autoPastePermission.status, next.status, fromFocus, awaitingPermission, restartCancelled || restartAttempted || restartPending);
+      autoPastePermission = next;
+      if (becameReady) scheduleRestart();
+    } catch (reason) {
+      autoPastePermission.status = "unknown";
+      permissionLoadFailed = true;
+      error = localizedError(reason);
+    } finally {
+      permissionChecking = false;
+      if (focusCheckQueued) {
+        focusCheckQueued = false;
+        void refreshAutoPastePermission(true);
+      }
+    }
+  }
+
+  function scheduleRestart() {
+    void logInfo("Accessibility permission changed from required to ready during the active guide; scheduling one relaunch");
+    restartPending = true;
+    restartTimer = setTimeout(() => void restartApp(), 4000);
+  }
+
+  function cancelRestart() {
+    clearTimeout(restartTimer);
+    restartPending = false;
+    restartCancelled = true;
+    void logInfo("Accessibility permission relaunch cancelled by the user");
+  }
+
+  async function restartApp() {
+    if (restartAttempted) return;
+    clearTimeout(restartTimer);
+    restartAttempted = true;
+    restartPending = false;
+    void logInfo("Relaunching after Accessibility permission grant");
+    try { await relaunch(); }
+    catch (reason) {
+      restartFailed = true;
+      void logError(`Accessibility permission relaunch failed: ${localizedError(reason)}`);
+      error = localizedError(reason);
+    }
+  }
+
+  async function revealApp() {
+    error = "";
+    try { await revealCurrentApp(); }
+    catch (reason) { error = localizedError(reason); }
+  }
 
   async function persist() {
     if (mode !== "first_run") return;
@@ -83,6 +160,7 @@
     if (step === "practice" && next !== "practice") await closePreviewIfOpen();
     step = next;
     if (next === "system_preview") void refreshPreviewCapability();
+    if (next === "auto_paste" && platform === "macos") void refreshAutoPastePermission(false);
     if (!journey.visited_steps.includes(next)) journey.visited_steps = [...journey.visited_steps, next];
     if (save) {
       try { await persist(); } catch (reason) { error = localizedError(reason); }
@@ -194,6 +272,7 @@
   async function openPermissionSettings(kind: "auto_paste" | "file_preview") {
     error = "";
     try {
+      if (kind === "auto_paste") awaitingPermission = true;
       await (kind === "auto_paste" ? openAutoPasteSettings() : openFilePreviewSettings());
     } catch (reason) {
       error = localizedError(reason);
@@ -202,6 +281,10 @@
 
   async function finish() {
     if (finishing) return;
+    if (restartPending) {
+      await restartApp();
+      return;
+    }
     finishing = true;
     if (mode === "first_run") {
       try {
@@ -219,7 +302,7 @@
         return;
       }
     }
-    onfinish(mode !== "first_run");
+    onfinish(mode !== "first_run" && mode !== "auto_paste_recovery");
   }
 
   async function changeLanguage(language: LanguagePreference) {
@@ -272,6 +355,11 @@
   function onWindowKeydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return;
     if (languageMenuOpen) return;
+    if (event.key === "Escape" && restartPending) {
+      event.preventDefault();
+      cancelRestart();
+      return;
+    }
     if (event.key === "Escape" && isLastStep) {
       event.preventDefault();
       void finish();
@@ -293,6 +381,9 @@
     }
     if (platform === "windows" && step === "system_preview" && !previewChecking) {
       void refreshPreviewCapability();
+    }
+    if (platform === "macos" && step === "auto_paste" && awaitingPermission) {
+      void refreshAutoPastePermission(true);
     }
   }
 
@@ -392,14 +483,24 @@
       <p>{t("onboarding.auto.body")}</p>
       <div class="capabilities">
         <div class="capability-row">
-          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small></span>
-          <button onclick={() => void openPermissionSettings("auto_paste")}>{t("onboarding.auto.openSettings")}</button>
+          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small>{#if platform === "macos"}<small aria-live="polite">{permissionChecking ? t("onboarding.permission.checking") : autoPastePermission.status === "ready" ? t("onboarding.permission.ready") : autoPastePermission.status === "permission_required" ? t("onboarding.permission.required") : autoPastePermission.status === "unknown" ? t("onboarding.permission.unknown") : t("onboarding.auto.unsupported")}</small>{/if}</span>
+          {#if platform === "macos"}<button disabled={permissionChecking} onclick={() => void (permissionLoadFailed ? refreshAutoPastePermission(false) : openPermissionSettings("auto_paste"))}>{permissionLoadFailed ? t("onboarding.auto.retry") : autoPastePermission.status === "ready" ? t("settings.manage") : t("onboarding.permission.openAccessibility")}</button>{/if}
         </div>
         <div class="capability-row">
           <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("onboarding.auto.filePreviewHelp")}</small></span>
           <button onclick={() => void openPermissionSettings("file_preview")}>{t("onboarding.auto.manageFileAccess")}</button>
         </div>
       </div>
+      {#if platform === "macos"}
+        <div class="permission-details" aria-live="polite">
+          <small>{autoPastePermission.app_path ?? t("onboarding.permission.development")}</small>
+          <small>{t("onboarding.permission.currentInstance")}</small>
+          {#if awaitingPermission && autoPastePermission.status === "permission_required"}<small>{t("onboarding.permission.waiting")}</small><small>{t("onboarding.permission.oldEntry")}</small>{/if}
+          {#if autoPastePermission.app_path}<button onclick={() => void revealApp()}>{t("onboarding.permission.reveal")}</button>{/if}
+          {#if restartPending}<span>{t("onboarding.permission.restartPending")}</span><button class="primary" onclick={() => void restartApp()}>{t("onboarding.permission.restartNow")}</button><button onclick={cancelRestart}>{t("onboarding.permission.cancelRestart")}</button>
+          {:else if restartFailed || restartCancelled}<span>{restartFailed ? t("onboarding.permission.restartFailed") : t("onboarding.permission.restartCancelled")}</span><button onclick={() => { restartAttempted = false; void restartApp(); }}>{t("onboarding.permission.restart")}</button>{/if}
+        </div>
+      {/if}
       <small class="capability-note">
         {t("onboarding.auto.fallback")} {t("onboarding.auto.systemPreviewPrefix")} <ShortcutHint shortcut="Space" {platform} variant="compact" /> {t("onboarding.auto.systemPreviewSuffix")}
       </small>
@@ -448,8 +549,8 @@
 </section>
 
 <footer>
-  <button class="step-button previous" disabled={step === "overview" || mode === "auto_paste"} onclick={() => void enter(steps[steps.indexOf(step) - 1]!)}><ArrowLeft size={15} aria-hidden="true" />{t("onboarding.previous")}</button>
-  {#if mode !== "auto_paste"}<span class="step-progress" aria-live="polite">{steps.indexOf(step) + 1} / {steps.length}</span>{/if}
+  <button class="step-button previous" disabled={step === "overview" || mode === "auto_paste" || mode === "auto_paste_recovery"} onclick={() => void enter(steps[steps.indexOf(step) - 1]!)}><ArrowLeft size={15} aria-hidden="true" />{t("onboarding.previous")}</button>
+  {#if mode !== "auto_paste" && mode !== "auto_paste_recovery"}<span class="step-progress" aria-live="polite">{steps.indexOf(step) + 1} / {steps.length}</span>{/if}
   {#if isLastStep}
     <button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else}{t("onboarding.finish")}{/if}</button>
   {:else}
@@ -523,6 +624,8 @@
   .preview-status{flex:none;min-height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--hairline);border-radius:var(--radius-md);white-space:nowrap}
   .preview-status.success{border-color:color-mix(in srgb,var(--success) 35%,var(--hairline));color:var(--success)}
   .capability-note{margin-top:14px}
+  .permission-details{width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;color:var(--text-2)}
+  .permission-details button{min-height:30px;padding:0 10px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui)}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */
   footer{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px;border-top:1px solid var(--hairline)}

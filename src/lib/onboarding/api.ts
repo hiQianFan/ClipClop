@@ -13,6 +13,22 @@ export const getOnboardingState = () => invoke<OnboardingState>("get_onboarding_
 export const saveOnboardingState = (onboarding: OnboardingState) =>
   invoke<OnboardingState>("save_onboarding_state", { onboarding });
 export const openAutoPasteSettings = () => invoke<void>("open_auto_paste_settings");
+export type AutoPastePermissionStatus = {
+  status: "ready" | "permission_required" | "unsupported";
+  app_location: "applications" | "other_bundle" | "development" | "unsupported";
+  app_path: string | null;
+};
+export type AutoPastePermissionViewStatus = AutoPastePermissionStatus["status"] | "unknown";
+export const getAutoPastePermissionStatus = () =>
+  invoke<AutoPastePermissionStatus>("get_auto_paste_permission_status");
+export const revealCurrentApp = () => invoke<void>("reveal_current_app");
+export const shouldRestartAfterPermissionCheck = (
+  previous: AutoPastePermissionViewStatus,
+  next: AutoPastePermissionStatus["status"],
+  fromFocus: boolean,
+  awaitingPermission: boolean,
+  restartHandled: boolean,
+) => fromFocus && awaitingPermission && previous === "permission_required" && next === "ready" && !restartHandled;
 export const saveLanguagePreference = (language: LanguagePreference) =>
   invoke<LanguagePreference>("set_language_preference", { language });
 
