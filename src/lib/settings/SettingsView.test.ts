@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { preview, updateSettings, listReleaseNotes, openRepository, platform, quicklook } = vi.hoisted(() => ({
+const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, platform, quicklook } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -12,6 +12,7 @@ const { preview, updateSettings, listReleaseNotes, openRepository, platform, qui
     hasUpdate: true,
   },
   updateSettings: vi.fn(async (settings) => settings),
+  getSettings: vi.fn(),
   listReleaseNotes: vi.fn(async () => [{
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
   }]),
@@ -25,14 +26,7 @@ const { preview, updateSettings, listReleaseNotes, openRepository, platform, qui
 }));
 
 vi.mock("./api", () => ({
-  getSettings: async () => ({
-    retention_days: 30, history_limit: 1000, move_used_to_top: true,
-    restore_browse_position: true, preserve_search_conditions: true,
-    trim_whitespace: false, file_preview_enabled: false, launch_at_login: false,
-    hotkey: "Control+Shift+V", theme: "system", language: "en",
-    tray_click_action: "recent", check_updates: true, last_update_check: preview.lastUpdateCheck,
-    skipped_update_version: null,
-  }),
+  getSettings,
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
   openFilePreviewSettings: vi.fn(), openQuicklookInstallPage: vi.fn(), openLogDir: vi.fn(), openRepository,
 }));
@@ -42,6 +36,8 @@ vi.mock("$lib/history/api", () => ({
 }));
 vi.mock("$lib/onboarding/api", () => ({
   getAutoPastePermissionStatus: vi.fn(async () => ({ status: "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" })),
+  openAutoPasteSettings: vi.fn(), revealCurrentApp: vi.fn(),
+  shouldRestartAfterPermissionCheck: vi.fn(() => false),
 }));
 vi.mock("./shortcuts", async (importOriginal) => ({
   ...await importOriginal<typeof import("./shortcuts")>(),
@@ -68,6 +64,17 @@ vi.mock("$lib/updater/store.svelte", () => ({
 }));
 
 import SettingsView from "./SettingsView.svelte";
+
+const settings = () => ({
+  retention_days: 30, history_limit: 1000, move_used_to_top: true,
+  restore_browse_position: true, preserve_search_conditions: true,
+  trim_whitespace: false, file_preview_enabled: false, launch_at_login: false,
+  hotkey: "Control+Shift+V", theme: "system", language: "en",
+  tray_click_action: "recent", check_updates: true, last_update_check: preview.lastUpdateCheck,
+  skipped_update_version: null,
+});
+
+beforeEach(() => getSettings.mockImplementation(async () => settings()));
 
 afterEach(() => {
   platform.value = "windows";
@@ -124,14 +131,43 @@ it("renders the platform-specific preview entry", async () => {
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   expect(await screen.findByText("System preview")).toBeTruthy();
   expect(await screen.findByRole("button", { name: "Install QuickLook" })).toBeTruthy();
+  expect(screen.queryByRole("tab", { name: "Permissions & System Access" })).toBeNull();
   cleanup();
   platform.value = "macos";
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   await screen.findByRole("heading", { name: "General" });
-  expect(screen.getByRole("button", { name: "Manage" })).toBeTruthy();
+  expect(document.querySelector('.settings-content[data-state="active"]')?.textContent).not.toContain("Automatic paste");
+  await fireEvent.click(screen.getByRole("tab", { name: "Permissions" }));
+  expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Open Settings" })).toBeTruthy();
   expect(screen.queryByText("System preview")).toBeNull();
   expect(screen.queryByRole("button", { name: "Install QuickLook" })).toBeNull();
+});
+
+it("normalizes a Windows permissions deep link to General", async () => {
+  render(SettingsView, { props: { initialTab: "permissions", focusPermission: true, onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(await screen.findByRole("heading", { name: "General" })).toBeTruthy();
+  expect(screen.queryByRole("tab", { name: "Permissions" })).toBeNull();
+});
+
+it("waits for settings and permission detection before focusing a deep link", async () => {
+  platform.value = "macos";
+  let resolveSettings!: (value: ReturnType<typeof settings>) => void;
+  getSettings.mockReturnValueOnce(new Promise((resolve) => { resolveSettings = resolve; }));
+  render(SettingsView, { props: { initialTab: "permissions", focusPermission: true, onclose() {}, oncleared() {}, onquickstart() {} } });
+  expect(screen.getAllByText("Loading settings…").length).toBeGreaterThan(0);
+  resolveSettings(settings());
+  const ready = await screen.findByRole("button", { name: "Ready" });
+  await waitFor(() => expect(document.activeElement).toBe(ready));
+});
+
+it("responds to a permissions request after settings is already mounted", async () => {
+  platform.value = "macos";
+  const view = render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
+  await screen.findByRole("heading", { name: "General" });
+  await view.rerender({ initialTab: "permissions", focusPermission: true, onclose() {}, oncleared() {}, onquickstart() {} });
+  expect(await screen.findByRole("heading", { name: "Permissions & System Access" })).toBeTruthy();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ready" })));
 });
 
 it("separates QuickLook status labels from recovery actions", async () => {

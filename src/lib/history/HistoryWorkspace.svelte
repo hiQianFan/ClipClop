@@ -38,9 +38,10 @@
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
-  let settingsTab = $state<"general" | "updates" | "about">("general");
+  let settingsTab = $state<"general" | "permissions" | "updates" | "about">("general");
+  let focusPermission = $state(false);
   let onboarding = $state<OnboardingState | null>(null);
-  let onboardingMode = $state<"first_run" | "quick_start" | "auto_paste" | "auto_paste_recovery">("first_run");
+  let onboardingMode = $state<"first_run" | "quick_start">("first_run");
   let deletePending = $state(false);
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
@@ -382,9 +383,10 @@
     if (mode === "file-tablist" && !event.target.closest("[role='tablist']")) mode = "browse";
   }
 
-  async function openSettingsView(tab: "general" | "updates" | "about" = "general") {
+  async function openSettingsView(tab: "general" | "permissions" | "updates" | "about" = "general", focus = false) {
     appMenuOpen = false;
     settingsTab = tab;
+    focusPermission = focus;
     view = "settings";
   }
 
@@ -399,11 +401,7 @@
     view = "onboarding";
   }
 
-  function openAutoPasteGuide(fromSettings = false) {
-    onboardingMode = fromSettings ? "auto_paste" : "auto_paste_recovery";
-    onboarding = { completed_revision: 1, current_step: "auto_paste", visited_steps: ["auto_paste"], selected_example: null };
-    view = "onboarding";
-  }
+  function openPermissionSettings() { void openSettingsView("permissions", true); }
 
   async function finishOnboarding(returnToSettings: boolean) {
     await syncSettings();
@@ -449,7 +447,7 @@
     listbox?.closeFilters();
     if (request.permissionGuide) {
       if (request.selectedId) await focusHistoryItem(request.selectedId);
-      openAutoPasteGuide();
+      openPermissionSettings();
       return;
     }
     if (request.settings) {
@@ -784,11 +782,11 @@
     oncanceldelete={cancelDelete}
     onconfirmdelete={confirmDelete}
     onpaste={() => void pasteSelected()}
-    onpermission={() => openAutoPasteGuide()}
+    onpermission={openPermissionSettings}
     onrestorefocus={focusConfirmationInvoker}
   />
   {:else}
-    <SettingsView initialTab={settingsTab} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} onautopaste={() => openAutoPasteGuide(true)} />
+    <SettingsView initialTab={settingsTab} {focusPermission} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} />
   {/if}
   {/if}
 </main>

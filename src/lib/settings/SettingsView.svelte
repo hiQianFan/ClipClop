@@ -15,11 +15,13 @@
   import GeneralSettings from "./GeneralSettings.svelte";
   import ShortcutSettings from "./ShortcutSettings.svelte";
   import UpdateSettings from "./UpdateSettings.svelte";
+  import PermissionSettings from "./PermissionSettings.svelte";
 
-  type Tab = "general" | "history" | "appearance" | "shortcuts" | "updates" | "about";
-  const tabs: Tab[] = ["general", "history", "appearance", "shortcuts", "updates", "about"];
+  type Tab = "general" | "history" | "appearance" | "shortcuts" | "permissions" | "updates" | "about";
+  const platform: ShortcutPlatform = currentPlatform();
+  const tabs: Tab[] = platform === "macos" ? ["general", "history", "appearance", "shortcuts", "permissions", "updates", "about"] : ["general", "history", "appearance", "shortcuts", "updates", "about"];
 
-  let { initialTab = "general", onclose, oncleared, onquickstart, onautopaste = onquickstart }: { initialTab?: Tab; onclose: () => void; oncleared: () => void; onquickstart: () => void; onautopaste?: () => void } = $props();
+  let { initialTab = "general", focusPermission = false, onclose, oncleared, onquickstart }: { initialTab?: Tab; focusPermission?: boolean; onclose: () => void; oncleared: () => void; onquickstart: () => void } = $props();
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("general");
   let status = $state("");
@@ -35,7 +37,7 @@
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
   let confirmClearButton = $state<HTMLButtonElement | null>(null);
-  const platform: ShortcutPlatform = currentPlatform();
+  const normalizeTab = (value: Tab): Tab => value === "permissions" && platform !== "macos" ? "general" : value;
   const retentionItems = $derived([
     ...[1, 7, 30, 90].map((count) => ({ value: String(count), label: t("settings.days", { count: formatNumber(count) }) })),
     { value: "365", label: t("settings.year") },
@@ -58,8 +60,7 @@
 
 
   onMount(() => {
-    tab = initialTab;
-    requestAnimationFrame(() => navButtons[tabs.indexOf(tab)]?.focus());
+    tab = normalizeTab(initialTab);
     void load();
   });
   onDestroy(() => {
@@ -78,6 +79,15 @@
     });
   });
 
+  $effect(() => {
+    const requestedTab = normalizeTab(initialTab);
+    const focusRequested = focusPermission;
+    untrack(() => {
+      tab = requestedTab;
+      if (settings && !focusRequested) requestAnimationFrame(() => navButtons[tabs.indexOf(tab)]?.focus());
+    });
+  });
+
   async function load() {
     void updateStore.hydrate();
     try {
@@ -87,6 +97,8 @@
       savedSettings = { ...loaded };
       applyTheme(loaded.theme);
       setLanguagePreference(loaded.language);
+      await tick();
+      if (!focusPermission) requestAnimationFrame(() => navButtons[tabs.indexOf(tab)]?.focus());
     }
     catch (reason) { if (!destroyed) status = t("settings.loadFailed", { error: localizedError(reason) }); }
   }
@@ -235,19 +247,16 @@
   </header>
   <Tabs.Root class="settings-body" value={tab} onValueChange={(value) => selectTab(value as Tab)} orientation="vertical" activationMode="automatic" loop={true}>
     <Tabs.List class={`settings-nav${navFocusRing ? " tab-focus" : ""}`} aria-label={t("settings.categories")}>
-      <Tabs.Trigger bind:ref={navButtons[0]} value="general" class={tab === "general" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.general")}</Tabs.Trigger>
-      <Tabs.Trigger bind:ref={navButtons[1]} value="history" class={tab === "history" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.history")}</Tabs.Trigger>
-      <Tabs.Trigger bind:ref={navButtons[2]} value="appearance" class={tab === "appearance" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.appearance")}</Tabs.Trigger>
-      <Tabs.Trigger bind:ref={navButtons[3]} value="shortcuts" class={tab === "shortcuts" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.shortcuts")}</Tabs.Trigger>
-      <span class="nav-separator" aria-hidden="true"></span>
-      <Tabs.Trigger bind:ref={navButtons[4]} value="updates" class={tab === "updates" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.updates")}</Tabs.Trigger>
-      <Tabs.Trigger bind:ref={navButtons[5]} value="about" class={tab === "about" ? "active" : ""} onkeydown={onNavKeydown}>{t("settings.about")}</Tabs.Trigger>
+      {#each tabs as navTab, index}
+        {#if navTab === "updates"}<span class="nav-separator" aria-hidden="true"></span>{/if}
+        <Tabs.Trigger bind:ref={navButtons[index]} value={navTab} class={tab === navTab ? "active" : ""} onkeydown={onNavKeydown}>{t(navTab === "permissions" ? "settings.permissionsNav" : `settings.${navTab}` as "settings.general")}</Tabs.Trigger>
+      {/each}
     </Tabs.List>
     {#each tabs as panelTab}
     <Tabs.Content value={panelTab} class={`settings-content${panelTab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
       {#if settings}
         {#if panelTab === "general"}
-          <GeneralSettings bind:settings {platform} {onquickstart} {onautopaste} onerror={(message) => status = message} bind:heading={sectionHeading} />
+          <GeneralSettings bind:settings {platform} {onquickstart} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else if panelTab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>
@@ -264,6 +273,8 @@
           <div class="row"><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><AppSelect value={settings.language} items={languageItems} ariaLabel={t("settings.language")} onchange={changeLanguage} /></div>
         {:else if panelTab === "shortcuts"}
           <ShortcutSettings {settings} {platform} bind:heading={sectionHeading} />
+        {:else if panelTab === "permissions"}
+          <PermissionSettings active={tab === "permissions"} focusRequested={focusPermission} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else if panelTab === "updates"}
           <UpdateSettings bind:settings onchecked={checkUpdates} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else}

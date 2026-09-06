@@ -19,6 +19,7 @@ colors:
   action: "var(--action)"
   action-hover: "var(--action-hover)"
   action-on: "var(--action-on)"
+  success: "var(--success)"
   danger: "var(--danger)"
   danger-fill: "var(--danger-fill)"
   danger-on: "var(--danger-on)"
@@ -92,7 +93,7 @@ components:
 
 ## Colors
 
-只使用继承的中性色阶：`{colors.bg-shell}`、`{colors.bg-raised}`、`{colors.bg-hover}`、`{colors.bg-selected}` 和 `{colors.hairline}`。权限状态不引入绿、黄或新的品牌色。
+页面主体使用继承的中性色阶。辅助功能经过实时验证为 ready 时，状态动作可使用现有 `{colors.success}`；不新增权限专用颜色。
 
 - 标题与关键状态使用 `{colors.text-1}`。
 - 解释、辅助文案和普通状态使用 `{colors.text-2}`。
@@ -113,7 +114,7 @@ components:
 
 ## Layout & Spacing
 
-权限区放在 Settings → General，沿用单列 ruled-list，不新增侧栏分类或卡片网格。每项权限是一条两区设置行：左侧为名称、用途与当前可验证状态，右侧为不可压缩的单一动作。
+权限使用 Settings 左侧独立的“权限”分类，位于“快捷键”之后、分隔线之前，仅在 macOS 展示。页面沿用单列 ruled-list，不使用卡片网格。每项是一条两区设置行：左侧为名称与一行用途，右侧为不可压缩、同时表达状态的动作。
 
 - 行内间距只使用 `{spacing.*}`；区间关系沿用根设计系统的 2px 基准。
 - 文本区 `flex: 1 1 auto; min-width: 0`；动作区 `flex: none`。
@@ -135,11 +136,11 @@ components:
 
 ### Permission row
 
-沿用 Settings Row 两区结构。左侧依次显示权限名称、价值说明与文本状态；右侧只显示与当前状态对应的动作：
+沿用 Settings Row 两区结构。左侧只显示权限名称与一行用途；右侧按钮同时表达状态和可执行动作：
 
-- 未请求、已拒绝、已失效：ghost “管理”。
-- 检测中：无按钮或禁用当前动作，状态写“正在检测…”。
-- 辅助功能已授权：文本写“已就绪”，不显示庆祝图形；可保留 ghost “管理”供撤销或检查。
+- 未请求、已拒绝、已失效：ghost “去授权”。
+- 检测中：禁用按钮“检测中…”。
+- 辅助功能已授权：使用 `{colors.success}` 轻底色或描边的“已就绪”；仍可点击并打开系统设置。
 - 完全磁盘访问：不显示不可验证的全局“已就绪”；写“预览文件时验证”或最近一次具体访问结果。
 - 不适用：从该平台或能力对应表面移除，不显示假 disabled 控件。
 

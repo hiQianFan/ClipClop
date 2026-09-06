@@ -7,6 +7,8 @@ const host = vi.hoisted(() => ({
   restoreBrowsePosition: true,
   settingsError: false,
   queryHistory: vi.fn(),
+  platform: "windows" as "windows" | "macos",
+  listeners: new Map<string, (event: { payload: unknown }) => void>(),
 }));
 
 const settings = () => ({
@@ -18,7 +20,7 @@ const settings = () => ({
   skipped_update_version: null,
 });
 
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async (name: string, callback: (event: { payload: unknown }) => void) => { host.listeners.set(name, callback); return () => host.listeners.delete(name); }) }));
 vi.mock("./api", () => ({
   canPreviewClip: () => false,
   copyClip: vi.fn(), deleteClip: vi.fn(), getClip: vi.fn(async (id: string) => detail(id)),
@@ -37,11 +39,12 @@ vi.mock("$lib/settings/api", () => ({
   openLogDir: vi.fn(), openQuicklookInstallPage: vi.fn(), openRepository: vi.fn(), quitApp: vi.fn(),
 }));
 vi.mock("$lib/settings/shortcuts", async (importOriginal) => ({
-  ...await importOriginal<typeof import("$lib/settings/shortcuts")>(), currentPlatform: () => "windows",
+  ...await importOriginal<typeof import("$lib/settings/shortcuts")>(), currentPlatform: () => host.platform,
 }));
 vi.mock("$lib/onboarding/api", () => ({
   getOnboardingState: vi.fn(async () => ({ completed_revision: 1, current_step: "overview", visited_steps: ["overview"], selected_example: "image" })),
-  openAutoPasteSettings: vi.fn(),
+  getAutoPastePermissionStatus: vi.fn(async () => ({ status: "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" })),
+  openAutoPasteSettings: vi.fn(), revealCurrentApp: vi.fn(), shouldRestartAfterPermissionCheck: vi.fn(() => false),
 }));
 vi.mock("$lib/updater/api", () => ({ DEVELOPMENT_VERSION: "0.0.0-dev", listReleaseNotes: vi.fn(async () => []), openLatestRelease: vi.fn() }));
 vi.mock("$lib/updater/store.svelte", () => ({
@@ -59,6 +62,8 @@ beforeEach(() => {
   Element.prototype.getAnimations = vi.fn(() => []);
   host.restoreBrowsePosition = true;
   host.settingsError = false;
+  host.platform = "windows";
+  host.listeners.clear();
   host.queryHistory.mockReset().mockImplementation(async (_query, target) => page(target));
 });
 afterEach(cleanup);
@@ -79,6 +84,19 @@ describe("closing settings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await waitFor(() => expect(screen.getByRole("option", { selected: true }).textContent).toContain(selected));
     expect(host.queryHistory.mock.calls.map((call) => call[1])).toEqual(closeRequests);
+  });
+
+  it("routes a permission request into mounted settings without clearing selection", async () => {
+    host.platform = "macos";
+    render(HistoryWorkspace);
+    await waitFor(() => expect(screen.getByRole("option", { selected: true }).textContent).toContain("latest"));
+    await fireEvent.keyDown(screen.getByRole("listbox"), { key: ",", metaKey: true });
+    await screen.findByRole("heading", { name: "General" });
+    host.listeners.get("main_panel_shown")?.({ payload: { selectedId: "latest", settings: false, permissionGuide: true } });
+    expect(await screen.findByRole("heading", { name: "Permissions & System Access" })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ready" })));
+    await fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await waitFor(() => expect(screen.getByRole("option", { selected: true }).textContent).toContain("latest"));
   });
 
   it("keeps the current page when settings cannot be refreshed", async () => {

@@ -16,7 +16,7 @@ sources:
 
 macOS 桌面端、键盘优先，使用现有 Svelte 5、Tauri、Bits UI 行为原语和 ClipClop token。本工作区的 `DESIGN.md` 定义权限表面的视觉增量；根目录 `DESIGN.md` 仍是视觉权威。
 
-权限体验采用双入口：Settings → General → 权限与系统访问是长期管理区；自动粘贴和文件预览只在真实失败时给出就地恢复入口。首次引导解释价值与可选性，不强迫一次性授予全部权限。
+权限体验采用双入口：Settings 左侧独立“权限”分类是长期管理区；自动粘贴和文件预览只在真实失败时给出就地恢复入口。首次引导解释价值与可选性，不复用管理页，也不强迫授权。
 
 辅助功能允许 ClipClop 注入 Command-V；完全磁盘访问只在文件预览实际需要且当前访问失败时请求。二者状态独立，不以“全部完成”作为使用剪贴板核心功能的前提。
 
@@ -25,7 +25,7 @@ macOS 桌面端、键盘优先，使用现有 Svelte 5、Tauri、Bits UI 行为�
 | Surface | Reached from | Purpose |
 |---|---|---|
 | First-run onboarding | 首次启动 | 解释两项权限分别解锁什么，并让用户选择现在配置或稍后处理 |
-| Settings → General → 权限与系统访问 | Settings 导航 | 集中查看和管理两项能力；不为两行内容新增一级侧栏分类 |
+| Settings → 权限 | macOS 设置侧栏 | 管理两项能力、当前 App 身份及授权恢复；Windows 隐藏该分类 |
 | Permission guide | 首次引导、权限区或恢复入口 | 一次处理一个权限；打开对应的系统设置后，引导仍保持显示 |
 | Paste recovery notice | 自动粘贴返回 `copied_permission_required` | 告知内容已复制，提供手动 Command-V 和“处理权限” |
 | File preview recovery notice | 预览因文件访问被拒 | 告知预览未打开，提供“处理权限”及不依赖预览的退路 |
@@ -58,7 +58,7 @@ macOS 桌面端、键盘优先，使用现有 Svelte 5、Tauri、Bits UI 行为�
 
 | Component | Use | Behavioral rules |
 |---|---|---|
-| Permission row | Settings → General | 辅助功能读取实时能力；完全磁盘访问只显示“按需验证/上次访问结果”，每项独立提供“管理” |
+| Permission row | Settings → 权限 | 辅助功能按钮显示“检测中/去授权/已就绪”；完全磁盘访问只显示“预览时验证/打开设置” |
 | Permission guide | 单项授权 | 保持在 App 内；打开对应设置后，仅在引导处于活动状态时监听窗口重新获得焦点，并重新检测 |
 | Inline recovery notice | 粘贴/预览真实失败 | 保留当前内容与选择；提供一个“处理权限”动作，不自动打开完整引导 |
 | Current App identity | 更新后恢复 | 显示 `/Applications/ClipClop.app` 或“开发构建”；路径使用 `{typography.body}` |
@@ -144,7 +144,7 @@ macOS 桌面端、键盘优先，使用现有 Svelte 5、Tauri、Bits UI 行为�
 
 ### Flow 2 — 周敏在设置中管理权限
 
-1. 周敏打开 Settings → General → 权限与系统访问。
+1. 周敏打开 Settings → 权限。
 2. 页面显示辅助功能实时状态；完全磁盘访问显示“预览文件时验证”，不声称全局已授权。
 3. 她点击完全磁盘访问行的“管理”，权限引导保持显示，同时打开 macOS 对应设置。
 4. 她返回 ClipClop；窗口重新获得焦点时，页面重新检测并原位更新状态，焦点仍在“管理”动作附近。

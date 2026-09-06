@@ -30,9 +30,10 @@ afterEach(() => {
 
 describe("Onboarding language menu", () => {
   it("does not expose macOS permission actions on other platforms", () => {
-    render(OnboardingView, { props: { initial, mode: "auto_paste", onfinish() {} } });
+    render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
     expect(screen.queryByRole("button", { name: "Open Accessibility Settings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show Current App in Finder" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Your clipboard, one shortcut away" })).toBeTruthy();
   });
 
   it("preserves special open focus, resets click focus, and lets Tab leave", async () => {
