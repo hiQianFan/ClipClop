@@ -4,8 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OnboardingView from "./OnboardingView.svelte";
 import type { OnboardingState } from "./api";
 
-const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
+const { invoke, platform } = vi.hoisted(() => ({ invoke: vi.fn(), platform: { value: "windows" as "windows" | "macos" } }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("$lib/settings/shortcuts", async (importOriginal) => ({
+  ...await importOriginal<typeof import("$lib/settings/shortcuts")>(),
+  currentPlatform: () => platform.value,
+}));
 
 const initial: OnboardingState = {
   completed_revision: 1,
@@ -15,6 +19,7 @@ const initial: OnboardingState = {
 };
 
 beforeEach(() => {
+  platform.value = "windows";
   invoke.mockImplementation((command: string) => {
     if (command === "get_preview_capability") {
       return Promise.resolve({ provider: "unavailable", reason: "not_installed", version: null });
@@ -32,6 +37,8 @@ describe("Onboarding language menu", () => {
   it("does not expose macOS permission actions on other platforms", () => {
     render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
     expect(screen.queryByRole("button", { name: "Open Accessibility Settings" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Grant Access" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show Current App in Finder" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Your clipboard, one shortcut away" })).toBeTruthy();
   });
@@ -51,6 +58,50 @@ describe("Onboarding language menu", () => {
     await fireEvent.keyDown(document.activeElement!, { key: "Tab" });
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     expect(document.activeElement).not.toBe(trigger);
+  });
+});
+
+describe("Onboarding permissions", () => {
+  it("shows both macOS permissions and refreshes automatic paste status on focus", async () => {
+    platform.value = "macos";
+    let checks = 0;
+    invoke.mockImplementation((command: string) => {
+      if (command === "get_auto_paste_permission_status") {
+        return Promise.resolve({ status: ++checks === 1 ? "permission_required" : "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
+    await fireEvent.click(await screen.findByRole("button", { name: "Grant Access" }));
+    expect(invoke).toHaveBeenCalledWith("open_auto_paste_settings");
+    await fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(invoke).toHaveBeenCalledWith("open_file_preview_settings");
+    await fireEvent.focus(window);
+    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+    expect(invoke.mock.calls.filter(([command]) => command === "get_auto_paste_permission_status")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Finish" })).toBeTruthy();
+  });
+
+  it("updates a ready permission after it is revoked", async () => {
+    platform.value = "macos";
+    let checks = 0;
+    invoke.mockImplementation((command: string) => command === "get_auto_paste_permission_status"
+      ? Promise.resolve({ status: ++checks === 1 ? "ready" : "permission_required", app_location: "applications", app_path: "/Applications/ClipClop.app" })
+      : Promise.resolve(undefined));
+    render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
+    await screen.findByRole("button", { name: "Ready" });
+    await fireEvent.focus(window);
+    expect(await screen.findByRole("button", { name: "Grant Access" })).toBeTruthy();
+  });
+
+  it("recovers from a failed permission check", async () => {
+    platform.value = "macos";
+    invoke.mockRejectedValueOnce(new Error("check failed")).mockResolvedValueOnce({ status: "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" });
+    render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
+    await fireEvent.click(await screen.findByRole("button", { name: "Check Again" }));
+    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+    expect(screen.queryByText("check failed")).toBeNull();
   });
 });
 
