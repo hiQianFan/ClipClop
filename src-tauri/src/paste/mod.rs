@@ -102,17 +102,13 @@ pub(crate) fn request_accessibility_permission() {
     macos::request_accessibility_permission();
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn injection_permission() -> InjectionPermission {
-    #[cfg(target_os = "macos")]
-    {
-        if macos::can_inject() {
-            InjectionPermission::Ready
-        } else {
-            InjectionPermission::PermissionRequired
-        }
+    if macos::can_inject() {
+        InjectionPermission::Ready
+    } else {
+        InjectionPermission::PermissionRequired
     }
-    #[cfg(not(target_os = "macos"))]
-    InjectionPermission::Unsupported
 }
 
 pub(crate) struct InFlightGuard<'a>(&'a AtomicBool);

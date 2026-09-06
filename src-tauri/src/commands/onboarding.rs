@@ -1,6 +1,8 @@
 use serde::Serialize;
-use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
+
+#[cfg(target_os = "macos")]
+use std::path::{Path, PathBuf};
 
 use crate::{
     error::AppResult, onboarding::OnboardingState, paste::InjectionPermission,
