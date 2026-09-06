@@ -96,25 +96,27 @@
   async function run(action: () => Promise<unknown>) {
     try { await action(); } catch (reason) { onerror(localizedError(reason)); }
   }
-  function onFocus() { if (active && awaitingPermission) void refresh(true); }
+  function onFocus() { if (active) void refresh(true); }
   function onKeydown(event: KeyboardEvent) { if (active && event.key === "Escape" && restartPending) { event.preventDefault(); cancelRestart(); } }
 </script>
 
 <svelte:window onfocus={onFocus} onkeydown={onKeydown} />
 <h1 bind:this={heading} id="settings-section-title" tabindex="-1">{t("settings.permissions")}</h1>
 <div class="row" data-permission="auto-paste">
-  <span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small><small aria-live="polite" aria-atomic="true">{statusText}</small></span>
+  <span><strong>{t("settings.autoPaste")}</strong><small>{t("settings.autoPasteHelp")}</small><small class="status-announcement" aria-live="polite" aria-atomic="true">{statusText}</small></span>
   <button bind:this={autoPasteButton} class:ready={!checking && permission.status === "ready"} disabled={checking} aria-busy={checking} onclick={() => void manageAutoPaste()}>{checking ? t("settings.permissionChecking") : checkFailed ? t("settings.permissionRetry") : permission.status === "ready" ? t("settings.permissionReady") : t("settings.permissionGrant")}</button>
 </div>
 <div class="row">
-  <span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelpShort")}</small><small>{t("settings.filePreviewVerifyShort")}</small></span>
+  <span><strong>{t("settings.filePreview")}</strong><small>{t("settings.filePreviewHelpShort")}</small></span>
   <button onclick={() => void run(openFilePreviewSettings)}>{t("settings.grant")}</button>
 </div>
-<div class="current-app">
-  <strong>{t("settings.currentApp")}</strong>
-  <small>{permission.app_path ?? t("onboarding.permission.development")}</small>
-  {#if permission.app_path}<button onclick={() => void run(revealCurrentApp)}>{t("onboarding.permission.reveal")}</button>{/if}
-</div>
+{#if permission.status === "permission_required" && permission.app_path}
+  <div class="current-app">
+    <strong>{t("settings.currentApp")}</strong>
+    <small>{permission.app_path}</small>
+    <button onclick={() => void run(revealCurrentApp)}>{t("onboarding.permission.reveal")}</button>
+  </div>
+{/if}
 <div class="permission-feedback" aria-live="polite">
   {#if awaitingPermission && permission.status === "permission_required"}<small>{t("onboarding.permission.waiting")}</small><small>{t("onboarding.permission.oldEntry")}</small>{/if}
   {#if restartPending}<span>{t("onboarding.permission.restartPending")}</span><button onclick={() => void restartApp()}>{t("onboarding.permission.restartNow")}</button><button onclick={cancelRestart}>{t("onboarding.permission.cancelRestart")}</button>
@@ -122,5 +124,5 @@
 </div>
 
 <style>
-  h1{margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}h1:focus{outline:none}.row{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}.row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}button{flex:none;min-height:32px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);white-space:nowrap}button:hover:not(:disabled){color:var(--text-1);background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}button:disabled{opacity:.45}.ready{color:var(--success);background:color-mix(in srgb,var(--success) 8%,transparent)}.current-app{min-height:68px;padding-block:12px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 16px;border-bottom:1px solid var(--hairline)}.current-app strong,.current-app small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.current-app small{grid-column:1}.current-app button{grid-column:2;grid-row:1/3}.permission-feedback{min-height:32px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text-2)}.permission-feedback small{width:100%}
+  h1{margin:18px 0 4px;font-size:var(--fs-heading);font-weight:680;line-height:1.3;letter-spacing:-.01em}h1:focus{outline:none}.row{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}.row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}button{flex:none;min-height:32px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);white-space:nowrap}button:hover:not(:disabled){color:var(--text-1);background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}button:disabled{opacity:.45}.ready{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);font-weight:600}button.ready:hover:not(:disabled){color:var(--success);background:color-mix(in srgb,var(--success) 22%,transparent)}.status-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}.current-app{min-height:68px;padding-block:12px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 16px;border-bottom:1px solid var(--hairline)}.current-app strong,.current-app small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.current-app small{grid-column:1}.current-app button{grid-column:2;grid-row:1/3}.permission-feedback{min-height:32px;margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--text-2)}.permission-feedback small{width:100%}
 </style>

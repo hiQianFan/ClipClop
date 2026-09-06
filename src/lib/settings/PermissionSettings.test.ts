@@ -31,6 +31,16 @@ describe("macOS permission settings", () => {
     expect(relaunch).not.toHaveBeenCalled();
   });
 
+  it("rechecks a revoked permission on focus without opening settings first", async () => {
+    let checks = 0;
+    invoke.mockImplementation((command: string) => command === "get_auto_paste_permission_status" ? Promise.resolve(status(++checks === 1 ? "ready" : "permission_required")) : Promise.resolve());
+    render(PermissionSettings, { props: { active: true, onerror() {} } });
+    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+    await fireEvent.focus(window);
+    expect(await screen.findByRole("button", { name: "Grant Access" })).toBeTruthy();
+    expect(checks).toBe(2);
+  });
+
   it("retries a failed check", async () => {
     invoke.mockRejectedValueOnce(new Error("check failed")).mockResolvedValueOnce(status("ready"));
     render(PermissionSettings, { props: { active: true, onerror() {} } });
