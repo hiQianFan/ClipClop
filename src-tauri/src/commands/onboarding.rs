@@ -84,11 +84,11 @@ pub fn get_auto_paste_permission_status(app: AppHandle) -> AppResult<AutoPastePe
             app.package_info().version,
             app.config().identifier,
         );
-        return Ok(AutoPastePermissionStatus {
+        Ok(AutoPastePermissionStatus {
             status,
             app_location: location,
             app_path: bundle.map(|path| path.to_string_lossy().into_owned()),
-        });
+        })
     }
     #[cfg(not(target_os = "macos"))]
     {

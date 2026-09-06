@@ -105,11 +105,11 @@ pub(crate) fn request_accessibility_permission() {
 pub(crate) fn injection_permission() -> InjectionPermission {
     #[cfg(target_os = "macos")]
     {
-        return if macos::can_inject() {
+        if macos::can_inject() {
             InjectionPermission::Ready
         } else {
             InjectionPermission::PermissionRequired
-        };
+        }
     }
     #[cfg(not(target_os = "macos"))]
     InjectionPermission::Unsupported
