@@ -445,11 +445,10 @@
           <button class:ready={!autoPasteChecking && autoPastePermission === "ready"} disabled={autoPasteChecking || autoPastePermission === "unsupported"} aria-busy={autoPasteChecking} onclick={() => void manageAutoPastePermission()}>{autoPasteChecking ? t("settings.permissionChecking") : autoPasteCheckFailed ? t("settings.permissionRetry") : autoPastePermission === "ready" ? t("settings.permissionReady") : autoPastePermission === "unsupported" ? t("settings.permissionUnavailable") : t("settings.permissionGrant")}</button>
         </div>
         <div class="capability-row">
-          <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("settings.filePreviewHelpShort")}</small><small>{t("settings.filePreviewVerifyShort")}</small></span>
+          <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("settings.filePreviewHelpShort")}</small></span>
           <button onclick={() => void openFilePermissionSettings()}>{t("settings.grant")}</button>
         </div>
       </div>
-      <small class="capability-note">{t("onboarding.auto.fallback")}</small>
     </div>
   {:else if step === "system_preview"}
     <div class="center capability-step">
@@ -567,7 +566,8 @@
   .capability-row button{flex:none;min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
   .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
   .capability-row button:active{background:var(--bg-selected)}
-  .capability-row button.ready{color:var(--success);background:color-mix(in srgb,var(--success) 8%,transparent)}
+  .capability-row button.ready{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);font-weight:600}
+  .capability-row button.ready:hover{color:var(--success);background:color-mix(in srgb,var(--success) 22%,transparent)}
   .capability-row button:disabled{opacity:.45}
   .preview-status{flex:none;min-height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--hairline);border-radius:var(--radius-md);white-space:nowrap}
   .preview-status.success{border-color:color-mix(in srgb,var(--success) 35%,var(--hairline));color:var(--success)}
