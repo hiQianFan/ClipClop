@@ -1,23 +1,21 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
-  import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, RefreshCw, Search, Type } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
+  import PermissionControls from "./PermissionControls.svelte";
   import { getPreviewCapability, type PreviewCapability } from "$lib/history/api";
   import PageScrubber from "$lib/history/PageScrubber.svelte";
   import { currentPlatform, defaultShortcut } from "$lib/settings/shortcuts";
   import { languagePreference, localizedError, setLanguagePreference, t } from "$lib/i18n/index.svelte";
-  import { openFilePreviewSettings, openQuicklookInstallPage, type LanguagePreference } from "$lib/settings/api";
+  import { openQuicklookInstallPage, type LanguagePreference } from "$lib/settings/api";
   import {
-    getAutoPastePermissionStatus,
-    openAutoPasteSettings,
     previewOnboardingExample,
     saveLanguagePreference,
     saveOnboardingState,
     type OnboardingExample,
     type OnboardingState,
     type OnboardingStep,
-    type AutoPastePermissionViewStatus,
   } from "./api";
 
   type Mode = "first_run" | "quick_start";
@@ -51,12 +49,6 @@
   let reducedMotion = $state(false);
   let previewCapability = $state<PreviewCapability>({ provider: "unavailable", reason: "detection_failed", version: null });
   let previewChecking = $state(platform === "windows");
-  let autoPastePermission = $state<AutoPastePermissionViewStatus>("unknown");
-  let autoPasteChecking = $state(false);
-  let autoPasteCheckFailed = $state(false);
-  let autoPasteAwaiting = $state(false);
-  let autoPasteFocusQueued = false;
-  let autoPasteGeneration = 0;
   let saveQueue = Promise.resolve();
   const announcement = $derived(t("onboarding.stepLabel", {
     current: steps.indexOf(step) + 1,
@@ -89,14 +81,8 @@
 
   async function enter(next: OnboardingStep, save = true) {
     if (step === "practice" && next !== "practice") await closePreviewIfOpen();
-    if (step === "auto_paste" && next !== "auto_paste") {
-      autoPasteGeneration += 1;
-      autoPasteChecking = false;
-      autoPasteFocusQueued = false;
-    }
     step = next;
     if (next === "system_preview") void refreshPreviewCapability();
-    if (next === "auto_paste" && platform === "macos") void refreshAutoPastePermission();
     if (!journey.visited_steps.includes(next)) journey.visited_steps = [...journey.visited_steps, next];
     if (save) {
       try { await persist(); } catch (reason) { error = localizedError(reason); }
@@ -205,52 +191,6 @@
     previewOpen = false;
   }
 
-  async function openPermissionSettings() {
-    error = "";
-    try {
-      await openAutoPasteSettings();
-      autoPasteAwaiting = true;
-    } catch (reason) {
-      error = localizedError(reason);
-    }
-  }
-
-  async function refreshAutoPastePermission(fromFocus = false) {
-    if (platform !== "macos" || step !== "auto_paste") return;
-    if (autoPasteChecking) { if (fromFocus) autoPasteFocusQueued = true; return; }
-    const generation = ++autoPasteGeneration;
-    autoPasteChecking = true;
-    autoPasteCheckFailed = false;
-    try {
-      const next = await getAutoPastePermissionStatus();
-      if (step !== "auto_paste" || generation !== autoPasteGeneration) return;
-      autoPastePermission = next.status;
-      if (next.status === "ready") autoPasteAwaiting = false;
-      error = "";
-    }
-    catch (reason) {
-      if (step !== "auto_paste" || generation !== autoPasteGeneration) return;
-      autoPastePermission = "unknown";
-      autoPasteCheckFailed = true;
-      error = localizedError(reason);
-    } finally {
-      if (step !== "auto_paste" || generation !== autoPasteGeneration) return;
-      autoPasteChecking = false;
-      if (autoPasteFocusQueued) { autoPasteFocusQueued = false; void refreshAutoPastePermission(true); }
-    }
-  }
-
-  async function manageAutoPastePermission() {
-    if (autoPasteCheckFailed || autoPasteAwaiting) await refreshAutoPastePermission();
-    else await openPermissionSettings();
-  }
-
-  async function openFilePermissionSettings() {
-    error = "";
-    try { await openFilePreviewSettings(); }
-    catch (reason) { error = localizedError(reason); }
-  }
-
   async function finish() {
     if (finishing) return;
     finishing = true;
@@ -345,7 +285,6 @@
     if (platform === "windows" && step === "system_preview" && !previewChecking) {
       void refreshPreviewCapability();
     }
-    if (platform === "macos" && step === "auto_paste") void refreshAutoPastePermission(true);
   }
 
   function exampleText(example = selected) {
@@ -443,14 +382,7 @@
       <h1>{t("onboarding.auto.title")}</h1>
       <p>{t("onboarding.auto.body")}</p>
       <div class="capabilities">
-        <div class="capability-row">
-          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small></span>
-          <div class="permission-actions"><button disabled={autoPasteChecking} onclick={() => void refreshAutoPastePermission()}><RefreshCw size={14} aria-hidden="true" />{t("settings.permissionRefresh")}</button><button class:ready={!autoPasteChecking && autoPastePermission === "ready"} disabled={autoPasteChecking || autoPastePermission === "unsupported"} aria-busy={autoPasteChecking} onclick={() => void manageAutoPastePermission()}>{autoPasteChecking ? t("settings.permissionChecking") : autoPasteCheckFailed ? t("settings.permissionRetry") : autoPastePermission === "ready" ? t("settings.permissionReady") : autoPastePermission === "unsupported" ? t("settings.permissionUnavailable") : t("settings.permissionGrant")}</button></div>
-        </div>
-        <div class="capability-row">
-          <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("settings.filePreviewHelpShort")}</small></span>
-          <button onclick={() => void openFilePermissionSettings()}>{t("settings.grant")}</button>
-        </div>
+        <PermissionControls onerror={(message) => error = message} returnTo={mode === "first_run" ? "onboarding" : "quick_start"} beforeRestart={async () => { await persist(); return true; }} />
       </div>
     </div>
   {:else if step === "system_preview"}
@@ -566,13 +498,9 @@
   .capability-row>span{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
   .capability-row strong{color:var(--text-1);font-size:var(--fs-ui)}
   .capability-row small{color:var(--text-3);font-size:var(--fs-meta);line-height:var(--lh-normal)}
-  .permission-actions{display:flex;align-items:center;gap:8px}
-  .permission-actions button{display:flex;align-items:center;gap:6px}
   .capability-row button{flex:none;min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
   .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
   .capability-row button:active{background:var(--bg-selected)}
-  .capability-row button.ready{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);font-weight:600}
-  .capability-row button.ready:hover{color:var(--success);background:color-mix(in srgb,var(--success) 22%,transparent)}
   .capability-row button:disabled{opacity:.45}
   .preview-status{flex:none;min-height:32px;padding:0 12px;display:inline-flex;align-items:center;border:1px solid var(--hairline);border-radius:var(--radius-md);white-space:nowrap}
   .preview-status.success{border-color:color-mix(in srgb,var(--success) 35%,var(--hairline));color:var(--success)}

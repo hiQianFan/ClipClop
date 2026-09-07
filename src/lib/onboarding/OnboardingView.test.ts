@@ -71,7 +71,7 @@ describe("Onboarding permissions", () => {
     render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
     await fireEvent.click(await screen.findByRole("button", { name: "Grant Access" }));
     await fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
-    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Restart App" })).toBeTruthy();
   });
 
   it("shows both macOS permissions and refreshes automatic paste status on focus", async () => {
@@ -86,11 +86,11 @@ describe("Onboarding permissions", () => {
 
     render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
     await fireEvent.click(await screen.findByRole("button", { name: "Grant Access" }));
-    expect(invoke).toHaveBeenCalledWith("open_auto_paste_settings");
+    expect(invoke).toHaveBeenCalledWith("open_permission_guide", { kind: "accessibility" });
     await fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    expect(invoke).toHaveBeenCalledWith("open_file_preview_settings");
+    expect(invoke).toHaveBeenCalledWith("open_permission_guide", { kind: "files" });
     await fireEvent.focus(window);
-    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Restart App" })).toBeTruthy();
     expect(invoke.mock.calls.filter(([command]) => command === "get_auto_paste_permission_status")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Finish" })).toBeTruthy();
   });

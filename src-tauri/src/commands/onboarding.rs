@@ -1,5 +1,91 @@
 use serde::Serialize;
 use tauri::{AppHandle, State};
+use tauri::{Emitter, Manager};
+
+#[tauri::command]
+pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()> {
+    if kind != "accessibility" && kind != "files" {
+        return Err(crate::error::AppError::Platform(
+            "invalid permission kind".into(),
+        ));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let bundle = current_app_bundle();
+        let window = if let Some(window) = app.get_webview_window("permission-guide") {
+            window
+                .show()
+                .map_err(|e| AppError::Platform(e.to_string()))?;
+            window
+        } else {
+            tauri::WebviewWindowBuilder::new(
+                &app,
+                "permission-guide",
+                tauri::WebviewUrl::App("permissions".into()),
+            )
+            .title("ClipClop")
+            .inner_size(430.0, 320.0)
+            .resizable(false)
+            .always_on_top(true)
+            .build()
+            .map_err(|e| AppError::Platform(e.to_string()))?
+        };
+        if let Some(bundle) = &bundle {
+            let path = bundle.to_string_lossy().into_owned();
+            app.run_on_main_thread(move || unsafe {
+                use objc::{class, msg_send, runtime::Object, sel, sel_impl};
+                let Ok(native) = window.ns_window() else {
+                    return;
+                };
+                let string: *mut Object = msg_send![class!(NSString), alloc];
+                let string: *mut Object = msg_send![string, initWithBytes:path.as_ptr() length:path.len() encoding:4usize];
+                let url: *mut Object = msg_send![class!(NSURL), fileURLWithPath:string];
+                let _: () = msg_send![native as *mut Object, setRepresentedURL:url];
+                let _: () = msg_send![string, release];
+            })
+            .map_err(|error| {
+                log::error!("permission guide failed: stage=set_represented_url error={error}");
+                AppError::Platform(error.to_string())
+            })?;
+        }
+        log::info!(
+            "permission guide opened: kind={kind} app_location={} draggable={}",
+            app_location(bundle.as_deref()),
+            bundle.is_some()
+        );
+        if kind == "accessibility" {
+            open_auto_paste_settings(app)?;
+        } else {
+            super::open_file_preview_settings(app)?;
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn close_permission_guide(app: AppHandle, restart: Option<bool>) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("permission-guide") {
+        window
+            .close()
+            .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .show()
+            .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+        if restart == Some(true) {
+            window
+                .emit("permission_restart_requested", ())
+                .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+        }
+        window
+            .set_focus()
+            .map_err(|e| crate::error::AppError::Platform(e.to_string()))?;
+    }
+    Ok(())
+}
 
 #[cfg(target_os = "macos")]
 use std::path::{Path, PathBuf};

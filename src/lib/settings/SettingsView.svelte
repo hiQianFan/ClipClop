@@ -33,6 +33,22 @@
   let navFocusRing = $state(false);
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
+  let confirmRestart = $state(false);
+  let resolveRestart: ((proceed: boolean) => void) | undefined;
+  function beforePermissionRestart(): Promise<boolean> {
+    if (JSON.stringify(settings) === JSON.stringify(savedSettings)) return Promise.resolve(true);
+    confirmRestart = true;
+    return new Promise((resolve) => { resolveRestart = resolve; });
+  }
+  function answerRestart(proceed: boolean) {
+    confirmRestart = false;
+    resolveRestart?.(proceed);
+    resolveRestart = undefined;
+  }
+  async function saveAndRestart() {
+    await save();
+    answerRestart(saveSucceeded);
+  }
   let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
@@ -65,6 +81,7 @@
   });
   onDestroy(() => {
     destroyed = true;
+    answerRestart(false);
     clearTimeout(saveFeedbackTimer);
     if (!saving && savedSettings) {
       previewTheme(savedSettings.theme);
@@ -274,7 +291,7 @@
         {:else if panelTab === "shortcuts"}
           <ShortcutSettings {settings} {platform} bind:heading={sectionHeading} />
         {:else if panelTab === "permissions"}
-          <PermissionSettings active={tab === "permissions"} focusRequested={focusPermission} onerror={(message) => status = message} bind:heading={sectionHeading} />
+          <PermissionSettings active={tab === "permissions"} focusRequested={focusPermission} onerror={(message) => status = message} bind:heading={sectionHeading} beforeRestart={beforePermissionRestart} />
         {:else if panelTab === "updates"}
           <UpdateSettings bind:settings onchecked={checkUpdates} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else}
@@ -287,6 +304,16 @@
     </Tabs.Content>
     {/each}
   </Tabs.Root>
+  <AlertDialog.Root open={confirmRestart} onOpenChange={(open) => { if (!open) answerRestart(false); }}>
+    {#if confirmRestart}<ActionToolbar>
+      <AlertDialog.Content aria-label={t("permission.unsaved")}>
+        <AlertDialog.Title>{t("permission.unsaved")}</AlertDialog.Title>
+        <button class="toolbar-button primary" disabled={saving} onclick={() => void saveAndRestart()}>{t("permission.save")}</button>
+        <button class="toolbar-button secondary" disabled={saving} onclick={() => answerRestart(true)}>{t("permission.discard")}</button>
+        <AlertDialog.Cancel class="toolbar-button" disabled={saving} onclick={() => answerRestart(false)}>{t("common.cancel")}</AlertDialog.Cancel>
+      </AlertDialog.Content>
+    </ActionToolbar>{/if}
+  </AlertDialog.Root>
   <AlertDialog.Root open={confirmClear} onOpenChange={(open) => confirmClear = open}>
     <ActionToolbar class="settings-toolbar">
       {#if confirmClear}

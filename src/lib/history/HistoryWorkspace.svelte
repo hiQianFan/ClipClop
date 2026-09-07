@@ -89,6 +89,19 @@
     try {
       await Promise.all([syncSettings(), refreshPreviewCapability()]);
       onboarding = await getOnboardingState();
+      const permissionReturn = localStorage.getItem("permission-restart-return");
+      localStorage.removeItem("permission-restart-return");
+      if (permissionReturn === "settings") {
+        settingsTab = "permissions";
+        view = "settings";
+        return;
+      }
+      if (permissionReturn === "quick_start") {
+        onboardingMode = "quick_start";
+        onboarding = { completed_revision: 1, current_step: "auto_paste", visited_steps: ["auto_paste"], selected_example: "image" };
+        view = "onboarding";
+        return;
+      }
       if (onboarding.completed_revision === null) {
         onboardingMode = "first_run";
         view = "onboarding";

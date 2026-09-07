@@ -22,13 +22,6 @@ export type AutoPastePermissionViewStatus = AutoPastePermissionStatus["status"] 
 export const getAutoPastePermissionStatus = () =>
   invoke<AutoPastePermissionStatus>("get_auto_paste_permission_status");
 export const revealCurrentApp = () => invoke<void>("reveal_current_app");
-export const shouldRestartAfterPermissionCheck = (
-  previous: AutoPastePermissionViewStatus,
-  next: AutoPastePermissionStatus["status"],
-  fromFocus: boolean,
-  awaitingPermission: boolean,
-  restartHandled: boolean,
-) => fromFocus && awaitingPermission && previous === "permission_required" && next === "ready" && !restartHandled;
 export const saveLanguagePreference = (language: LanguagePreference) =>
   invoke<LanguagePreference>("set_language_preference", { language });
 

@@ -1,4 +1,13 @@
 export const en = {
+  "permission.restart": "Restart App",
+  "permission.unsaved": "Save settings before restarting?",
+  "permission.discard": "Discard and Restart",
+  "permission.save": "Save and Restart",
+  "permission.restartHint": "If you have enabled ClipClop in System Settings, restart the app.",
+  "permission.drag": "Not in the list? Drag the ClipClop icon in this window’s title bar into the list, then enable it. You can also add the app using the + button in System Settings.",
+  "permission.development": "Development mode cannot provide a draggable app. Use an installed build to test this step.",
+  "permission.guide": "Enable ClipClop in System Settings",
+  "permission.return": "Return to ClipClop",
   "onboarding.language": "Language",
   "onboarding.previous": "Previous step",
   "onboarding.next": "Next step",
@@ -381,6 +390,15 @@ export const en = {
 export type Catalog = { [K in keyof typeof en]: string };
 
 export const zhCN = {
+  "permission.restart": "重启应用",
+  "permission.unsaved": "重启前保存设置？",
+  "permission.discard": "放弃并重启",
+  "permission.save": "保存并重启",
+  "permission.restartHint": "如果已在系统设置中开启 ClipClop，请重新启动应用。",
+  "permission.drag": "列表中没有 ClipClop？将窗口标题栏的 ClipClop 图标拖入列表并开启。也可点击系统设置中的加号添加应用。",
+  "permission.development": "开发模式无法提供可拖拽的应用，请使用安装版测试此步骤。",
+  "permission.guide": "在系统设置中开启 ClipClop",
+  "permission.return": "返回 ClipClop",
   "onboarding.language": "语言",
   "onboarding.previous": "上一步",
   "onboarding.next": "下一步",

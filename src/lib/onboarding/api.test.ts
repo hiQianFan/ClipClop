@@ -31,13 +31,4 @@ describe("onboarding IPC", () => {
     expect(invoke).toHaveBeenLastCalledWith("reveal_current_app");
   });
 
-  it("restarts only for one active-guide permission transition", async () => {
-    const { shouldRestartAfterPermissionCheck: shouldRestart } = await import("./api");
-    expect(shouldRestart("permission_required", "ready", true, true, false)).toBe(true);
-    expect(shouldRestart("ready", "ready", true, true, false)).toBe(false);
-    expect(shouldRestart("permission_required", "permission_required", true, true, false)).toBe(false);
-    expect(shouldRestart("permission_required", "ready", false, true, false)).toBe(false);
-    expect(shouldRestart("permission_required", "ready", true, false, false)).toBe(false);
-    expect(shouldRestart("permission_required", "ready", true, true, true)).toBe(false);
-  });
 });
