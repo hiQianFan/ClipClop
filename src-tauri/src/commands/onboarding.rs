@@ -3,7 +3,11 @@ use tauri::{AppHandle, State};
 use tauri::{Emitter, Manager};
 
 #[tauri::command]
-pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()> {
+pub async fn open_permission_guide(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    kind: String,
+) -> AppResult<()> {
     if kind != "accessibility" && kind != "files" {
         return Err(crate::error::AppError::Platform(
             "invalid permission kind".into(),
@@ -17,12 +21,18 @@ pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()
                 .show()
                 .map_err(|e| AppError::Platform(e.to_string()))?;
         } else {
+            let theme = match state.settings.get_stored()?.theme {
+                crate::settings::Theme::Light => Some(tauri::Theme::Light),
+                crate::settings::Theme::Dark => Some(tauri::Theme::Dark),
+                crate::settings::Theme::System => None,
+            };
             tauri::WebviewWindowBuilder::new(
                 &app,
                 "permission-guide",
                 tauri::WebviewUrl::App("permissions".into()),
             )
             .title("ClipClop")
+            .theme(theme)
             .inner_size(430.0, 360.0)
             .resizable(false)
             .always_on_top(true)
