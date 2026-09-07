@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { untrack } from "svelte";
   import { formatDateTime, localizedError, t } from "$lib/i18n/index.svelte";
   import { listReleaseNotes, openLatestRelease, type ReleaseNote } from "$lib/updater/api";
 
-  let { updateVersion, onerror }: { updateVersion?: string; onerror: (message: string) => void } = $props();
+  let { updateVersion, refreshRevision = 0, onerror }: { updateVersion?: string; refreshRevision?: number; onerror: (message: string) => void } = $props();
   let releases = $state<ReleaseNote[]>([]);
   let selected = $state<ReleaseNote | null>(null);
   let loading = $state(false);
   let error = $state("");
   let list = $state<HTMLDivElement>();
 
-  onMount(() => { void load(); });
+  $effect(() => { refreshRevision; untrack(() => void load()); });
   $effect(() => { const release = forVersion(updateVersion); if (release) selected = release; });
 
   function forVersion(version: string | undefined) {

@@ -94,7 +94,7 @@ export type ReleaseNote = { version: string; publishedAt: string; notes: string;
 const RELEASES_API = "https://api.github.com/repos/hiQianFan/ClipClop/releases?per_page=30";
 
 export async function listReleaseNotes(): Promise<ReleaseNote[]> {
-  const response = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github.html+json" } });
+  const response = await fetch(RELEASES_API, { cache: "no-store", headers: { Accept: "application/vnd.github.html+json" } });
   if (!response.ok) throw new Error(`GitHub releases request failed (${response.status})`);
   const releases = await response.json() as Array<{ tag_name?: string; published_at?: string; body?: string; body_html?: string; html_url?: string; draft?: boolean }>;
   return releases.filter((release) => !release.draft && release.tag_name && release.published_at).map((release, index) => ({

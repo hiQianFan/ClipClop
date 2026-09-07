@@ -109,6 +109,14 @@ it("keeps release notes mounted while switching categories", async () => {
   expect(listReleaseNotes).toHaveBeenCalledTimes(1);
 });
 
+it("refreshes release notes when checking for updates", async () => {
+  listReleaseNotes.mockClear();
+  render(SettingsView, { props: { initialTab: "updates", onclose() {}, oncleared() {}, onquickstart() {} } });
+  await waitFor(() => expect(listReleaseNotes).toHaveBeenCalledTimes(1));
+  await fireEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+  await waitFor(() => expect(listReleaseNotes).toHaveBeenCalledTimes(2));
+});
+
 it("rolls editable settings back when saving fails", async () => {
   updateSettings.mockRejectedValueOnce(new Error("disk full"));
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
