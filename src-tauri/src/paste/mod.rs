@@ -98,11 +98,6 @@ impl PasteController {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn request_accessibility_permission() {
-    macos::request_accessibility_permission();
-}
-
-#[cfg(target_os = "macos")]
 pub(crate) fn injection_permission() -> InjectionPermission {
     if macos::can_inject() {
         InjectionPermission::Ready

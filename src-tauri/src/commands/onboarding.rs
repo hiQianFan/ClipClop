@@ -235,7 +235,6 @@ pub fn open_auto_paste_settings(app: AppHandle) -> AppResult<()> {
             "automatic paste permission requested: app_location={}",
             app_location(current_app_bundle().as_deref())
         );
-        crate::paste::request_accessibility_permission();
         app.opener()
             .open_url(
                 "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",

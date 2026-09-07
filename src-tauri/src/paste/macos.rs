@@ -20,7 +20,6 @@ const FIRST_RESPONDER_SETTLE_DELAY: Duration = Duration::from_millis(60);
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     fn CGPreflightPostEventAccess() -> bool;
-    fn CGRequestPostEventAccess() -> bool;
     fn CGEventSourceCreate(state_id: i32) -> *mut c_void;
     fn CGEventCreateKeyboardEvent(
         source: *mut c_void,
@@ -34,12 +33,6 @@ extern "C" {
 
 pub(super) fn can_inject() -> bool {
     unsafe { CGPreflightPostEventAccess() }
-}
-
-pub(super) fn request_accessibility_permission() {
-    unsafe {
-        CGRequestPostEventAccess();
-    }
 }
 
 pub(super) fn capture_target() -> Option<PasteTarget> {
