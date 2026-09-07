@@ -25,6 +25,7 @@ use commands::{
     open_file_preview_settings, open_log_dir, open_permission_guide, open_quicklook_install_page,
     open_release_page, open_repository, paste_clip, perform_pager_haptic, preview_clip,
     preview_onboarding_example, query_history, quit_app, record_update_check, reveal_current_app,
+    start_current_app_drag,
     save_onboarding_state, set_language_preference, set_quick_selection, show_full_panel,
     skip_update_version, start_update_download, update_settings,
 };
@@ -257,6 +258,7 @@ pub fn run() {
             get_auto_paste_permission_status,
             open_permission_guide,
             close_permission_guide,
+            start_current_app_drag,
             open_auto_paste_settings,
             reveal_current_app,
             set_language_preference,

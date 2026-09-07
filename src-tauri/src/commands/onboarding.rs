@@ -12,11 +12,10 @@ pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()
     #[cfg(target_os = "macos")]
     {
         let bundle = current_app_bundle();
-        let window = if let Some(window) = app.get_webview_window("permission-guide") {
+        if let Some(window) = app.get_webview_window("permission-guide") {
             window
                 .show()
                 .map_err(|e| AppError::Platform(e.to_string()))?;
-            window
         } else {
             tauri::WebviewWindowBuilder::new(
                 &app,
@@ -24,29 +23,11 @@ pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()
                 tauri::WebviewUrl::App("permissions".into()),
             )
             .title("ClipClop")
-            .inner_size(430.0, 280.0)
+            .inner_size(430.0, 360.0)
             .resizable(false)
             .always_on_top(true)
             .build()
-            .map_err(|e| AppError::Platform(e.to_string()))?
-        };
-        if let Some(bundle) = &bundle {
-            let path = bundle.to_string_lossy().into_owned();
-            app.run_on_main_thread(move || unsafe {
-                use objc::{class, msg_send, runtime::Object, sel, sel_impl};
-                let Ok(native) = window.ns_window() else {
-                    return;
-                };
-                let string: *mut Object = msg_send![class!(NSString), alloc];
-                let string: *mut Object = msg_send![string, initWithBytes:path.as_ptr() length:path.len() encoding:4usize];
-                let url: *mut Object = msg_send![class!(NSURL), fileURLWithPath:string];
-                let _: () = msg_send![native as *mut Object, setRepresentedURL:url];
-                let _: () = msg_send![string, release];
-            })
-            .map_err(|error| {
-                log::error!("permission guide failed: stage=set_represented_url error={error}");
-                AppError::Platform(error.to_string())
-            })?;
+            .map_err(|e| AppError::Platform(e.to_string()))?;
         }
         log::info!(
             "permission guide opened: kind={kind} app_location={} draggable={}",
@@ -58,6 +39,49 @@ pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()
         } else {
             super::open_file_preview_settings(app)?;
         }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = app;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn start_current_app_drag(app: AppHandle) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let bundle = current_app_bundle().ok_or_else(|| {
+            AppError::Platform("current process is not running from an app bundle".into())
+        })?;
+        let window = app
+            .get_webview_window("permission-guide")
+            .ok_or_else(|| AppError::Platform("permission guide window is unavailable".into()))?;
+        let path = bundle.to_string_lossy().into_owned();
+        app.run_on_main_thread(move || unsafe {
+            use objc::{class, msg_send, runtime::Object, sel, sel_impl};
+            #[repr(C)]
+            struct Point { x: f64, y: f64 }
+            #[repr(C)]
+            struct Size { width: f64, height: f64 }
+            #[repr(C)]
+            struct Rect { origin: Point, size: Size }
+
+            let Ok(native) = window.ns_window() else { return };
+            let native = native as *mut Object;
+            let view: *mut Object = msg_send![native, contentView];
+            let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+            let event: *mut Object = msg_send![application, currentEvent];
+            if view.is_null() || event.is_null() { return; }
+            let location: Point = msg_send![native, mouseLocationOutsideOfEventStream];
+            let rect = Rect {
+                origin: Point { x: location.x - 32.0, y: location.y - 32.0 },
+                size: Size { width: 64.0, height: 64.0 },
+            };
+            let string: *mut Object = msg_send![class!(NSString), alloc];
+            let string: *mut Object = msg_send![string, initWithBytes:path.as_ptr() length:path.len() encoding:4usize];
+            let _: i8 = msg_send![view, dragFile:string fromRect:rect slideBack:1i8 event:event];
+            let _: () = msg_send![string, release];
+        })
+        .map_err(|error| AppError::Platform(error.to_string()))?;
     }
     #[cfg(not(target_os = "macos"))]
     let _ = app;
