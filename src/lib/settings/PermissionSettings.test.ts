@@ -27,7 +27,7 @@ describe("macOS permission settings", () => {
     render(PermissionSettings, { props: { active: true, onerror() {} } });
     await fireEvent.click(await screen.findByRole("button", { name: "Ready" }));
     await fireEvent.focus(window);
-    expect(await screen.findByText("The current ClipClop needs Accessibility permission.")).toBeTruthy();
+    expect(await screen.findByText("Grant Accessibility permission.")).toBeTruthy();
     expect(relaunch).not.toHaveBeenCalled();
   });
 

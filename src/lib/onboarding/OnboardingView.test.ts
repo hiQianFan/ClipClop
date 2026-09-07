@@ -62,6 +62,18 @@ describe("Onboarding language menu", () => {
 });
 
 describe("Onboarding permissions", () => {
+  it("offers a manual permission recheck after opening settings", async () => {
+    platform.value = "macos";
+    let checks = 0;
+    invoke.mockImplementation((command: string) => command === "get_auto_paste_permission_status"
+      ? Promise.resolve({ status: ++checks === 1 ? "permission_required" : "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" })
+      : Promise.resolve(undefined));
+    render(OnboardingView, { props: { initial: { ...initial, current_step: "auto_paste" }, mode: "quick_start", onfinish() {} } });
+    await fireEvent.click(await screen.findByRole("button", { name: "Grant Access" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    expect(await screen.findByRole("button", { name: "Ready" })).toBeTruthy();
+  });
+
   it("shows both macOS permissions and refreshes automatic paste status on focus", async () => {
     platform.value = "macos";
     let checks = 0;

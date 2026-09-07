@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte";
   import { DropdownMenu } from "bits-ui";
-  import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, Search, Type } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, Check, Languages, Link, LoaderCircle, RefreshCw, Search, Type } from "@lucide/svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
   import { getPreviewCapability, type PreviewCapability } from "$lib/history/api";
   import PageScrubber from "$lib/history/PageScrubber.svelte";
@@ -54,6 +54,7 @@
   let autoPastePermission = $state<AutoPastePermissionViewStatus>("unknown");
   let autoPasteChecking = $state(false);
   let autoPasteCheckFailed = $state(false);
+  let autoPasteAwaiting = $state(false);
   let autoPasteFocusQueued = false;
   let autoPasteGeneration = 0;
   let saveQueue = Promise.resolve();
@@ -208,6 +209,7 @@
     error = "";
     try {
       await openAutoPasteSettings();
+      autoPasteAwaiting = true;
     } catch (reason) {
       error = localizedError(reason);
     }
@@ -223,6 +225,7 @@
       const next = await getAutoPastePermissionStatus();
       if (step !== "auto_paste" || generation !== autoPasteGeneration) return;
       autoPastePermission = next.status;
+      if (next.status === "ready") autoPasteAwaiting = false;
       error = "";
     }
     catch (reason) {
@@ -238,7 +241,7 @@
   }
 
   async function manageAutoPastePermission() {
-    if (autoPasteCheckFailed) await refreshAutoPastePermission();
+    if (autoPasteCheckFailed || autoPasteAwaiting) await refreshAutoPastePermission();
     else await openPermissionSettings();
   }
 
@@ -441,8 +444,8 @@
       <p>{t("onboarding.auto.body")}</p>
       <div class="capabilities">
         <div class="capability-row">
-          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small><small aria-live="polite" aria-atomic="true">{autoPasteChecking ? t("onboarding.permission.checking") : autoPasteCheckFailed ? t("onboarding.permission.unknown") : autoPastePermission === "ready" ? t("onboarding.permission.ready") : autoPastePermission === "unsupported" ? t("onboarding.auto.unsupported") : t("onboarding.permission.required")}</small></span>
-          <button class:ready={!autoPasteChecking && autoPastePermission === "ready"} disabled={autoPasteChecking || autoPastePermission === "unsupported"} aria-busy={autoPasteChecking} onclick={() => void manageAutoPastePermission()}>{autoPasteChecking ? t("settings.permissionChecking") : autoPasteCheckFailed ? t("settings.permissionRetry") : autoPastePermission === "ready" ? t("settings.permissionReady") : autoPastePermission === "unsupported" ? t("settings.permissionUnavailable") : t("settings.permissionGrant")}</button>
+          <span><strong>{t("onboarding.auto.autoPasteTitle")}</strong><small>{t("onboarding.auto.autoPasteHelp")}</small></span>
+          <div class="permission-actions"><button disabled={autoPasteChecking} onclick={() => void refreshAutoPastePermission()}><RefreshCw size={14} aria-hidden="true" />{t("settings.permissionRefresh")}</button><button class:ready={!autoPasteChecking && autoPastePermission === "ready"} disabled={autoPasteChecking || autoPastePermission === "unsupported"} aria-busy={autoPasteChecking} onclick={() => void manageAutoPastePermission()}>{autoPasteChecking ? t("settings.permissionChecking") : autoPasteCheckFailed ? t("settings.permissionRetry") : autoPastePermission === "ready" ? t("settings.permissionReady") : autoPastePermission === "unsupported" ? t("settings.permissionUnavailable") : t("settings.permissionGrant")}</button></div>
         </div>
         <div class="capability-row">
           <span><strong>{t("onboarding.auto.filePreviewTitle")}</strong><small>{t("settings.filePreviewHelpShort")}</small></span>
@@ -497,7 +500,7 @@
   <button class="step-button previous" disabled={step === "overview"} onclick={() => void enter(steps[steps.indexOf(step) - 1]!)}><ArrowLeft size={15} aria-hidden="true" />{t("onboarding.previous")}</button>
   <span class="step-progress" aria-live="polite">{steps.indexOf(step) + 1} / {steps.length}</span>
   {#if isLastStep}
-    <button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else if step === "auto_paste" && autoPastePermission !== "ready"}{t("onboarding.auto.later")}{:else}{t("onboarding.finish")}{/if}</button>
+    <button class="primary finish" onclick={() => void finish()} disabled={finishing} aria-busy={finishing}>{#if finishing}<LoaderCircle size={14} class="finish-spinner" />{t("onboarding.finishing")}{:else}{t("onboarding.finish")}{/if}</button>
   {:else}
     <button class="step-button next" onclick={() => void enter(steps[steps.indexOf(step) + 1]!)}>{t("onboarding.next")}<ArrowRight size={15} aria-hidden="true" /></button>
   {/if}
@@ -563,6 +566,8 @@
   .capability-row>span{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
   .capability-row strong{color:var(--text-1);font-size:var(--fs-ui)}
   .capability-row small{color:var(--text-3);font-size:var(--fs-meta);line-height:var(--lh-normal)}
+  .permission-actions{display:flex;align-items:center;gap:8px}
+  .permission-actions button{display:flex;align-items:center;gap:6px}
   .capability-row button{flex:none;min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);font-weight:600;white-space:nowrap}
   .capability-row button:hover{color:var(--text-1);background:var(--bg-hover)}
   .capability-row button:active{background:var(--bg-selected)}
