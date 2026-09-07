@@ -24,7 +24,7 @@ pub async fn open_permission_guide(app: AppHandle, kind: String) -> AppResult<()
                 tauri::WebviewUrl::App("permissions".into()),
             )
             .title("ClipClop")
-            .inner_size(430.0, 320.0)
+            .inner_size(430.0, 280.0)
             .resizable(false)
             .always_on_top(true)
             .build()

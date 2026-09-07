@@ -26,5 +26,5 @@
 </main>
 <ActionToolbar><button class="toolbar-button" onclick={() => void run("close_permission_guide")}>{t("permission.return")}</button><button class="toolbar-button primary" onclick={() => void run("close_permission_guide", true)}>{t("permission.restart")}</button></ActionToolbar>
 <style>
-  main{padding:24px;flex:1}h1{font-size:var(--fs-heading);color:var(--text-1)}p{font-size:var(--fs-ui);color:var(--text-2);line-height:1.6}button{min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:transparent}button:hover{background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
+  :global(body){display:flex;flex-direction:column}main{min-height:0;padding:24px;flex:1}h1{margin:0 0 14px;font-size:var(--fs-heading);color:var(--text-1)}p{margin:0 0 14px;font-size:var(--fs-ui);color:var(--text-2);line-height:1.6}button{min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md);color:var(--text-2);background:transparent}button:hover{background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
 </style>
