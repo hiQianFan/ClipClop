@@ -51,7 +51,7 @@ pub async fn open_permission_guide(
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = app;
+    let _ = (app, state);
     Ok(())
 }
 
