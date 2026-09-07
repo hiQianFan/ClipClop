@@ -59,25 +59,45 @@ pub fn start_current_app_drag(app: AppHandle) -> AppResult<()> {
         app.run_on_main_thread(move || unsafe {
             use objc::{class, msg_send, runtime::Object, sel, sel_impl};
             #[repr(C)]
-            struct Point { x: f64, y: f64 }
+            struct Point {
+                x: f64,
+                y: f64,
+            }
             #[repr(C)]
-            struct Size { width: f64, height: f64 }
+            struct Size {
+                width: f64,
+                height: f64,
+            }
             #[repr(C)]
-            struct Rect { origin: Point, size: Size }
+            struct Rect {
+                origin: Point,
+                size: Size,
+            }
 
-            let Ok(native) = window.ns_window() else { return };
+            let Ok(native) = window.ns_window() else {
+                return;
+            };
             let native = native as *mut Object;
             let view: *mut Object = msg_send![native, contentView];
             let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
             let event: *mut Object = msg_send![application, currentEvent];
-            if view.is_null() || event.is_null() { return; }
+            if view.is_null() || event.is_null() {
+                return;
+            }
             let location: Point = msg_send![native, mouseLocationOutsideOfEventStream];
             let rect = Rect {
-                origin: Point { x: location.x - 32.0, y: location.y - 32.0 },
-                size: Size { width: 64.0, height: 64.0 },
+                origin: Point {
+                    x: location.x - 32.0,
+                    y: location.y - 32.0,
+                },
+                size: Size {
+                    width: 64.0,
+                    height: 64.0,
+                },
             };
             let string: *mut Object = msg_send![class!(NSString), alloc];
-            let string: *mut Object = msg_send![string, initWithBytes:path.as_ptr() length:path.len() encoding:4usize];
+            let string: *mut Object =
+                msg_send![string, initWithBytes:path.as_ptr() length:path.len() encoding:4usize];
             let _: i8 = msg_send![view, dragFile:string fromRect:rect slideBack:1i8 event:event];
             let _: () = msg_send![string, release];
         })
