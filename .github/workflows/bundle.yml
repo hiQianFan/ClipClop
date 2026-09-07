@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-release
     permissions:
+      actions: read
       contents: write
     outputs:
       release_id: ${{ steps.version.outputs.release_id }}
@@ -28,6 +29,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      - name: Require successful Quality run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for _ in {1..80}; do
+            conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/quality.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=1" --jq '.workflow_runs[0].conclusion // empty')"
+            if [[ "$conclusion" == "success" ]]; then exit 0; fi
+            if [[ -n "$conclusion" ]]; then echo "Quality concluded: $conclusion"; exit 1; fi
+            sleep 15
+          done
+          echo "Timed out waiting for Quality on $GITHUB_SHA"
+          exit 1
       - name: Verify release version
         id: version
         shell: bash
@@ -99,21 +113,8 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
           targets: ${{ matrix.rust_targets }}
       - run: pnpm install --frozen-lockfile
-      - name: Frontend tests
-        run: pnpm test
-      - name: Frontend diagnostics
-        run: pnpm check
-      - name: Frontend production build
-        run: pnpm build
-      - name: Rust formatting
-        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-      - name: Rust lint
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-      - name: Rust tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Verify updater signing key
         shell: bash
         env:
