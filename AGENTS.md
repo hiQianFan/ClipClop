@@ -20,3 +20,7 @@
 
 - Run project Python scripts through `uv`; do not call the system `python` or `python3` directly.
 - In restricted environments, point uv's cache and Python install directory at a writable project or temporary directory instead of the user home directory.
+
+## Cross-platform Rust
+
+- When a command argument or import is used only inside a platform `cfg`, also gate it or explicitly consume it on every other target. The Windows and macOS Quality jobs treat compiler warnings as errors, so check both target paths before release.
