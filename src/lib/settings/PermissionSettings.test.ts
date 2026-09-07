@@ -23,6 +23,14 @@ it("allows explicit restart even when the process still reports required", async
   expect(relaunch).toHaveBeenCalledTimes(1);
   expect(localStorage.getItem("permission-restart-return")).toBe("settings");
 });
+it("keeps the ready state when opening an already granted permission", async () => {
+  invoke.mockImplementation((command: string) => Promise.resolve(command === "get_auto_paste_permission_status" ? status("ready") : undefined));
+  render(PermissionSettings, { active: true, onerror() {} });
+  await fireEvent.click(await screen.findByRole("button", { name: "Ready" }));
+  expect(invoke).toHaveBeenCalledWith("open_permission_guide", { kind: "accessibility" });
+  expect(screen.getByRole("button", { name: "Ready" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Restart App" })).toBeNull();
+});
 it("does not restart on focus or after a timer", async () => {
   setup();
   await fireEvent.click(await screen.findByRole("button", { name: "Grant Access" }));

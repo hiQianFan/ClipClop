@@ -88,15 +88,13 @@ it("provides a non-interactive drag region in the settings header", () => {
   expect(container.querySelector("button[data-tauri-drag-region]")).toBeNull();
 });
 
-it("keeps loading and saving owned by SettingsView across categories", async () => {
+it("saves changes immediately without a save button", async () => {
   updateSettings.mockClear();
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   await waitFor(() => expect(screen.getByRole("heading", { name: "General" })).toBeTruthy());
-  await fireEvent.click(screen.getByRole("tab", { name: "Shortcuts" }));
-  await waitFor(() => expect(screen.getByRole("heading", { name: "Shortcuts" })).toBeTruthy());
-  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await fireEvent.click(screen.getByRole("switch", { name: "Launch at login" }));
   await waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(1));
-  expect(screen.getByRole("button", { name: "Saved" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
 it("keeps release notes mounted while switching categories", async () => {
@@ -122,9 +120,9 @@ it("rolls editable settings back when saving fails", async () => {
   render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {} } });
   const launch = await screen.findByRole("switch", { name: "Launch at login" }) as HTMLInputElement;
   await fireEvent.click(launch);
-  expect(launch.checked).toBe(true);
-  await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(updateSettings).toHaveBeenCalled());
   await waitFor(() => expect((screen.getByRole("switch", { name: "Launch at login" }) as HTMLInputElement).checked).toBe(false));
+  expect(screen.getByText(/Could not save/)).toBeTruthy();
 });
 
 it("shows the global shortcut as reference-only", async () => {
@@ -203,9 +201,10 @@ it("opens the repository from the GitHub icon", async () => {
   expect(openRepository).toHaveBeenCalledOnce();
 });
 
-it("keeps save available on the About category", async () => {
+it("does not show a save button on the About category", async () => {
   render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
-  expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
+  await screen.findByText("ClipClop");
+  expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
 async function show(

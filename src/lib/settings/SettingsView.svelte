@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from "svelte";
   import { AlertDialog, Tabs } from "bits-ui";
-  import { ArrowLeft, Check, LoaderCircle, Save } from "@lucide/svelte";
+  import { ArrowLeft } from "@lucide/svelte";
   import Icon from "@iconify/svelte/dist/OfflineIcon.svelte";
   import githubIcon from "@iconify-icons/simple-icons/github";
   import { clearHistory } from "$lib/history/api";
@@ -25,30 +25,13 @@
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("general");
   let status = $state("");
-  let saving = $state(false);
-  let saveSucceeded = $state(false);
-  let saveFeedbackTimer: ReturnType<typeof setTimeout> | undefined;
+  let savePromise: Promise<boolean> | null = null;
   const appVersion = $derived(updateStore.appVersion);
   let confirmClear = $state(false);
   let navFocusRing = $state(false);
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
-  let confirmRestart = $state(false);
-  let resolveRestart: ((proceed: boolean) => void) | undefined;
-  function beforePermissionRestart(): Promise<boolean> {
-    if (JSON.stringify(settings) === JSON.stringify(savedSettings)) return Promise.resolve(true);
-    confirmRestart = true;
-    return new Promise((resolve) => { resolveRestart = resolve; });
-  }
-  function answerRestart(proceed: boolean) {
-    confirmRestart = false;
-    resolveRestart?.(proceed);
-    resolveRestart = undefined;
-  }
-  async function saveAndRestart() {
-    await save();
-    answerRestart(saveSucceeded);
-  }
+  const beforePermissionRestart = () => save();
   let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
@@ -81,12 +64,6 @@
   });
   onDestroy(() => {
     destroyed = true;
-    answerRestart(false);
-    clearTimeout(saveFeedbackTimer);
-    if (!saving && savedSettings) {
-      previewTheme(savedSettings.theme);
-      setLanguagePreference(savedSettings.language);
-    }
   });
 
   $effect(() => {
@@ -94,6 +71,12 @@
     untrack(() => {
       status = "";
     });
+  });
+
+  $effect(() => {
+    const current = settings ? JSON.stringify(settings) : null;
+    const saved = savedSettings ? JSON.stringify(savedSettings) : null;
+    if (current && saved && current !== saved) untrack(() => void save());
   });
 
   $effect(() => {
@@ -158,30 +141,41 @@
     target?.scrollIntoView({ block: "nearest" });
   }
 
-  async function save() {
-    if (!settings || saving) return;
-    clearTimeout(saveFeedbackTimer);
-    saveSucceeded = false;
-    saving = true;
-    status = "";
-    try {
-      const saved = await updateSettings({ ...settings });
-      settings = saved;
-      savedSettings = { ...saved };
-      setLanguagePreference(saved.language);
-      applyTheme(saved.theme);
-      saveSucceeded = true;
-      saveFeedbackTimer = setTimeout(() => saveSucceeded = false, 1600);
-    } catch (reason) {
-      if (savedSettings) {
-        settings = { ...savedSettings };
-        previewTheme(savedSettings.theme);
-        setLanguagePreference(savedSettings.language);
-      }
-      status = t("settings.saveFailed", { error: localizedError(reason) });
-    } finally {
-      saving = false;
+  async function save(): Promise<boolean> {
+    if (!settings) return false;
+    if (savePromise) {
+      const succeeded = await savePromise;
+      if (!succeeded) return false;
+      return JSON.stringify(settings) === JSON.stringify(savedSettings) ? true : save();
     }
+    if (JSON.stringify(settings) === JSON.stringify(savedSettings)) return true;
+    const snapshot = { ...settings };
+    status = "";
+    savePromise = (async () => {
+      try {
+        const saved = await updateSettings(snapshot);
+        if (!destroyed) {
+          if (JSON.stringify(settings) === JSON.stringify(snapshot)) settings = { ...saved };
+          savedSettings = { ...saved };
+          setLanguagePreference(saved.language);
+          applyTheme(saved.theme);
+        }
+        return true;
+      } catch (reason) {
+        if (!destroyed && savedSettings && JSON.stringify(settings) === JSON.stringify(snapshot)) {
+          settings = { ...savedSettings };
+          previewTheme(savedSettings.theme);
+          setLanguagePreference(savedSettings.language);
+        }
+        if (!destroyed) status = t("settings.saveFailed", { error: localizedError(reason) });
+        return false;
+      } finally {
+        savePromise = null;
+      }
+    })();
+    const succeeded = await savePromise;
+    if (succeeded && settings && JSON.stringify(settings) !== JSON.stringify(savedSettings)) return save();
+    return succeeded;
   }
 
   function requestClear() {
@@ -247,9 +241,6 @@
       if (confirmClear) cancelClear();
       else onclose();
     }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-      event.preventDefault(); void save();
-    }
   }
 </script>
 
@@ -260,7 +251,6 @@
     <button class="back-button pressable" aria-label={t("common.back")} onclick={onclose}><ArrowLeft size={15} aria-hidden="true" /><strong>{t("settings.title")}</strong></button>
     <span class="header-drag" data-tauri-drag-region></span>
     <span class="header-status" aria-live="polite" aria-atomic="true">{status}</span>
-    <button class="save-button pressable" class:saved={saveSucceeded} onclick={() => void save()} disabled={!settings || saving} aria-label={saving ? t("settings.saving") : saveSucceeded ? t("settings.saved") : t("common.save")} aria-busy={saving}>{#if saving}<LoaderCircle size={15} class="save-spinner" aria-hidden="true" />{:else if saveSucceeded}<Check size={15} aria-hidden="true" />{:else}<Save size={15} aria-hidden="true" />{/if}</button>
   </header>
   <Tabs.Root class="settings-body" value={tab} onValueChange={(value) => selectTab(value as Tab)} orientation="vertical" activationMode="automatic" loop={true}>
     <Tabs.List class={`settings-nav${navFocusRing ? " tab-focus" : ""}`} aria-label={t("settings.categories")}>
@@ -304,16 +294,6 @@
     </Tabs.Content>
     {/each}
   </Tabs.Root>
-  <AlertDialog.Root open={confirmRestart} onOpenChange={(open) => { if (!open) answerRestart(false); }}>
-    {#if confirmRestart}<ActionToolbar>
-      <AlertDialog.Content aria-label={t("permission.unsaved")}>
-        <AlertDialog.Title>{t("permission.unsaved")}</AlertDialog.Title>
-        <button class="toolbar-button primary" disabled={saving} onclick={() => void saveAndRestart()}>{t("permission.save")}</button>
-        <button class="toolbar-button secondary" disabled={saving} onclick={() => answerRestart(true)}>{t("permission.discard")}</button>
-        <AlertDialog.Cancel class="toolbar-button" disabled={saving} onclick={() => answerRestart(false)}>{t("common.cancel")}</AlertDialog.Cancel>
-      </AlertDialog.Content>
-    </ActionToolbar>{/if}
-  </AlertDialog.Root>
   <AlertDialog.Root open={confirmClear} onOpenChange={(open) => confirmClear = open}>
     <ActionToolbar class="settings-toolbar">
       {#if confirmClear}
@@ -324,14 +304,14 @@
 </div>
 
 <style>
-  .settings-shell{grid-column:1/-1;grid-row:1/4;min-height:0;display:grid;grid-template-rows:48px minmax(0,1fr) 49px}.settings-header{display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--hairline)}.back-button{height:30px;padding:0 8px!important;display:flex;align-items:center;gap:5px;border:1px solid transparent;color:var(--text-2);font-size:var(--fs-ui)}.back-button:hover{border-color:color-mix(in srgb,var(--hairline) 60%,transparent);color:var(--text-2);background:color-mix(in srgb,var(--bg-hover) 65%,transparent)}.back-button:active{border-color:var(--hairline);background:var(--bg-selected)}.back-button strong{font-size:inherit;font-weight:600}.header-status{min-width:0;margin-left:auto;overflow:hidden;color:var(--text-3);font-size:var(--fs-ui);text-overflow:ellipsis;white-space:nowrap}.settings-header .save-button{width:30px;height:30px;flex:none;padding:0;display:grid;place-items:center;color:var(--action-on);background:var(--action)}.settings-header .save-button:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}.settings-header .save-button.saved{color:var(--action-on);background:var(--action)}button{padding:8px 10px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);line-height:1.4}button:hover{color:var(--text-1);background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.row{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}.row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:88px;height:88px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:var(--fs-ui)}.github{width:36px;height:36px;padding:0;display:grid;place-items:center}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:var(--fs-meta);font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}.save-button :global(.save-spinner){animation:save-spin .8s linear infinite}.danger{color:var(--danger)}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@keyframes save-spin{to{transform:rotate(360deg)}}
+  .settings-shell{grid-column:1/-1;grid-row:1/4;min-height:0;display:grid;grid-template-rows:48px minmax(0,1fr) 49px}.settings-header{display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--hairline)}.back-button{height:30px;padding:0 8px!important;display:flex;align-items:center;gap:5px;border:1px solid transparent;color:var(--text-2);font-size:var(--fs-ui)}.back-button:hover{border-color:color-mix(in srgb,var(--hairline) 60%,transparent);color:var(--text-2);background:color-mix(in srgb,var(--bg-hover) 65%,transparent)}.back-button:active{border-color:var(--hairline);background:var(--bg-selected)}.back-button strong{font-size:inherit;font-weight:600}.header-status{min-width:0;margin-left:auto;overflow:hidden;color:var(--text-3);font-size:var(--fs-ui);text-overflow:ellipsis;white-space:nowrap}button{padding:8px 10px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);line-height:1.4}button:hover{color:var(--text-1);background:var(--bg-hover)}button:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}.row{min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}.row>span{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}strong{font-size:var(--fs-body)}small{color:var(--text-3);font-size:var(--fs-ui);line-height:1.4}.about,.loading{height:100%;display:grid;place-content:center;justify-items:center;gap:8px;text-align:center}.about{position:relative}.about img{width:88px;height:88px}.about h2,.about p{margin:0}.about p{color:var(--text-2);font-size:var(--fs-ui)}.github{width:36px;height:36px;padding:0;display:grid;place-items:center}.log-door{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);min-height:0;padding:4px 8px;color:var(--text-3);font-size:var(--fs-meta);font-weight:400;opacity:.7}.log-door:hover{color:var(--text-2);background:transparent;opacity:1}.danger{color:var(--danger)}.danger:hover:not(:disabled){color:var(--danger-on);background:var(--danger-fill)}button:disabled{opacity:.45;cursor:not-allowed}button:disabled:hover{background:transparent}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .nav-separator{height:1px;margin:8px 6px;background:var(--hairline)}
   /* Setting-row contract: text zone flexes (rule above), action zone is protected
      and never compresses. Every row's action lives in one of these. */
   .row>button{flex:none}
   /* Unified action-button sizing across every section (ghost per DESIGN.md). */
   .row>button{min-height:32px;padding:0 12px;white-space:nowrap}
-  .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}.save-button :global(.save-spinner){animation:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
+  .switch{position:relative;flex:none;width:44px;height:44px;cursor:pointer}.switch input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap}.switch-track{position:absolute;left:4px;top:12px;width:36px;height:20px;border:1px solid color-mix(in srgb,var(--text-2) 42%,var(--bg-selected));border-radius:var(--radius-pill);background:var(--bg-selected);transition:background var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}.switch-track:after{content:"";position:absolute;left:1px;top:1px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform var(--dur-fast) ease-out}.switch input:checked+.switch-track{border-color:var(--action);background:var(--action)}.switch input:checked+.switch-track:after{transform:translateX(16px);background:var(--action-on)}.switch input:focus-visible+.switch-track{outline:2px solid var(--text-2);outline-offset:3px}.switch:hover .switch-track{border-color:var(--text-2)}.switch:hover input:checked+.switch-track{border-color:var(--action)}.retention-warning{margin:10px 0;padding:9px 11px;border-radius:var(--radius-md);color:var(--text-2);background:var(--bg-raised);font-size:var(--fs-ui);line-height:1.5}@media(prefers-reduced-motion:reduce){.switch-track,.switch-track:after{transition:none}}@media(forced-colors:active){.switch-track{border:1px solid ButtonText;background:Canvas}.switch-track:after{background:ButtonText}.switch input:checked+.switch-track{background:Highlight}.switch input:checked+.switch-track:after{background:HighlightText}}
   .settings-shell :global(.settings-body){grid-row:2;min-height:0;display:grid;grid-template-columns:clamp(168px,22%,192px) minmax(0,1fr)}
   .settings-shell :global(.settings-nav){display:flex;flex-direction:column;gap:3px;padding:14px 12px;border-right:1px solid var(--hairline)}
   .settings-shell :global(.settings-nav button){min-height:40px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;text-align:left;font-size:var(--fs-body);font-weight:600;line-height:1.4}

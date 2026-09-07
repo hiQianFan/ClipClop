@@ -45,7 +45,10 @@
     } finally { if (request === generation) checking = false; }
   }
   async function configure(kind: "accessibility" | "files") {
-    try { await invoke("open_permission_guide", { kind }); configuring = true; }
+    try {
+      await invoke("open_permission_guide", { kind });
+      if (kind === "accessibility" && status !== "ready") configuring = true;
+    }
     catch (reason) { onerror(localizedError(reason)); }
   }
   async function restart() {
