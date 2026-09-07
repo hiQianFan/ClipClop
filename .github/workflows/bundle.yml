@@ -119,11 +119,37 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+      - name: Import macOS release identity
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_CERTIFICATE_SHA256: ${{ secrets.MACOS_CERTIFICATE_SHA256 }}
+        run: |
+          test -n "$MACOS_CERTIFICATE_BASE64"
+          test -n "$MACOS_CERTIFICATE_PASSWORD"
+          test -n "$MACOS_CERTIFICATE_SHA256"
+          keychain_path="$RUNNER_TEMP/clipclop-signing.keychain-db"
+          certificate_path="$RUNNER_TEMP/clipclop-release.p12"
+          keychain_password="$(openssl rand -hex 24)"
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security find-certificate -c "ClipClop Release" -p "$keychain_path" > "$RUNNER_TEMP/clipclop-release.pem"
+          security add-trusted-cert -r trustRoot -p codeSign -k "$keychain_path" "$RUNNER_TEMP/clipclop-release.pem"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path" | grep -F '"ClipClop Release"'
       - uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && 'ClipClop Release' || '' }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           tagName: v__VERSION__
@@ -132,6 +158,18 @@ jobs:
           # latest.json has exactly one writer in finalize; matrix jobs only upload platform assets.
           includeUpdaterJson: false
           args: ${{ matrix.args }}
+      - name: Verify macOS release identity
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_SHA256: ${{ secrets.MACOS_CERTIFICATE_SHA256 }}
+        run: scripts/verify-macos-release.sh src-tauri/target/universal-apple-darwin/release/bundle "$MACOS_CERTIFICATE_SHA256"
+      - name: Remove temporary macOS keychain
+        if: runner.os == 'macOS' && always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/clipclop-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/clipclop-release.p12" "$RUNNER_TEMP/clipclop-release.pem"
 
   finalize:
     name: Finalize and Verify Draft Release

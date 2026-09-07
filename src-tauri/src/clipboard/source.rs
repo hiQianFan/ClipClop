@@ -320,7 +320,7 @@ mod tests {
     #[test]
     fn clipclop_source_blocks_recent_external_fallback() {
         let clipclop = SourceApp {
-            id: "com.clipclop.desktop".into(),
+            id: "io.clipclop.desktop".into(),
             name: "ClipClop".into(),
         };
         let previous = SourceApp {

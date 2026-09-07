@@ -16,7 +16,7 @@ When automatic update checks are enabled, ClipClop contacts `clipclop.io` (serve
 
 ## Your controls
 
-You can delete individual entries, clear all history, limit history by age and item count, or quit ClipClop to stop capture. When recently used items are moved to the top, cleanup uses their last-used time. Uninstall behavior varies by operating system and installer; to remove all local data, quit ClipClop and delete the application data directory for `com.clipclop.desktop`.
+You can delete individual entries, clear all history, limit history by age and item count, or quit ClipClop to stop capture. When recently used items are moved to the top, cleanup uses their last-used time. Uninstall behavior varies by operating system and installer; to remove all local data, quit ClipClop and delete the application data directory for `io.clipclop.desktop`.
 
 ## System permissions
 

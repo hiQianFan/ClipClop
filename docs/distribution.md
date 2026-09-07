@@ -28,3 +28,24 @@ The release workflow uploads and verifies versioned files before replacing
 
 `clipclop.mapin.net` is not a supported compatibility endpoint and has no
 redirect or proxy contract.
+
+## macOS release identity
+
+Production macOS builds use the fixed self-signed code-signing identity
+`ClipClop Release` with bundle ID `io.clipclop.desktop`. This stabilizes the app's
+code identity between releases, but it is not an Apple Developer ID and does
+not remove Gatekeeper or browser download warnings.
+
+Keep the encrypted certificate backup outside the repository at
+`ClipClop/Credentials/macOS/ClipClop-Release.p12`. The `production-release`
+environment must contain:
+
+- `MACOS_CERTIFICATE_BASE64`: Base64-encoded contents of the P12 file.
+- `MACOS_CERTIFICATE_PASSWORD`: the P12 export password.
+- `MACOS_CERTIFICATE_SHA256`: the leaf certificate's SHA-256 fingerprint.
+
+The workflow imports the certificate into a temporary keychain, signs through
+Tauri using `ClipClop Release`, verifies the app, DMG and updater archive, then
+deletes the temporary keychain. Missing or mismatched credentials stop the
+macOS release instead of falling back to ad-hoc signing. The separate
+`TAURI_SIGNING_PRIVATE_KEY` secrets continue to sign updater artifacts.
