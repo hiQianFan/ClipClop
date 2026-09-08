@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tauri::{Emitter, Manager};
 
@@ -6,13 +6,8 @@ use tauri::{Emitter, Manager};
 pub async fn open_permission_guide(
     app: AppHandle,
     state: State<'_, AppState>,
-    kind: String,
+    kind: PermissionKind,
 ) -> AppResult<()> {
-    if kind != "accessibility" && kind != "files" {
-        return Err(crate::error::AppError::Platform(
-            "invalid permission kind".into(),
-        ));
-    }
     #[cfg(target_os = "macos")]
     {
         let bundle = current_app_bundle();
@@ -40,19 +35,26 @@ pub async fn open_permission_guide(
             .map_err(|e| AppError::Platform(e.to_string()))?;
         }
         log::info!(
-            "permission guide opened: kind={kind} app_location={} draggable={}",
+            "permission guide opened: kind={kind:?} app_location={} draggable={}",
             app_location(bundle.as_deref()),
             bundle.is_some()
         );
-        if kind == "accessibility" {
+        if kind == PermissionKind::Accessibility {
             open_auto_paste_settings(app)?;
         } else {
             super::open_file_preview_settings(app)?;
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, state);
-    Ok(())
+    let _ = (app, state, kind);
+    Err(AppError::Platform("permission setup is unavailable on this platform".into()))
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionKind {
+    Accessibility,
+    Files,
 }
 
 #[tauri::command]
