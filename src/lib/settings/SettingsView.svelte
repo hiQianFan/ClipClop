@@ -21,13 +21,16 @@
   const platform: ShortcutPlatform = currentPlatform();
   const tabs: Tab[] = platform === "macos" ? ["general", "history", "appearance", "shortcuts", "permissions", "updates", "about"] : ["general", "history", "appearance", "shortcuts", "updates", "about"];
 
-  let { initialTab = "general", focusPermission = false, onclose, oncleared, onquickstart }: { initialTab?: Tab; focusPermission?: boolean; onclose: () => void; oncleared: () => void; onquickstart: () => void } = $props();
+  let { initialTab = "general", focusPermission = false, onclose, oncleared, onquickstart, onenterdemo }: { initialTab?: Tab; focusPermission?: boolean; onclose: () => void; oncleared: () => void; onquickstart: () => void; onenterdemo?: () => Promise<void> } = $props();
   let settings = $state<Settings | null>(null);
   let tab = $state<Tab>("general");
   let status = $state("");
   let savePromise: Promise<boolean> | null = null;
   const appVersion = $derived(updateStore.appVersion);
   let confirmClear = $state(false);
+  let confirmDemo = $state(false);
+  let enteringDemo = $state(false);
+  let cancelDemoButton = $state<HTMLButtonElement | null>(null);
   let navFocusRing = $state(false);
   let savedSettings = $state<Settings | null>(null);
   let destroyed = false;
@@ -203,6 +206,18 @@
     } catch (reason) { confirmClear = false; status = t("settings.clearFailed", { error: localizedError(reason) }); }
   }
 
+  async function enterDemo() {
+    if (!onenterdemo || enteringDemo) return;
+    enteringDemo = true;
+    try {
+      if (!await save()) return;
+      await onenterdemo();
+      confirmDemo = false;
+    }
+    catch (reason) { status = t("settings.demoEnterFailed", { error: localizedError(reason) }); }
+    finally { enteringDemo = false; }
+  }
+
   async function openLogs() {
     try { await openLogDir(); }
     catch (reason) { status = t("settings.openLogsFailed", { error: localizedError(reason) }); }
@@ -268,7 +283,7 @@
     <Tabs.Content value={panelTab} class={`settings-content${panelTab === "updates" ? " updates-content" : ""}`} tabindex={-1} onkeydown={onContentKeydown}>
       {#if settings}
         {#if panelTab === "general"}
-          <GeneralSettings bind:settings {platform} {onquickstart} onerror={(message) => status = message} bind:heading={sectionHeading} />
+          <GeneralSettings bind:settings {platform} {onquickstart} ondemo={() => confirmDemo = true} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else if panelTab === "history"}
           <h1 bind:this={sectionHeading} id="settings-section-title" tabindex="-1">{t("settings.history")}</h1>
           <div class="row"><span><strong>{t("settings.retention")}</strong><small>{t("settings.retentionHelp")}</small></span><AppSelect value={settings.retention_days === null ? "none" : String(settings.retention_days)} items={retentionItems} ariaLabel={t("settings.retention")} onchange={(value) => settings!.retention_days = value === "none" ? null : Number(value) as Settings["retention_days"]} /></div>
@@ -306,6 +321,16 @@
       {/if}
     </ActionToolbar>
   </AlertDialog.Root>
+  <AlertDialog.Root open={confirmDemo} onOpenChange={(open) => confirmDemo = open}>
+    <AlertDialog.Portal>
+      <AlertDialog.Overlay class="dialog-overlay" />
+      <AlertDialog.Content class="demo-dialog" onOpenAutoFocus={(event) => { event.preventDefault(); cancelDemoButton?.focus(); }}>
+        <AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title>
+        <AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description>
+        <div class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button disabled={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></div>
+      </AlertDialog.Content>
+    </AlertDialog.Portal>
+  </AlertDialog.Root>
 </div>
 
 <style>
@@ -335,4 +360,7 @@
   .header-drag{min-width:24px;flex:1;align-self:stretch}
   .settings-header{gap:10px}
   .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
+  :global(.dialog-overlay){position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.38)}
+  :global(.demo-dialog){position:fixed;z-index:21;top:50%;left:50%;width:min(400px,calc(100vw - 48px));padding:20px;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
+  :global(.demo-dialog h2){margin:0 0 8px;font-size:var(--fs-heading)}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-body);line-height:1.5}:global(.dialog-actions){margin-top:20px;display:flex;justify-content:flex-end;gap:8px}:global(.dialog-actions button){min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md)}:global(.dialog-actions button:last-child){border-color:var(--action);color:var(--action-on);background:var(--action)}
 </style>

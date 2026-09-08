@@ -2,41 +2,31 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter};
 
 use crate::{
-    clipboard,
-    error::AppResult,
-    history::{HistoryService, NewClip},
-    preview::ExternalPreviewService,
-    settings::SettingsService,
+    clipboard, error::AppResult, history::NewClip, settings::SettingsService, state::HistoryRuntime,
 };
 
-pub fn start(
-    app: AppHandle,
-    history: HistoryService,
-    preview: ExternalPreviewService,
-    settings: SettingsService,
-) -> AppResult<()> {
-    clipboard::start_watcher(move |snapshot| {
-        capture(&app, &history, &preview, &settings, &snapshot)
-    })
+pub fn start(app: AppHandle, history: HistoryRuntime, settings: SettingsService) -> AppResult<()> {
+    clipboard::start_watcher(move |snapshot| capture(&app, &history, &settings, &snapshot))
 }
 
 fn capture(
     app: &AppHandle,
-    history: &HistoryService,
-    preview: &ExternalPreviewService,
+    history: &HistoryRuntime,
     settings: &SettingsService,
     snapshot: &NewClip,
 ) -> AppResult<()> {
     let policy = settings.get_stored()?;
-    let id = history.capture(snapshot)?;
-    let cleanup = crate::workflows::clip_actions::apply_retention(
-        app,
-        history,
-        preview,
-        policy.retention_days,
-        policy.history_limit,
-    );
+    let id = history.with_current(|environment| {
+        let id = environment.history.capture(snapshot)?;
+        crate::workflows::clip_actions::apply_retention(
+            app,
+            &environment.history,
+            &environment.external_preview,
+            policy.retention_days,
+            policy.history_limit,
+        )?;
+        Ok(id)
+    })?;
     let _ = app.emit("history_changed", json!({ "latest_id": id }));
-    cleanup?;
     Ok(())
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { canPreviewClip, copyClip, getHistoryFacets, getPreviewCapability, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability } from "$lib/history/api";
+  import { canPreviewClip, copyClip, enterDemoMode, exitDemoMode, getHistoryFacets, getPreviewCapability, getRuntimeMode, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability, type RuntimeMode } from "$lib/history/api";
   import type { ContentType, HistorySourceOption } from "$lib/history/types";
   import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
@@ -37,6 +37,7 @@
   let pastePermissionRequired = $state(false);
   let menuOpen = $state(false);
   let appMenuOpen = $state(false);
+  let runtimeMode = $state<RuntimeMode>("real");
   let view = $state<"loading" | "history" | "settings" | "onboarding">("loading");
   let settingsTab = $state<"general" | "permissions" | "updates" | "about">("general");
   let focusPermission = $state(false);
@@ -87,7 +88,8 @@
   async function initializeView() {
     let initializationError = "";
     try {
-      await Promise.all([syncSettings(), refreshPreviewCapability()]);
+      const [, , currentMode] = await Promise.all([syncSettings(), refreshPreviewCapability(), getRuntimeMode()]);
+      runtimeMode = currentMode;
       onboarding = await getOnboardingState();
       const permissionReturn = localStorage.getItem("permission-restart-return");
       localStorage.removeItem("permission-restart-return");
@@ -414,6 +416,19 @@
     view = "onboarding";
   }
 
+  async function switchRuntime(action: () => Promise<RuntimeMode>) {
+    runtimeMode = await action();
+    clearContentCaches();
+    session.query = "";
+    session.clearFilters();
+    activeSourceQuery = "";
+    expandedId = null;
+    view = "history";
+    mode = "browse";
+    await syncFacets();
+    await refreshAndFocus(1);
+  }
+
   function openPermissionSettings() { void openSettingsView("permissions", true); }
 
   async function finishOnboarding(returnToSettings: boolean) {
@@ -457,6 +472,18 @@
   // Browse position and search conditions are independent saved-session choices.
   async function onPanelShown(request: MainPanelRequest) {
     void refreshPreviewCapability();
+    try {
+      const currentMode = await getRuntimeMode();
+      if (currentMode !== runtimeMode) {
+        runtimeMode = currentMode;
+        clearContentCaches();
+        session.query = "";
+        session.clearFilters();
+        activeSourceQuery = "";
+        expandedId = null;
+        mode = "browse";
+      }
+    } catch { /* A transient mode check must not block the requested panel route. */ }
     listbox?.closeFilters();
     if (request.permissionGuide) {
       if (request.selectedId) await focusHistoryItem(request.selectedId);
@@ -713,6 +740,8 @@
     onsettings={() => void openSettingsView()}
     onupdates={checkForUpdates}
     onabout={() => void openSettingsView("about")}
+    demo={runtimeMode === "demo"}
+    onexitdemo={() => void switchRuntime(exitDemoMode)}
     onquit={() => void quitApp()}
   />{/if}
   {#if view === "history"}
@@ -799,7 +828,7 @@
     onrestorefocus={focusConfirmationInvoker}
   />
   {:else}
-    <SettingsView initialTab={settingsTab} {focusPermission} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} />
+    <SettingsView initialTab={settingsTab} {focusPermission} onclose={closeSettingsView} oncleared={settingsClearedHistory} onquickstart={openQuickStart} onenterdemo={() => switchRuntime(enterDemoMode)} />
   {/if}
   {/if}
 </main>

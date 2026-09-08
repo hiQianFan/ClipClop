@@ -12,6 +12,8 @@
     onsettings,
     onupdates,
     onabout,
+    demo = false,
+    onexitdemo = () => {},
     onquit,
   }: {
     history: boolean;
@@ -22,6 +24,8 @@
     onsettings: () => void;
     onupdates: () => void;
     onabout: () => void;
+    demo?: boolean;
+    onexitdemo?: () => void;
     onquit: () => void;
   } = $props();
 
@@ -55,11 +59,13 @@
             <DropdownMenu.Item onclick={onsettings}>{t("history.settings")} <ShortcutHint shortcut={settingsShortcut} platform={settingsShortcut.startsWith("Command") ? "macos" : "windows"} /></DropdownMenu.Item>
             <DropdownMenu.Item onclick={onupdates}>{t("history.checkUpdates")}</DropdownMenu.Item>
             <DropdownMenu.Item onclick={onabout}>{t("history.about")}</DropdownMenu.Item>
+            {#if demo}<DropdownMenu.Item onclick={onexitdemo}>{t("history.exitDemo")}</DropdownMenu.Item>{/if}
             <DropdownMenu.Separator class="menu-separator" />
             <DropdownMenu.Item class="danger" onclick={onquit}><span>{t("history.quit")}</span><ShortcutHint shortcut={quitShortcut} platform={quitShortcut.startsWith("Command") ? "macos" : "windows"} /></DropdownMenu.Item>
           </DropdownMenu.ContentStatic>
         </div>
       </DropdownMenu.Root>
+      {#if demo}<span class="demo-badge">{t("history.demoMode")}</span>{/if}
     </div>
   {:else}
     <span class="settings-title">{t("settings.title")}</span>
@@ -71,6 +77,7 @@
   .titlebar { grid-column:1 / -1; grid-row:1; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid var(--hairline); user-select:none; }
   .titlebar-drag { flex:1; align-self:stretch; }
   .brand { display:flex; align-items:center; color:var(--text-2); }
+  .demo-badge{margin-left:7px;padding:2px 7px;border:1px solid var(--hairline);border-radius:var(--radius-pill);color:var(--text-3);font-size:var(--fs-meta);font-weight:500}
   .app-menu-wrap { position:relative; }
   .brand :global(.app-menu-trigger) { height:30px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px solid transparent; border-radius:var(--radius-md); color:var(--text-2); background:transparent; font-size:var(--fs-ui); font-weight:600; letter-spacing:.01em; }
   .brand :global(.app-menu-trigger:hover) { border-color:color-mix(in srgb,var(--hairline) 60%,transparent); background:color-mix(in srgb,var(--bg-hover) 65%,transparent); }

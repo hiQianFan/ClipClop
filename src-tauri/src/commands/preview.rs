@@ -16,8 +16,8 @@ pub fn get_preview_capability() -> crate::preview::PreviewCapability {
 
 #[tauri::command]
 pub async fn get_clip_asset(state: State<'_, AppState>, id: String) -> AppResult<PreviewResource> {
-    let assets = state.assets.clone();
-    run_blocking(move || assets.asset(&id)).await
+    let history = state.history.clone();
+    run_blocking(move || history.with_current(|environment| environment.assets.asset(&id))).await
 }
 
 #[tauri::command]
@@ -26,8 +26,11 @@ pub async fn get_clip_file_asset(
     id: String,
     index: usize,
 ) -> AppResult<PreviewResource> {
-    let assets = state.assets.clone();
-    run_blocking(move || assets.file_asset(&id, index)).await
+    let history = state.history.clone();
+    run_blocking(move || {
+        history.with_current(|environment| environment.assets.file_asset(&id, index))
+    })
+    .await
 }
 
 #[tauri::command]
@@ -35,8 +38,9 @@ pub async fn get_clip_thumbnail(
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<PreviewResource> {
-    let assets = state.assets.clone();
-    run_blocking(move || assets.thumbnail(&id)).await
+    let history = state.history.clone();
+    run_blocking(move || history.with_current(|environment| environment.assets.thumbnail(&id)))
+        .await
 }
 
 #[tauri::command]
@@ -48,13 +52,15 @@ pub fn preview_clip(
     index: Option<usize>,
 ) -> AppResult<PreviewOutcome> {
     log::info!("preview requested: index={}", index.unwrap_or(0));
-    preview_clip::preview(
-        &app,
-        &preview_state,
-        &state.external_preview,
-        &id,
-        index.unwrap_or(0),
-    )
+    state.history.with_current(|environment| {
+        preview_clip::preview(
+            &app,
+            &preview_state,
+            &environment.external_preview,
+            &id,
+            index.unwrap_or(0),
+        )
+    })
 }
 
 #[tauri::command]
@@ -64,9 +70,11 @@ pub fn open_clip_link(
     id: String,
     origin_only: Option<bool>,
 ) -> AppResult<()> {
-    state
-        .external_preview
-        .open_link(&app, &id, origin_only.unwrap_or(false))
+    state.history.with_current(|environment| {
+        environment
+            .external_preview
+            .open_link(&app, &id, origin_only.unwrap_or(false))
+    })
 }
 
 #[tauri::command]
@@ -74,8 +82,11 @@ pub async fn get_source_app_icon(
     state: State<'_, AppState>,
     id: String,
 ) -> AppResult<PreviewResource> {
-    let assets = state.assets.clone();
-    run_blocking(move || assets.source_app_icon(&id)).await
+    let history = state.history.clone();
+    run_blocking(move || {
+        history.with_current(|environment| environment.assets.source_app_icon(&id))
+    })
+    .await
 }
 
 /// Set Quick Look to the requested state over a fixed onboarding example.
@@ -89,17 +100,26 @@ pub fn preview_onboarding_example(
 ) -> AppResult<PreviewOutcome> {
     if !open {
         if preview_state.is_active() {
-            state.external_preview.close_native(&app, &preview_state)?;
+            state.history.with_current(|environment| {
+                environment
+                    .external_preview
+                    .close_native(&app, &preview_state)
+            })?;
         }
         return Ok(PreviewOutcome::NativeClosed);
     }
     if preview_state.is_active() {
-        state.external_preview.close_native(&app, &preview_state)?;
+        state.history.with_current(|environment| {
+            environment
+                .external_preview
+                .close_native(&app, &preview_state)
+        })?;
     }
-    if state
-        .external_preview
-        .toggle_onboarding_example(&app, &preview_state, example)?
-    {
+    if state.history.with_current(|environment| {
+        environment
+            .external_preview
+            .toggle_onboarding_example(&app, &preview_state, example)
+    })? {
         return Ok(PreviewOutcome::NativeOpened);
     }
     Ok(PreviewOutcome::NotPreviewable)

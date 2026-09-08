@@ -6,10 +6,11 @@
   import { openQuicklookInstallPage, type Settings, type TrayClickAction } from "./api";
   import type { ShortcutPlatform } from "./shortcuts";
 
-  let { settings = $bindable(), platform, onquickstart, onerror, heading = $bindable() }: {
+  let { settings = $bindable(), platform, onquickstart, ondemo, onerror, heading = $bindable() }: {
     settings: Settings;
     platform: ShortcutPlatform;
     onquickstart: () => void;
+    ondemo: () => void;
     onerror: (message: string) => void;
     heading?: HTMLHeadingElement;
   } = $props();
@@ -51,6 +52,7 @@
 <div class="row"><span><strong id="launch-label">{t("settings.launch")}</strong><small id="launch-help">{t("settings.launchHelp")}</small></span><label class="switch"><input type="checkbox" role="switch" aria-labelledby="launch-label" aria-describedby="launch-help" bind:checked={settings.launch_at_login} /><span class="switch-track"></span></label></div>
 {#if platform === "macos"}<div class="row"><span><strong>{t("settings.trayClick")}</strong><small>{t("settings.trayClickHelp")}</small></span><AppSelect value={settings.tray_click_action} items={trayItems} ariaLabel={t("settings.trayClick")} onchange={(value) => settings.tray_click_action = value as TrayClickAction} /></div>{/if}
 <div class="row"><span><strong>{t("settings.quickStart")}</strong><small>{t("settings.quickStartHelp")}</small></span><button onclick={onquickstart}>{t("settings.quickStart")}</button></div>
+<div class="row"><span><strong>{t("settings.demoMode")}</strong><small>{t("settings.demoModeHelp")}</small></span><button onclick={ondemo}>{t("settings.enterDemo")}</button></div>
 {#if platform === "windows"}
   <div class="row">
     <span>

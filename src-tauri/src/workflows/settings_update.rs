@@ -4,9 +4,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::{
     error::{AppError, AppResult},
-    history::HistoryService,
-    preview::ExternalPreviewService,
     settings::{validate_hotkey, HotkeyValidationError, Settings, SettingsService},
+    state::HistoryRuntime,
 };
 
 pub fn get(app: &AppHandle, service: &SettingsService) -> AppResult<Settings> {
@@ -21,8 +20,7 @@ pub fn get(app: &AppHandle, service: &SettingsService) -> AppResult<Settings> {
 pub fn update(
     app: &AppHandle,
     service: &SettingsService,
-    history: &HistoryService,
-    preview: &ExternalPreviewService,
+    history: &HistoryRuntime,
     mut settings: Settings,
 ) -> AppResult<Settings> {
     let _guard = service.lock_mutation()?;
@@ -127,13 +125,15 @@ pub fn update(
             ));
         }
     }
-    let removed = match crate::workflows::clip_actions::apply_retention(
-        app,
-        history,
-        preview,
-        saved.retention_days,
-        saved.history_limit,
-    ) {
+    let removed = match history.with_current(|environment| {
+        crate::workflows::clip_actions::apply_retention(
+            app,
+            &environment.history,
+            &environment.external_preview,
+            saved.retention_days,
+            saved.history_limit,
+        )
+    }) {
         Ok(removed) => removed,
         Err(error) => {
             log::warn!(

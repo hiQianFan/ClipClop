@@ -79,13 +79,22 @@ const ONBOARDING_LINK: &[u8] = b"https://github.com/hiQianFan/ClipClop";
 pub struct ExternalPreviewService {
     history: HistoryService,
     lifecycle: Arc<Mutex<()>>,
+    cache_namespace: &'static str,
 }
 
 impl ExternalPreviewService {
     pub fn new(history: HistoryService) -> Self {
+        Self::with_cache_namespace(history, "external-preview")
+    }
+
+    pub(crate) fn with_cache_namespace(
+        history: HistoryService,
+        cache_namespace: &'static str,
+    ) -> Self {
         Self {
             history,
             lifecycle: Arc::new(Mutex::new(())),
+            cache_namespace,
         }
     }
 
@@ -99,12 +108,12 @@ impl ExternalPreviewService {
                     .iter()
                     .find(|flavor| flavor.format == "image/png")
                     .ok_or(AppError::NotFound)?;
-                let path = preview_path(app, id, "png")?;
+                let path = preview_path(app, self.cache_namespace, id, "png")?;
                 self.publish_preview(id, &path, &png.payload)?;
                 open_path(app, path)
             }
             ContentType::Text | ContentType::Color | ContentType::Link => {
-                let path = preview_path(app, id, "txt")?;
+                let path = preview_path(app, self.cache_namespace, id, "txt")?;
                 self.publish_preview(
                     id,
                     &path,
@@ -173,7 +182,7 @@ impl ExternalPreviewService {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             let (name, extension, bytes) = onboarding_preview(example);
-            let path = preview_path(app, name, extension)?;
+            let path = preview_path(app, self.cache_namespace, name, extension)?;
             let dir = path.parent().ok_or(AppError::NotFound)?;
             std::fs::create_dir_all(dir).map_err(|error| AppError::Platform(error.to_string()))?;
             std::fs::write(&path, bytes).map_err(|error| AppError::Platform(error.to_string()))?;
@@ -187,11 +196,11 @@ impl ExternalPreviewService {
     }
 
     pub fn delete_cached(&self, app: &AppHandle, id: &str) -> AppResult<()> {
-        delete_cached_previews_in(&cached_preview_dir(app)?, id)
+        delete_cached_previews_in(&cached_preview_dir(app, self.cache_namespace)?, id)
     }
 
     pub fn clear_cached(&self, app: &AppHandle) -> AppResult<()> {
-        match std::fs::remove_dir_all(cached_preview_dir(app)?) {
+        match std::fs::remove_dir_all(cached_preview_dir(app, self.cache_namespace)?) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(AppError::Platform(error.to_string())),
@@ -237,12 +246,12 @@ impl ExternalPreviewService {
                     .iter()
                     .find(|flavor| flavor.format == "image/png")
                     .ok_or(AppError::NotFound)?;
-                let path = preview_path(app, id, "png")?;
+                let path = preview_path(app, self.cache_namespace, id, "png")?;
                 self.publish_preview(id, &path, &png.payload)?;
                 Ok(path)
             }
             ContentType::Text | ContentType::Color | ContentType::Link => {
-                let path = preview_path(app, id, "txt")?;
+                let path = preview_path(app, self.cache_namespace, id, "txt")?;
                 self.publish_preview(
                     id,
                     &path,
@@ -292,18 +301,23 @@ fn ensure_preview_path_exists(path: &Path) -> AppResult<()> {
     path.exists().then_some(()).ok_or(AppError::NotFound)
 }
 
-fn preview_path(app: &AppHandle, id: &str, extension: &str) -> AppResult<PathBuf> {
-    let dir = cached_preview_dir(app)?;
+fn preview_path(
+    app: &AppHandle,
+    cache_namespace: &str,
+    id: &str,
+    extension: &str,
+) -> AppResult<PathBuf> {
+    let dir = cached_preview_dir(app, cache_namespace)?;
     std::fs::create_dir_all(&dir).map_err(|error| AppError::Platform(error.to_string()))?;
     Ok(dir.join(format!("{id}.{extension}")))
 }
 
-fn cached_preview_dir(app: &AppHandle) -> AppResult<PathBuf> {
+fn cached_preview_dir(app: &AppHandle, cache_namespace: &str) -> AppResult<PathBuf> {
     Ok(app
         .path()
         .app_cache_dir()
         .map_err(|error| AppError::Platform(error.to_string()))?
-        .join("external-preview"))
+        .join(cache_namespace))
 }
 
 fn delete_cached_previews_in(dir: &Path, id: &str) -> AppResult<()> {

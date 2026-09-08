@@ -50,4 +50,17 @@ describe("AppTitleBar menu", () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect([onsettings, onupdates, onabout, onquit].map((callback) => callback.mock.calls.length)).toEqual([1, 1, 1, 1]);
   });
+
+  it("shows the demo status and exit action only in demo mode", async () => {
+    const onexitdemo = vi.fn();
+    const view = render(AppTitleBar, { props: {
+      history: true, open: true, demo: true,
+      settingsShortcut: "Command+,", quitShortcut: "Command+Q",
+      onopenchange() {}, onsettings() {}, onupdates() {}, onabout() {}, onquit() {}, onexitdemo,
+    } });
+    expect(screen.getByText("Demo mode")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Exit demo mode" }));
+    expect(onexitdemo).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
 });

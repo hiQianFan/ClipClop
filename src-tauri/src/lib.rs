@@ -3,6 +3,7 @@
 pub mod assets;
 pub mod clipboard;
 pub mod commands;
+pub mod demo;
 pub mod error;
 pub mod history;
 pub mod onboarding;
@@ -18,16 +19,16 @@ pub mod workflows;
 
 use commands::{
     cancel_update_download, clear_history, close_permission_guide, copy_clip, delete_clip,
-    discard_downloaded_update, get_auto_paste_permission_status, get_clip, get_clip_asset,
-    get_clip_file_asset, get_clip_thumbnail, get_history_facets, get_onboarding_state,
-    get_preview_capability, get_settings, get_source_app_icon, hide_panel,
-    install_downloaded_update, open_auto_paste_settings, open_clip_link,
-    open_file_preview_settings, open_log_dir, open_permission_guide, open_quicklook_install_page,
-    open_release_page, open_repository, open_website, paste_clip, perform_pager_haptic,
-    preview_clip, preview_onboarding_example, query_history, quit_app, record_update_check,
-    reveal_current_app, save_onboarding_state, set_language_preference, set_quick_selection,
-    show_full_panel, skip_update_version, start_current_app_drag, start_update_download,
-    update_settings,
+    discard_downloaded_update, enter_demo_mode, exit_demo_mode, get_auto_paste_permission_status,
+    get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_history_facets,
+    get_onboarding_state, get_preview_capability, get_runtime_mode, get_settings,
+    get_source_app_icon, hide_panel, install_downloaded_update, open_auto_paste_settings,
+    open_clip_link, open_file_preview_settings, open_log_dir, open_permission_guide,
+    open_quicklook_install_page, open_release_page, open_repository, open_website, paste_clip,
+    perform_pager_haptic, preview_clip, preview_onboarding_example, query_history, quit_app,
+    record_update_check, reveal_current_app, save_onboarding_state, set_language_preference,
+    set_quick_selection, show_full_panel, skip_update_version, start_current_app_drag,
+    start_update_download, update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -130,6 +131,9 @@ pub fn run() {
                 std::env::consts::OS,
                 std::env::consts::ARCH
             );
+            if let Err(error) = demo::cleanup_stale(app.handle()) {
+                log::warn!("failed to clean stale demo files: {error}");
+            }
 
             #[cfg(target_os = "macos")]
             {
@@ -170,7 +174,6 @@ pub fn run() {
             workflows::capture::start(
                 app.handle().clone(),
                 state.history.clone(),
-                state.external_preview.clone(),
                 state.settings.clone(),
             )?;
             log::info!("registering global shortcut: {startup_hotkey}");
@@ -266,7 +269,10 @@ pub fn run() {
             start_update_download,
             cancel_update_download,
             discard_downloaded_update,
-            install_downloaded_update
+            install_downloaded_update,
+            get_runtime_mode,
+            enter_demo_mode,
+            exit_demo_mode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

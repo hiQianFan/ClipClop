@@ -11,7 +11,9 @@ use crate::{
 
 #[tauri::command]
 pub fn query_history(state: State<'_, AppState>, request: HistoryQuery) -> AppResult<HistoryPage> {
-    state.history.query(&request)
+    state
+        .history
+        .with_current(|environment| environment.history.query(&request))
 }
 
 #[tauri::command]
@@ -20,24 +22,37 @@ pub fn get_history_facets(
     request: HistoryQuery,
     source_query: Option<String>,
 ) -> AppResult<HistoryFacets> {
-    state
-        .history
-        .facets(&request, source_query.as_deref().unwrap_or(""))
+    state.history.with_current(|environment| {
+        environment
+            .history
+            .facets(&request, source_query.as_deref().unwrap_or(""))
+    })
 }
 
 #[tauri::command]
 pub fn get_clip(state: State<'_, AppState>, id: String) -> AppResult<ClipDetail> {
-    state.history.get(&id)
+    state
+        .history
+        .with_current(|environment| environment.history.get(&id))
 }
 
 #[tauri::command]
 pub fn delete_clip(app: AppHandle, state: State<'_, AppState>, id: String) -> AppResult<()> {
-    clip_actions::delete_clip(&app, &state.history, &state.external_preview, &id)
+    state.history.with_current(|environment| {
+        clip_actions::delete_clip(
+            &app,
+            &environment.history,
+            &environment.external_preview,
+            &id,
+        )
+    })
 }
 
 #[tauri::command]
 pub fn clear_history(app: AppHandle, state: State<'_, AppState>) -> AppResult<u64> {
-    clip_actions::clear_history(&app, &state.history, &state.external_preview)
+    state.history.with_current(|environment| {
+        clip_actions::clear_history(&app, &environment.history, &environment.external_preview)
+    })
 }
 
 #[tauri::command]
@@ -46,12 +61,14 @@ pub fn copy_clip(
     id: String,
     plain_text: Option<bool>,
 ) -> AppResult<bool> {
-    clip_actions::copy_clip(
-        &state.history,
-        &state.settings,
-        &id,
-        plain_text.unwrap_or(false),
-    )
+    state.history.with_current(|environment| {
+        clip_actions::copy_clip(
+            &environment.history,
+            &state.settings,
+            &id,
+            plain_text.unwrap_or(false),
+        )
+    })
 }
 
 #[tauri::command]
@@ -67,15 +84,17 @@ pub async fn paste_clip(
     let settings = state.settings.clone();
     let window_label = window.label().to_string();
     tauri::async_runtime::spawn_blocking(move || {
-        paste_workflow::paste_clip(
-            &app,
-            &history,
-            &paste,
-            &settings,
-            &window_label,
-            &id,
-            plain_text.unwrap_or(false),
-        )
+        history.with_current(|environment| {
+            paste_workflow::paste_clip(
+                &app,
+                &environment.history,
+                &paste,
+                &settings,
+                &window_label,
+                &id,
+                plain_text.unwrap_or(false),
+            )
+        })
     })
     .await
     .map_err(|error| crate::error::AppError::Platform(error.to_string()))?

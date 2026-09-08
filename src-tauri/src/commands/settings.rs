@@ -21,13 +21,7 @@ pub fn update_settings(
     state: State<'_, AppState>,
     settings: Settings,
 ) -> AppResult<Settings> {
-    settings_update::update(
-        &app,
-        &state.settings,
-        &state.history,
-        &state.external_preview,
-        settings,
-    )
+    settings_update::update(&app, &state.settings, &state.history, settings)
 }
 
 /// Opens the application log directory in the native file manager.

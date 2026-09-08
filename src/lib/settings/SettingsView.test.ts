@@ -98,6 +98,16 @@ it("saves changes immediately without a save button", async () => {
   expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
+it("confirms demo entry with Cancel focused", async () => {
+  const onenterdemo = vi.fn(async () => {});
+  render(SettingsView, { props: { onclose() {}, oncleared() {}, onquickstart() {}, onenterdemo } });
+  await fireEvent.click(await screen.findByRole("button", { name: "Enter…" }));
+  const cancel = await screen.findByRole("button", { name: "Cancel" });
+  await waitFor(() => expect(document.activeElement).toBe(cancel));
+  await fireEvent.click(screen.getByRole("button", { name: "Enter demo" }));
+  await waitFor(() => expect(onenterdemo).toHaveBeenCalledTimes(1));
+});
+
 it("keeps release notes mounted while switching categories", async () => {
   listReleaseNotes.mockClear();
   render(SettingsView, { props: { initialTab: "updates", onclose() {}, oncleared() {}, onquickstart() {} } });

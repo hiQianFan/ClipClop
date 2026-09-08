@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-import { canPreviewClip, getPreviewCapability, getSourceAppIcon, openClipLink, previewClip, queryHistory, showFullPanel } from "./api";
+import { canPreviewClip, enterDemoMode, exitDemoMode, getPreviewCapability, getRuntimeMode, getSourceAppIcon, openClipLink, previewClip, queryHistory, showFullPanel } from "./api";
 
 describe("history host contracts", () => {
   beforeEach(() => invoke.mockReset());
@@ -63,5 +63,15 @@ describe("history host contracts", () => {
       settings: false,
       permissionGuide: true,
     });
+  });
+
+  it("switches runtime data sources without changing history request shapes", async () => {
+    invoke.mockResolvedValue("demo");
+    await expect(getRuntimeMode()).resolves.toBe("demo");
+    await enterDemoMode();
+    await exitDemoMode();
+    expect(invoke.mock.calls.slice(-3)).toEqual([
+      ["get_runtime_mode"], ["enter_demo_mode"], ["exit_demo_mode"],
+    ]);
   });
 });

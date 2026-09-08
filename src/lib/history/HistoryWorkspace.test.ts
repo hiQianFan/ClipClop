@@ -27,6 +27,7 @@ vi.mock("./api", () => ({
   getClipAsset: vi.fn(), getClipFileAsset: vi.fn(), getClipThumbnail: vi.fn(async () => ({ data_url: null, byte_size: null, access_denied: false, is_directory: false })),
   getHistoryFacets: vi.fn(async () => ({ type_total: 0, type_counts: {}, sources: [] })),
   getPreviewCapability: vi.fn(async () => ({ provider: "unavailable", reason: "not_installed", version: null })),
+  getRuntimeMode: vi.fn(async () => "real"), enterDemoMode: vi.fn(async () => "demo"), exitDemoMode: vi.fn(async () => "real"),
   getSourceAppIcon: vi.fn(), hidePanel: vi.fn(), openClipLink: vi.fn(), pasteClip: vi.fn(),
   performPagerHaptic: vi.fn(), previewClip: vi.fn(), queryHistory: host.queryHistory,
 }));
