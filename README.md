@@ -5,7 +5,7 @@
 
   **Clip-clip, clop-clop. Two steps, fast.**
 
-  Everything you copy, saved locally forever. Never lost.
+  Clipboard history, saved locally and ready to reuse.
 
   [![Quality](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
   [![Release](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
@@ -17,7 +17,7 @@
   [Download](https://clipclop.io/download) · [Features](#speed-shouldnt-cost-you-privacy) · [Privacy](#privacy-and-security-you-can-verify) · [简体中文](README.zh-CN.md)
 </div>
 
-## Never lose a copy again
+## Find what you copied
 
 ClipClop remembers the text, links, colors, images, and files you copy. Press one shortcut to open it, find what you need, and paste it back without breaking your flow.
 

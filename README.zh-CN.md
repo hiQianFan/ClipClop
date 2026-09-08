@@ -5,7 +5,7 @@
 
   **马不停贴，哒哒两步，快速粘贴。**
 
-  复制过的内容，本地永久保存，永不丢失。
+  剪贴历史，本地保存，随手取用。
 
   [![构建状态](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml/badge.svg)](https://github.com/hiQianFan/ClipClop/actions/workflows/quality.yml)
   [![版本](https://img.shields.io/github/v/release/hiQianFan/ClipClop)](https://github.com/hiQianFan/ClipClop/releases/latest)
@@ -17,7 +17,7 @@
   [下载](https://clipclop.io/download) · [产品亮点](#快不必以隐私为代价) · [隐私](#隐私与安全公开可验证) · [English](README.md)
 </div>
 
-## 不再弄丢复制过的内容
+## 找回复制过的内容
 
 ClipClop 记住你复制过的文本、链接、颜色、图片和文件。按下快捷键，就能随时呼出、快速找到并粘贴回去，不打断手上的工作。
 
