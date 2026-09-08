@@ -325,9 +325,8 @@
     <AlertDialog.Portal>
       <AlertDialog.Overlay class="dialog-overlay" />
       <AlertDialog.Content class="demo-dialog" onOpenAutoFocus={(event) => { event.preventDefault(); cancelDemoButton?.focus(); }}>
-        <AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title>
-        <AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description>
-        <div class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button disabled={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></div>
+        <div class="dialog-copy"><AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title><AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description></div>
+        <ActionToolbar class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} class="toolbar-button secondary pressable" disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button class="toolbar-button primary pressable" disabled={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></ActionToolbar>
       </AlertDialog.Content>
     </AlertDialog.Portal>
   </AlertDialog.Root>
@@ -361,7 +360,7 @@
   .settings-header{gap:10px}
   .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
   :global(.dialog-overlay){position:fixed;inset:20px;z-index:20;border-radius:var(--radius-xl);background:color-mix(in srgb,var(--text-1) 28%,transparent)}
-  :global(.demo-dialog){position:fixed;z-index:21;top:50%;left:50%;width:min(400px,calc(100vw - 48px));padding:20px;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
-  :global(.demo-dialog h2){margin:0 0 8px;font-size:var(--fs-heading)}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-body);line-height:1.5}:global(.dialog-actions){margin-top:20px;display:flex;justify-content:flex-end;gap:8px}:global(.dialog-actions button){min-height:32px;padding:0 12px;border:1px solid var(--hairline);border-radius:var(--radius-md)}:global(.dialog-actions button:last-child){border-color:var(--action);color:var(--action-on);background:var(--action)}
+  :global(.demo-dialog){position:fixed;z-index:21;top:50%;left:50%;width:min(360px,calc(100vw - 64px));overflow:hidden;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
+  :global(.dialog-copy){padding:18px 18px 16px}:global(.demo-dialog h2){margin:0 0 6px;font-size:var(--fs-emphasis);font-weight:650;line-height:var(--lh-snug)}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-ui);line-height:1.5}:global(.demo-dialog .dialog-actions){min-height:49px;padding:8px 14px}
   @media(prefers-reduced-motion:no-preference){:global(.dialog-overlay){transition:opacity var(--dur-mid) var(--ease-out)}:global(.demo-dialog){transition:opacity var(--dur-mid) var(--ease-out),transform var(--dur-mid) var(--ease-out)}:global(.dialog-overlay[data-starting-style]),:global(.dialog-overlay[data-ending-style]){opacity:0}:global(.demo-dialog[data-starting-style]),:global(.demo-dialog[data-ending-style]){opacity:0;transform:translate(-50%,-50%) scale(.97)}}
 </style>
