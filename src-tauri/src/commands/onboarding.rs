@@ -44,10 +44,15 @@ pub async fn open_permission_guide(
         } else {
             super::open_file_preview_settings(app)?;
         }
+        Ok(())
     }
     #[cfg(not(target_os = "macos"))]
-    let _ = (app, state, kind);
-    Err(AppError::Platform("permission setup is unavailable on this platform".into()))
+    {
+        let _ = (app, state, kind);
+        Err(crate::error::AppError::Platform(
+            "permission setup is unavailable on this platform".into(),
+        ))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
