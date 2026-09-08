@@ -325,7 +325,7 @@
     <AlertDialog.Portal>
       <AlertDialog.Overlay class="dialog-overlay" />
       <AlertDialog.Content class="demo-dialog" onOpenAutoFocus={(event) => { event.preventDefault(); cancelDemoButton?.focus(); }}>
-        <div class="dialog-copy"><AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title><AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description><p class="dialog-note">{t("settings.demoExternalNote")}</p></div>
+        <div class="dialog-copy"><AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title><AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description></div>
         <ActionToolbar class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} class="toolbar-button secondary pressable" disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button class="toolbar-button primary pressable" disabled={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></ActionToolbar>
       </AlertDialog.Content>
     </AlertDialog.Portal>
@@ -361,6 +361,6 @@
   .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
   :global(.dialog-overlay){position:fixed;inset:20px;z-index:20;border-radius:var(--radius-xl);background:color-mix(in srgb,var(--text-1) 28%,transparent)}
   :global(.demo-dialog){position:fixed;z-index:21;top:50%;left:50%;width:min(380px,calc(100vw - 64px));overflow:hidden;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
-  :global(.dialog-copy){padding:20px 20px 18px}:global(.demo-dialog h2){margin:0 0 8px;color:var(--text-1);font-size:var(--fs-heading);font-weight:680;line-height:var(--lh-snug);letter-spacing:-.01em}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-ui);line-height:1.55}:global(.demo-dialog .dialog-note){margin-top:12px;padding-top:10px;border-top:1px solid var(--hairline);color:var(--text-3);font-size:var(--fs-meta)}:global(.demo-dialog .dialog-actions){min-height:49px;padding:8px 14px}:global(.demo-dialog .dialog-actions .secondary){min-width:72px;border-color:transparent}:global(.demo-dialog .dialog-actions .primary){min-width:112px}
+  :global(.dialog-copy){padding:20px 20px 18px}:global(.demo-dialog h2){margin:0 0 8px;color:var(--text-1);font-size:var(--fs-heading);font-weight:680;line-height:var(--lh-snug);letter-spacing:-.01em}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-ui);line-height:1.55}:global(.demo-dialog .dialog-actions){min-height:49px;padding:8px 14px}:global(.demo-dialog .dialog-actions .secondary){min-width:72px;border-color:transparent}:global(.demo-dialog .dialog-actions .primary){min-width:112px}
   @media(prefers-reduced-motion:no-preference){:global(.dialog-overlay){transition:opacity var(--dur-mid) var(--ease-out)}:global(.demo-dialog){transition:opacity var(--dur-mid) var(--ease-out),transform var(--dur-mid) var(--ease-out)}:global(.dialog-overlay[data-starting-style]),:global(.dialog-overlay[data-ending-style]){opacity:0}:global(.demo-dialog[data-starting-style]),:global(.demo-dialog[data-ending-style]){opacity:0;transform:translate(-50%,-50%) scale(.97)}}
 </style>
