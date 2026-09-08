@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, platform, quicklook } = vi.hoisted(() => ({
+const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, openWebsite, platform, quicklook } = vi.hoisted(() => ({
   preview: {
     phase: "idle",
     progress: null as number | null,
@@ -17,6 +17,7 @@ const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, 
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
   }]),
   openRepository: vi.fn(),
+  openWebsite: vi.fn(),
   platform: { value: "windows" as "windows" | "macos" },
   quicklook: { value: { provider: "unavailable", reason: "not_installed", version: null } as {
     provider: "macos_quicklook" | "quicklook" | "unavailable";
@@ -28,7 +29,7 @@ const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, 
 vi.mock("./api", () => ({
   getSettings,
   updateSettings, applyTheme: vi.fn(), previewTheme: vi.fn(),
-  openFilePreviewSettings: vi.fn(), openQuicklookInstallPage: vi.fn(), openLogDir: vi.fn(), openRepository,
+  openFilePreviewSettings: vi.fn(), openQuicklookInstallPage: vi.fn(), openLogDir: vi.fn(), openRepository, openWebsite,
 }));
 vi.mock("$lib/history/api", () => ({
   clearHistory: vi.fn(),
@@ -199,6 +200,13 @@ it("opens the repository from the GitHub icon", async () => {
   render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
   await fireEvent.click(await screen.findByRole("button", { name: "View ClipClop on GitHub" }));
   expect(openRepository).toHaveBeenCalledOnce();
+});
+
+it("opens the ClipClop website from About", async () => {
+  openWebsite.mockClear();
+  render(SettingsView, { props: { initialTab: "about", onclose() {}, oncleared() {}, onquickstart() {} } });
+  await fireEvent.click(await screen.findByRole("button", { name: "clipclop.io" }));
+  expect(openWebsite).toHaveBeenCalledOnce();
 });
 
 it("does not show a save button on the About category", async () => {

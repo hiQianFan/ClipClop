@@ -5,7 +5,7 @@ const { invoke, emit } = vi.hoisted(() => ({ invoke: vi.fn(), emit: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ emit }));
 
-import { applyTheme, openFilePreviewSettings, previewTheme, THEME_PREVIEW_EVENT } from "./api";
+import { applyTheme, openFilePreviewSettings, openWebsite, previewTheme, THEME_PREVIEW_EVENT } from "./api";
 
 describe("file preview settings IPC", () => {
   beforeEach(() => invoke.mockReset());
@@ -14,6 +14,8 @@ describe("file preview settings IPC", () => {
     invoke.mockResolvedValue(undefined);
     await openFilePreviewSettings();
     expect(invoke).toHaveBeenLastCalledWith("open_file_preview_settings");
+    await openWebsite();
+    expect(invoke).toHaveBeenLastCalledWith("open_website");
   });
 });
 

@@ -23,10 +23,11 @@ use commands::{
     get_preview_capability, get_settings, get_source_app_icon, hide_panel,
     install_downloaded_update, open_auto_paste_settings, open_clip_link,
     open_file_preview_settings, open_log_dir, open_permission_guide, open_quicklook_install_page,
-    open_release_page, open_repository, paste_clip, perform_pager_haptic, preview_clip,
-    preview_onboarding_example, query_history, quit_app, record_update_check, reveal_current_app,
-    save_onboarding_state, set_language_preference, set_quick_selection, show_full_panel,
-    skip_update_version, start_current_app_drag, start_update_download, update_settings,
+    open_release_page, open_repository, open_website, paste_clip, perform_pager_haptic,
+    preview_clip, preview_onboarding_example, query_history, quit_app, record_update_check,
+    reveal_current_app, save_onboarding_state, set_language_preference, set_quick_selection,
+    show_full_panel, skip_update_version, start_current_app_drag, start_update_download,
+    update_settings,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -250,6 +251,7 @@ pub fn run() {
             open_quicklook_install_page,
             open_release_page,
             open_repository,
+            open_website,
             quit_app,
             perform_pager_haptic,
             get_onboarding_state,

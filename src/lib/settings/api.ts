@@ -30,6 +30,7 @@ export const skipUpdateVersion = (version: string) => invoke<void>("skip_update_
 export const openLogDir = () => invoke<void>("open_log_dir");
 export const openQuicklookInstallPage = () => invoke<void>("open_quicklook_install_page");
 export const openRepository = () => invoke<void>("open_repository");
+export const openWebsite = () => invoke<void>("open_website");
 export const openFilePreviewSettings = () => invoke<void>("open_file_preview_settings");
 export const quitApp = () => invoke<void>("quit_app");
 export const THEME_PREVIEW_EVENT = "theme_preview";

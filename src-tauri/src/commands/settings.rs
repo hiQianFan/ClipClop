@@ -62,6 +62,11 @@ pub fn open_repository(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn open_website(app: AppHandle) -> AppResult<()> {
+    open_url(&app, "https://clipclop.io/")
+}
+
+#[tauri::command]
 pub fn open_quicklook_install_page(app: AppHandle) -> AppResult<()> {
     open_url(&app, "https://github.com/QL-Win/QuickLook#-get-started")
 }
