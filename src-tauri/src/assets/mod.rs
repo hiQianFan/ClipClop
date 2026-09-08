@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 
 use crate::{
@@ -95,7 +96,8 @@ impl AssetService {
         let data_url = cache
             .entry(source.id.clone())
             .or_insert_with(|| {
-                let icon = platform::source_app_icon(&source.id);
+                let icon =
+                    demo_source_icon(&source.id).or_else(|| platform::source_app_icon(&source.id));
                 if icon.is_none() {
                     log::warn!("source icon unavailable for {}", source.id);
                 }
@@ -109,6 +111,42 @@ impl AssetService {
             is_directory: false,
         })
     }
+}
+
+fn demo_source_icon(id: &str) -> Option<String> {
+    let (mime, bytes): (&str, &[u8]) = match id.strip_prefix("demo:")? {
+        "chrome" => (
+            "image/png",
+            include_bytes!("../../assets/demo-sources/chrome.png"),
+        ),
+        "safari" => (
+            "image/png",
+            include_bytes!("../../assets/demo-sources/safari.png"),
+        ),
+        "edge" => (
+            "image/svg+xml",
+            include_bytes!("../../assets/demo-sources/edge.svg"),
+        ),
+        "codex" => (
+            "image/svg+xml",
+            include_bytes!("../../assets/demo-sources/codex.svg"),
+        ),
+        "claude" => (
+            "image/svg+xml",
+            include_bytes!("../../assets/demo-sources/claude.svg"),
+        ),
+        "finder" => (
+            "image/png",
+            include_bytes!("../../assets/demo-sources/finder.png"),
+        ),
+        "preview" => (
+            "image/png",
+            include_bytes!("../../assets/demo-sources/preview.png"),
+        ),
+        "clipclop" => ("image/png", include_bytes!("../../../static/app-icon.png")),
+        _ => return None,
+    };
+    Some(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 #[cfg(target_os = "macos")]
@@ -171,6 +209,18 @@ mod tests {
             .unwrap()
             .starts_with("data:image/png;base64,"));
         assert!(platform::source_app_icon("/not/a/real/application").is_none());
+    }
+
+    #[test]
+    fn bundled_demo_source_icons_cover_the_website_fixture() {
+        for icon in [
+            "chrome", "safari", "edge", "codex", "claude", "finder", "preview", "clipclop",
+        ] {
+            assert!(demo_source_icon(&format!("demo:{icon}"))
+                .unwrap()
+                .starts_with("data:image/"));
+        }
+        assert!(demo_source_icon("demo:unknown").is_none());
     }
 
     #[test]

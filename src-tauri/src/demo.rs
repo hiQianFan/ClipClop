@@ -20,6 +20,7 @@ struct DemoItem {
     content_type: ContentType,
     text: &'static str,
     source: &'static str,
+    icon: &'static str,
 }
 
 pub fn create_environment(
@@ -151,10 +152,7 @@ fn new_clip(
         plain_text,
         preview,
         source_app: Some(SourceApp {
-            id: format!(
-                "demo:{}",
-                item.source.to_ascii_lowercase().replace(' ', "-")
-            ),
+            id: format!("demo:{}", item.icon),
             name: item.source.into(),
         }),
         flavors,
@@ -173,29 +171,29 @@ fn items(chinese: bool) -> &'static [DemoItem; 10] {
 }
 
 const ZH_ITEMS: [DemoItem; 10] = [
-    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop", source: "Google Chrome" },
-    DemoItem { content_type: ContentType::Text, text: "macOS  ⌃⌘C  呼出\nWindows  Ctrl+Alt+C  呼出\n↑ ↓  选择\n← →  翻页\n1–0  快速选择\nSpace  预览\nEnter  粘贴\nShift+Enter  纯文本粘贴\nEsc  关闭", source: "ClipClop" },
-    DemoItem { content_type: ContentType::Text, text: "console.log(\"Hello, ClipClop\");", source: "Codex" },
-    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop/releases/latest", source: "Safari" },
-    DemoItem { content_type: ContentType::Image, text: "ClipClop 应用图标", source: "预览" },
-    DemoItem { content_type: ContentType::File, text: "ClipClop.dmg", source: "访达" },
-    DemoItem { content_type: ContentType::Color, text: "#ECEEF0", source: "Claude" },
-    DemoItem { content_type: ContentType::Text, text: "保存、搜索、预览与粘贴，都在这台设备上完成。", source: "Microsoft Edge" },
-    DemoItem { content_type: ContentType::Text, text: "无法自动粘贴时，内容仍会留在系统剪贴板。", source: "Google Chrome" },
-    DemoItem { content_type: ContentType::Text, text: "剪贴历史保留时间\n1 天 / 7 天 / 30 天 / 90 天 / 1 年 / 永久\n\n剪贴历史数量上限\n100 条 / 500 条 / 1,000 条 / 5,000 条 / 不限制", source: "ClipClop" },
+    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop", source: "Google Chrome", icon: "chrome" },
+    DemoItem { content_type: ContentType::Text, text: "macOS  ⌃⌘C  呼出\nWindows  Ctrl+Alt+C  呼出\n↑ ↓  选择\n← →  翻页\n1–0  快速选择\nSpace  预览\nEnter  粘贴\nShift+Enter  纯文本粘贴\nEsc  关闭", source: "ClipClop", icon: "clipclop" },
+    DemoItem { content_type: ContentType::Text, text: "console.log(\"Hello, ClipClop\");", source: "Codex", icon: "codex" },
+    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop/releases/latest", source: "Safari", icon: "safari" },
+    DemoItem { content_type: ContentType::Image, text: "ClipClop 应用图标", source: "预览", icon: "preview" },
+    DemoItem { content_type: ContentType::File, text: "ClipClop.dmg", source: "访达", icon: "finder" },
+    DemoItem { content_type: ContentType::Color, text: "#ECEEF0", source: "Claude", icon: "claude" },
+    DemoItem { content_type: ContentType::Text, text: "保存、搜索、预览与粘贴，都在这台设备上完成。", source: "Microsoft Edge", icon: "edge" },
+    DemoItem { content_type: ContentType::Text, text: "无法自动粘贴时，内容仍会留在系统剪贴板。", source: "Google Chrome", icon: "chrome" },
+    DemoItem { content_type: ContentType::Text, text: "剪贴历史保留时间\n1 天 / 7 天 / 30 天 / 90 天 / 1 年 / 永久\n\n剪贴历史数量上限\n100 条 / 500 条 / 1,000 条 / 5,000 条 / 不限制", source: "ClipClop", icon: "clipclop" },
 ];
 
 const EN_ITEMS: [DemoItem; 10] = [
-    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop", source: "Google Chrome" },
-    DemoItem { content_type: ContentType::Text, text: "macOS  ⌃⌘C  Open\nWindows  Ctrl+Alt+C  Open\n↑ ↓  Select\n← →  Change page\n1–0  Quick select\nSpace  Preview\nEnter  Paste\nShift+Enter  Paste plain text\nEsc  Close", source: "ClipClop" },
-    DemoItem { content_type: ContentType::Text, text: "console.log(\"Hello, ClipClop\");", source: "Codex" },
-    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop/releases/latest", source: "Safari" },
-    DemoItem { content_type: ContentType::Image, text: "ClipClop app icon", source: "Preview" },
-    DemoItem { content_type: ContentType::File, text: "ClipClop.dmg", source: "Finder" },
-    DemoItem { content_type: ContentType::Color, text: "#ECEEF0", source: "Claude" },
-    DemoItem { content_type: ContentType::Text, text: "Save, search, preview, and paste—all on this device.", source: "Microsoft Edge" },
-    DemoItem { content_type: ContentType::Text, text: "If direct paste is unavailable, your content stays on the system clipboard.", source: "Google Chrome" },
-    DemoItem { content_type: ContentType::Text, text: "Clipboard history retention\n1 / 7 / 30 / 90 days / 1 year / Forever\n\nClipboard history limit\n100 / 500 / 1,000 / 5,000 items / Unlimited", source: "ClipClop" },
+    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop", source: "Google Chrome", icon: "chrome" },
+    DemoItem { content_type: ContentType::Text, text: "macOS  ⌃⌘C  Open\nWindows  Ctrl+Alt+C  Open\n↑ ↓  Select\n← →  Change page\n1–0  Quick select\nSpace  Preview\nEnter  Paste\nShift+Enter  Paste plain text\nEsc  Close", source: "ClipClop", icon: "clipclop" },
+    DemoItem { content_type: ContentType::Text, text: "console.log(\"Hello, ClipClop\");", source: "Codex", icon: "codex" },
+    DemoItem { content_type: ContentType::Link, text: "https://github.com/hiQianFan/ClipClop/releases/latest", source: "Safari", icon: "safari" },
+    DemoItem { content_type: ContentType::Image, text: "ClipClop app icon", source: "Preview", icon: "preview" },
+    DemoItem { content_type: ContentType::File, text: "ClipClop.dmg", source: "Finder", icon: "finder" },
+    DemoItem { content_type: ContentType::Color, text: "#ECEEF0", source: "Claude", icon: "claude" },
+    DemoItem { content_type: ContentType::Text, text: "Save, search, preview, and paste—all on this device.", source: "Microsoft Edge", icon: "edge" },
+    DemoItem { content_type: ContentType::Text, text: "If direct paste is unavailable, your content stays on the system clipboard.", source: "Google Chrome", icon: "chrome" },
+    DemoItem { content_type: ContentType::Text, text: "Clipboard history retention\n1 / 7 / 30 / 90 days / 1 year / Forever\n\nClipboard history limit\n100 / 500 / 1,000 / 5,000 items / Unlimited", source: "ClipClop", icon: "clipclop" },
 ];
 
 fn platform_error(error: std::io::Error) -> AppError {
