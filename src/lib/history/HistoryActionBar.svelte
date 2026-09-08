@@ -114,8 +114,8 @@
 
 <style>
   :global(.actions) { grid-column:2; grid-row:3; }
-  .actions :global(.action-menu-trigger.expanded) { color:var(--text-1); background:var(--bg-hover); }
-  .actions :global(.action-menu-trigger:active), .actions :global(.action-menu-trigger.expanded:active) { background:var(--bg-selected); }
+  :global(.actions .action-menu-trigger.expanded) { color:var(--text-1); background:var(--bg-hover); }
+  :global(.actions .action-menu-trigger:active), :global(.actions .action-menu-trigger.expanded:active) { background:var(--bg-selected); }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
   .menu-wrap :global(.menu) { position:absolute; right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
@@ -127,7 +127,7 @@
   .menu-wrap :global(.menu .danger) { color:var(--danger); }
   .message { min-width:0; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:auto; color:var(--text-2); font-size:var(--fs-meta); }
   .message.error { color:var(--danger); }
-  .actions :global(.confirmation) { width:100%; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
-  .actions :global(.confirmation > span) { margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
-  .actions :global(.confirmation small) { display:block; margin-top:2px; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; }
+  :global(.actions .confirmation) { width:100%; min-width:0; display:flex; align-items:center; justify-content:flex-end; gap:8px; }
+  :global(.actions .confirmation > span) { min-width:0; margin-right:auto; color:var(--text-1); font-size:var(--fs-ui); font-weight:600; }
+  :global(.actions .confirmation small) { display:block; margin-top:2px; overflow:hidden; color:var(--text-2); font-size:var(--fs-caption); font-weight:400; text-overflow:ellipsis; white-space:nowrap; }
 </style>
