@@ -194,6 +194,85 @@ pub(super) fn hide_preview(app: &tauri::AppHandle) {
     }
 }
 
+pub(crate) fn prepare_quicklook_level(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use objc::{class, msg_send};
+    use tauri_nspanel::ManagerExt;
+
+    let app_for_main = app.clone();
+    app.run_on_main_thread(move || {
+        let panel_level = [super::MAIN_LABEL, super::QUICK_LABEL]
+            .into_iter()
+            .filter_map(|label| app_for_main.get_webview_panel(label).ok())
+            .map(|panel| panel.as_panel().level())
+            .max()
+            .unwrap_or(0);
+        // Ordering front only affects windows within the same level.
+        // Quick Look must also sit above our always-on-top clipboard panels.
+        unsafe {
+            let preview: *mut objc::runtime::Object =
+                msg_send![class!(QLPreviewPanel), sharedPreviewPanel];
+            let _: () = msg_send![preview, setLevel: panel_level + 1];
+            let actual_level: isize = msg_send![preview, level];
+            debug_assert!(actual_level > panel_level);
+        }
+    })
+}
+
+pub(crate) fn application_is_active() -> bool {
+    use objc::{class, msg_send};
+    unsafe {
+        let application: *mut objc::runtime::Object =
+            msg_send![class!(NSApplication), sharedApplication];
+        msg_send![application, isActive]
+    }
+}
+
+pub(crate) fn monitor_application_deactivation(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tauri::Manager;
+    static MONITORING: AtomicBool = AtomicBool::new(false);
+    if MONITORING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        // Allow Quick Look to finish its activation transition first.
+        std::thread::sleep(std::time::Duration::from_millis(220));
+        loop {
+            if !application_is_active() {
+                let app_for_main = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    if app_for_main.state::<super::PreviewState>().is_active() {
+                        // Close the native panel before changing our lifecycle
+                        // state; hiding the webview alone cannot dismiss it.
+                        hide_preview(&app_for_main);
+                        let _ = super::hide_panel(
+                            &app_for_main,
+                            super::MAIN_LABEL,
+                            super::HideReason::Blur,
+                        );
+                        let _ = super::hide_panel(
+                            &app_for_main,
+                            super::QUICK_LABEL,
+                            super::HideReason::Blur,
+                        );
+                        app_for_main
+                            .state::<super::PreviewState>()
+                            .set_active(false);
+                    }
+                });
+                MONITORING.store(false, Ordering::Release);
+                return;
+            }
+            if !app.state::<super::PreviewState>().is_active() {
+                MONITORING.store(false, Ordering::Release);
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+}
+
 unsafe extern "C" fn handle_quicklook_key(
     _delegate: &objc::runtime::Object,
     _selector: objc::runtime::Sel,

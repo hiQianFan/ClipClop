@@ -380,9 +380,19 @@ pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, 
         let app_for_main = app.clone();
         let _ = app.run_on_main_thread(move || {
             let lifecycle = app_for_main.state::<PanelLifecycleState>();
-            if !lifecycle.can_hide(&label, token)
-                || app_for_main.state::<PreviewState>().is_active()
-            {
+            if !lifecycle.can_hide(&label, token) {
+                return;
+            }
+            #[cfg(target_os = "macos")]
+            if !macos::application_is_active() {
+                // Quick Look belongs to this application, while TextEdit and
+                // other "Open with" targets deactivate it. Hide immediately.
+                app_for_main.state::<PreviewState>().set_active(false);
+            } else if app_for_main.state::<PreviewState>().is_active() {
+                return;
+            }
+            #[cfg(not(target_os = "macos"))]
+            if app_for_main.state::<PreviewState>().is_active() {
                 return;
             }
             if panel.is_focused().unwrap_or(false) {
@@ -445,7 +455,9 @@ pub(crate) fn restore_topmost_after_preview_transition(app: &tauri::AppHandle) {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) use macos::install_quicklook_key_handler;
+pub(crate) use macos::{
+    install_quicklook_key_handler, monitor_application_deactivation, prepare_quicklook_level,
+};
 
 #[cfg(test)]
 mod tests {
