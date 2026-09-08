@@ -64,6 +64,8 @@
 
   /* Elevation stacking */
   --z-menu: 50;
+  --z-modal-backdrop: 60;
+  --z-modal: 61;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;

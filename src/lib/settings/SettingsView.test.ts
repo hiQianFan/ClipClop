@@ -104,7 +104,7 @@ it("confirms demo entry with Cancel focused", async () => {
   await fireEvent.click(await screen.findByRole("button", { name: "Enter…" }));
   const cancel = await screen.findByRole("button", { name: "Cancel" });
   await waitFor(() => expect(document.activeElement).toBe(cancel));
-  await fireEvent.click(screen.getByRole("button", { name: "Enter demo" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Enter" }));
   await waitFor(() => expect(onenterdemo).toHaveBeenCalledTimes(1));
 });
 

@@ -30,6 +30,7 @@
   let confirmClear = $state(false);
   let confirmDemo = $state(false);
   let enteringDemo = $state(false);
+  let demoError = $state("");
   let cancelDemoButton = $state<HTMLButtonElement | null>(null);
   let navFocusRing = $state(false);
   let savedSettings = $state<Settings | null>(null);
@@ -209,12 +210,13 @@
   async function enterDemo() {
     if (!onenterdemo || enteringDemo) return;
     enteringDemo = true;
+    demoError = "";
     try {
       if (!await save()) return;
       await onenterdemo();
       confirmDemo = false;
     }
-    catch (reason) { status = t("settings.demoEnterFailed", { error: localizedError(reason) }); }
+    catch (reason) { demoError = t("settings.demoEnterFailed", { error: localizedError(reason) }); }
     finally { enteringDemo = false; }
   }
 
@@ -321,12 +323,12 @@
       {/if}
     </ActionToolbar>
   </AlertDialog.Root>
-  <AlertDialog.Root open={confirmDemo} onOpenChange={(open) => confirmDemo = open}>
+  <AlertDialog.Root open={confirmDemo} onOpenChange={(open) => { confirmDemo = open; if (!open) demoError = ""; }}>
     <AlertDialog.Portal>
       <AlertDialog.Overlay class="dialog-overlay" />
       <AlertDialog.Content class="demo-dialog" onOpenAutoFocus={(event) => { event.preventDefault(); cancelDemoButton?.focus(); }}>
-        <div class="dialog-copy"><AlertDialog.Title>{t("settings.demoConfirmTitle")}</AlertDialog.Title><AlertDialog.Description>{t("settings.demoConfirmHelp")}</AlertDialog.Description></div>
-        <ActionToolbar class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} class="toolbar-button secondary pressable" disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button class="toolbar-button primary pressable" disabled={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></ActionToolbar>
+        <div class="dialog-copy"><AlertDialog.Title class="dialog-title">{t("settings.demoConfirmTitle")}</AlertDialog.Title><AlertDialog.Description class="dialog-description">{t("settings.demoConfirmHelp")}</AlertDialog.Description>{#if demoError}<p class="dialog-error" role="alert">{demoError}</p>{/if}</div>
+        <ActionToolbar class="dialog-actions"><AlertDialog.Cancel bind:ref={cancelDemoButton} class="toolbar-button pressable" disabled={enteringDemo}>{t("common.cancel")}</AlertDialog.Cancel><button class="toolbar-button primary pressable" disabled={enteringDemo} aria-busy={enteringDemo} onclick={() => void enterDemo()}>{enteringDemo ? t("settings.demoEntering") : t("settings.enterDemoAction")}</button></ActionToolbar>
       </AlertDialog.Content>
     </AlertDialog.Portal>
   </AlertDialog.Root>
@@ -359,8 +361,8 @@
   .header-drag{min-width:24px;flex:1;align-self:stretch}
   .settings-header{gap:10px}
   .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
-  :global(.dialog-overlay){position:fixed;inset:20px;z-index:20;border-radius:var(--radius-xl);background:color-mix(in srgb,var(--text-1) 28%,transparent)}
-  :global(.demo-dialog){position:fixed;z-index:21;top:50%;left:50%;width:min(380px,calc(100vw - 64px));overflow:hidden;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
-  :global(.dialog-copy){padding:20px 20px 18px}:global(.demo-dialog h2){margin:0 0 8px;color:var(--text-1);font-size:var(--fs-heading);font-weight:680;line-height:var(--lh-snug);letter-spacing:-.01em}:global(.demo-dialog p){margin:0;color:var(--text-2);font-size:var(--fs-ui);line-height:1.55}:global(.demo-dialog .dialog-actions){min-height:49px;padding:8px 14px}:global(.demo-dialog .dialog-actions .secondary){min-width:72px;border-color:transparent}:global(.demo-dialog .dialog-actions .primary){min-width:112px}
+  :global(.dialog-overlay){position:fixed;inset:20px;z-index:var(--z-modal-backdrop);border-radius:var(--radius-xl);background:color-mix(in srgb,var(--text-1) 28%,transparent)}
+  :global(.demo-dialog){position:fixed;z-index:var(--z-modal);top:50%;left:50%;width:min(380px,calc(100vw - 64px));overflow:hidden;transform:translate(-50%,-50%);border:1px solid var(--hairline);border-radius:var(--radius-lg);background:var(--bg-raised);box-shadow:var(--menu-shadow)}
+  :global(.dialog-copy){padding:var(--space-10)}:global(.dialog-title){margin:0 0 var(--space-4);color:var(--text-1);font-size:var(--fs-heading);font-weight:680;line-height:var(--lh-tight);letter-spacing:-.01em;text-wrap:balance}:global(.dialog-description){max-width:46ch;margin:0;color:var(--text-2);font-size:var(--fs-ui);line-height:var(--lh-snug);text-wrap:pretty}:global(.dialog-error){margin:var(--space-6) 0 0;color:var(--danger);font-size:var(--fs-ui);line-height:var(--lh-snug)}:global(.demo-dialog .dialog-actions){min-height:49px;padding:var(--space-4) var(--space-7)}:global(.demo-dialog .dialog-actions .toolbar-button){min-width:72px}:global(.demo-dialog .dialog-actions .primary){min-width:96px}
   @media(prefers-reduced-motion:no-preference){:global(.dialog-overlay){transition:opacity var(--dur-mid) var(--ease-out)}:global(.demo-dialog){transition:opacity var(--dur-mid) var(--ease-out),transform var(--dur-mid) var(--ease-out)}:global(.dialog-overlay[data-starting-style]),:global(.dialog-overlay[data-ending-style]){opacity:0}:global(.demo-dialog[data-starting-style]),:global(.demo-dialog[data-ending-style]){opacity:0;transform:translate(-50%,-50%) scale(.97)}}
 </style>
