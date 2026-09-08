@@ -59,8 +59,8 @@
             <DropdownMenu.Item onclick={onsettings}>{t("history.settings")} <ShortcutHint shortcut={settingsShortcut} platform={settingsShortcut.startsWith("Command") ? "macos" : "windows"} /></DropdownMenu.Item>
             <DropdownMenu.Item onclick={onupdates}>{t("history.checkUpdates")}</DropdownMenu.Item>
             <DropdownMenu.Item onclick={onabout}>{t("history.about")}</DropdownMenu.Item>
-            {#if demo}<DropdownMenu.Item onclick={onexitdemo}>{t("history.exitDemo")}</DropdownMenu.Item>{/if}
             <DropdownMenu.Separator class="menu-separator" />
+            {#if demo}<DropdownMenu.Item onclick={onexitdemo}>{t("history.exitDemo")}</DropdownMenu.Item>{/if}
             <DropdownMenu.Item class="danger" onclick={onquit}><span>{t("history.quit")}</span><ShortcutHint shortcut={quitShortcut} platform={quitShortcut.startsWith("Command") ? "macos" : "windows"} /></DropdownMenu.Item>
           </DropdownMenu.ContentStatic>
         </div>
