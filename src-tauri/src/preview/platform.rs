@@ -106,7 +106,7 @@ pub(super) fn toggle_quicklook(
     let url = url::Url::from_file_path(path)
         .map_err(|_| crate::error::AppError::Validation("preview path is invalid".into()))?;
     state.set_active(true);
-    crate::window::monitor_application_deactivation(app);
+    crate::window::install_deactivation_observer(app);
     let result = (|| {
         app.quicklook()
             .set_items(vec![PreviewItem::new(url.to_string(), None)])

@@ -227,49 +227,34 @@ pub(crate) fn application_is_active() -> bool {
     }
 }
 
-pub(crate) fn monitor_application_deactivation(app: &tauri::AppHandle) {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use tauri::Manager;
-    static MONITORING: AtomicBool = AtomicBool::new(false);
-    if MONITORING.swap(true, Ordering::AcqRel) {
-        return;
-    }
+pub(crate) fn install_deactivation_observer(app: &tauri::AppHandle) {
+    use block2::RcBlock;
+    use objc2_foundation::{
+        NSNotification, NSNotificationCenter, NSNotificationName, NSOperationQueue,
+    };
+    use std::sync::Once;
+
+    static INSTALL: Once = Once::new();
     let app = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        // Allow Quick Look to finish its activation transition first.
-        std::thread::sleep(std::time::Duration::from_millis(220));
-        loop {
-            if !application_is_active() {
-                let app_for_main = app.clone();
-                let _ = app.run_on_main_thread(move || {
-                    if app_for_main.state::<super::PreviewState>().is_active() {
-                        // Close the native panel before changing our lifecycle
-                        // state; hiding the webview alone cannot dismiss it.
-                        hide_preview(&app_for_main);
-                        let _ = super::hide_panel(
-                            &app_for_main,
-                            super::MAIN_LABEL,
-                            super::HideReason::Blur,
-                        );
-                        let _ = super::hide_panel(
-                            &app_for_main,
-                            super::QUICK_LABEL,
-                            super::HideReason::Blur,
-                        );
-                        app_for_main
-                            .state::<super::PreviewState>()
-                            .set_active(false);
-                    }
-                });
-                MONITORING.store(false, Ordering::Release);
-                return;
-            }
-            if !app.state::<super::PreviewState>().is_active() {
-                MONITORING.store(false, Ordering::Release);
-                return;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+    INSTALL.call_once(|| {
+        let name = NSNotificationName::from_str("NSApplicationDidResignActiveNotification");
+        let block = RcBlock::new(move |_notification: std::ptr::NonNull<NSNotification>| {
+            // Dismiss the native panel explicitly before hiding our webviews.
+            hide_preview(&app);
+            let _ = super::hide_panel(&app, super::MAIN_LABEL, super::HideReason::Blur);
+            let _ = super::hide_panel(&app, super::QUICK_LABEL, super::HideReason::Blur);
+        });
+        let center = NSNotificationCenter::defaultCenter();
+        let observer = unsafe {
+            center.addObserverForName_object_queue_usingBlock(
+                Some(&name),
+                None,
+                Some(&NSOperationQueue::mainQueue()),
+                &block,
+            )
+        };
+        // NSNotificationCenter retains the observer for the application's lifetime.
+        drop(observer);
     });
 }
 

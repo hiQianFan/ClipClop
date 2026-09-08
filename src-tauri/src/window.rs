@@ -456,7 +456,7 @@ pub(crate) fn restore_topmost_after_preview_transition(app: &tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{
-    install_quicklook_key_handler, monitor_application_deactivation, prepare_quicklook_level,
+    install_deactivation_observer, install_quicklook_key_handler, prepare_quicklook_level,
 };
 
 #[cfg(test)]
