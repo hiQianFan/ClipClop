@@ -66,8 +66,7 @@ pub struct HistoryFacets {
 impl SourceApp {
     pub(crate) fn is_meaningful(&self) -> bool {
         let process_name = self.id.rsplit(['/', '\\']).next().unwrap_or(&self.id);
-        !self.name.eq_ignore_ascii_case("ClipClop")
-            && !self.name.eq_ignore_ascii_case("loginwindow")
+        !self.name.eq_ignore_ascii_case("loginwindow")
             && !self.id.eq_ignore_ascii_case("com.apple.loginwindow")
             && !process_name.eq_ignore_ascii_case("loginwindow")
     }

@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn clipclop_source_blocks_recent_external_fallback() {
+    fn clipclop_is_preserved_as_the_source() {
         let clipclop = SourceApp {
             id: "io.clipclop.desktop".into(),
             name: "ClipClop".into(),
@@ -327,7 +327,10 @@ mod tests {
             id: "com.example.editor".into(),
             name: "Editor".into(),
         };
-        assert_eq!(resolve_source([Some(clipclop)], Some(previous)), None);
+        assert_eq!(
+            resolve_source([Some(clipclop.clone())], Some(previous)),
+            Some(clipclop)
+        );
     }
 
     #[test]
