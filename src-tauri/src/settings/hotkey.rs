@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyValidationError {
     InvalidFormat,
@@ -138,4 +140,3 @@ mod tests {
         );
     }
 }
-use serde::{Deserialize, Serialize};
