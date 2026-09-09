@@ -26,9 +26,9 @@ use commands::{
     open_clip_link, open_file_preview_settings, open_log_dir, open_permission_guide,
     open_quicklook_install_page, open_release_page, open_repository, open_website, paste_clip,
     perform_pager_haptic, preview_clip, preview_onboarding_example, query_history, quit_app,
-    record_update_check, reveal_current_app, save_onboarding_state, set_language_preference,
-    set_quick_selection, show_full_panel, skip_update_version, start_current_app_drag,
-    start_update_download, update_settings,
+    record_update_check, reveal_current_app, save_onboarding_state, set_hotkey_recording,
+    set_language_preference, set_quick_selection, show_full_panel, skip_update_version,
+    start_current_app_drag, start_update_download, update_settings, HotkeyRecordingState,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -160,6 +160,7 @@ pub fn run() {
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::QuickSelectionState::default());
             app.manage(window::PreviewState::default());
+            app.manage(HotkeyRecordingState::default());
             app.manage(commands::UpdaterDownloadState::default());
             if let Err(error) = workflows::settings_update::reconcile_autostart(
                 app.handle(),
@@ -272,7 +273,8 @@ pub fn run() {
             install_downloaded_update,
             get_runtime_mode,
             enter_demo_mode,
-            exit_demo_mode
+            exit_demo_mode,
+            set_hotkey_recording
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -285,6 +287,13 @@ fn register_panel_hotkey(
     app.global_shortcut()
         .on_shortcut(hotkey, |app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
+                if app
+                    .state::<HotkeyRecordingState>()
+                    .0
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    return;
+                }
                 window::toggle_panel(app);
             }
         })

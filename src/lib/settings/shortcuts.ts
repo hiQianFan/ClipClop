@@ -4,7 +4,7 @@ export type ShortcutPlatform = "macos" | "windows";
 
 export type ShortcutValidation =
   | { valid: true; shortcut: string }
-  | { valid: false; code: "invalid_input" | "invalid_combination" | "reserved" };
+  | { valid: false; code: "invalid_input" | "invalid_combination" };
 
 const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"]);
 const supportedNamedKeys = new Map([
@@ -61,14 +61,11 @@ export function validateShortcut(shortcut: string, platform: ShortcutPlatform): 
     ? new Set(["Control", "Alt", "Shift", "Command"])
     : new Set(["Ctrl", "Alt", "Shift", "Super"]);
 
-  if (!supportedMainKey(key) || modifiers.size === 0 || modifiers.size !== modifierParts.length
+  if (!supportedMainKey(key) || modifiers.size !== modifierParts.length
     || [...modifiers].some((part) => !accepted.has(part))) {
     return { valid: false, code: "invalid_combination" };
   }
 
-  if (isReservedShortcut(modifiers, key, platform)) {
-    return { valid: false, code: "reserved" };
-  }
   return { valid: true, shortcut: [...parts.slice(0, -1), key].join("+") };
 }
 
@@ -79,26 +76,6 @@ function supportedMainKey(key: string) {
       "Home", "End", "PageUp", "PageDown", "Enter", "Escape", "Tab", "Space"]).has(key);
 }
 
-function hasModifiers(actual: Set<string>, expected: string[]) {
-  return actual.size === expected.length && expected.every((item) => actual.has(item));
-}
-
-function isReservedShortcut(modifiers: Set<string>, key: string, platform: ShortcutPlatform) {
-  if (platform === "macos") {
-    return (hasModifiers(modifiers, ["Command"])
-        && new Set(["A", "C", "F", "H", "M", "Q", "S", "Tab", "V", "W", "X", "Z", "Space"]).has(key))
-      || (hasModifiers(modifiers, ["Control"]) && key === "Space")
-      || (hasModifiers(modifiers, ["Command", "Shift"]) && key === "W")
-      || (hasModifiers(modifiers, ["Control", "Command"]) && key === "Q")
-      || (hasModifiers(modifiers, ["Alt", "Command"]) && key === "Escape")
-      || (hasModifiers(modifiers, ["Command", "Shift"]) && new Set(["3", "4", "5"]).has(key));
-  }
-  return (hasModifiers(modifiers, ["Ctrl"])
-      && new Set(["A", "C", "F", "S", "V", "W", "X", "Z", "Space"]).has(key))
-    || (hasModifiers(modifiers, ["Alt"]) && new Set(["F4", "Space", "Tab"]).has(key))
-    || (hasModifiers(modifiers, ["Super"]) && new Set(["D", "E", "L", "R", "S", "Tab", "V"]).has(key))
-    || (hasModifiers(modifiers, ["Ctrl", "Alt"]) && key === "Delete");
-}
 
 export function shortcutKeycaps(shortcut: string, platform: ShortcutPlatform): string[] {
   const labels: Record<string, string> = platform === "macos"
