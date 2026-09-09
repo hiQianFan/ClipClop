@@ -125,7 +125,10 @@ mod tests {
 
     #[test]
     fn leaves_system_availability_to_registration() {
+        #[cfg(target_os = "macos")]
         assert!(validate_hotkey("Command+Q").is_ok());
+        #[cfg(not(target_os = "macos"))]
+        assert!(validate_hotkey("Ctrl+Q").is_ok());
     }
 
     #[test]
