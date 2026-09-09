@@ -136,6 +136,7 @@
   <Dialog.Portal>
     <Dialog.Overlay class="record-overlay" />
     <Dialog.Content class="record-dialog"
+      preventScroll={false}
       onEscapeKeydown={(event) => { if (saving) event.preventDefault(); }}
       onInteractOutside={(event) => event.preventDefault()}
       onOpenAutoFocus={(event) => { event.preventDefault(); capture?.focus(); }}
