@@ -301,7 +301,7 @@
           <div class="row"><span><strong>{t("settings.theme")}</strong><small>{t("settings.appearanceHelp")}</small></span><AppSelect value={settings.theme} items={themeItems} ariaLabel={t("settings.theme")} onchange={changeTheme} /></div>
           <div class="row"><span><strong>{t("settings.language")}</strong><small>{t("settings.languageHelp")}</small></span><AppSelect value={settings.language} items={languageItems} ariaLabel={t("settings.language")} onchange={changeLanguage} /></div>
         {:else if panelTab === "shortcuts"}
-          <ShortcutSettings {settings} {platform} bind:heading={sectionHeading} />
+          <ShortcutSettings {settings} {platform} onerror={(message) => status = message} bind:heading={sectionHeading} />
         {:else if panelTab === "permissions"}
           <PermissionSettings active={tab === "permissions"} focusRequested={focusPermission} onerror={(message) => status = message} bind:heading={sectionHeading} beforeRestart={beforePermissionRestart} />
         {:else if panelTab === "updates"}

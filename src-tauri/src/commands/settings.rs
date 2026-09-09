@@ -1,6 +1,38 @@
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 use crate::{error::AppResult, settings::Settings, state::AppState, workflows::settings_update};
+
+#[derive(Default)]
+pub struct HotkeyRecordingState(pub std::sync::atomic::AtomicBool);
+
+#[tauri::command]
+pub fn set_hotkey_recording(
+    app: AppHandle,
+    state: State<'_, HotkeyRecordingState>,
+    recording: bool,
+) -> AppResult<()> {
+    state
+        .0
+        .store(recording, std::sync::atomic::Ordering::Release);
+    let hotkey = crate::settings::SettingsService::get_stored(&app.state::<AppState>().settings)
+        .map_err(|e| crate::error::AppError::Platform(e.to_string()))?
+        .hotkey;
+    if recording {
+        app.global_shortcut()
+            .unregister(hotkey.as_str())
+            .map_err(|e| crate::error::AppError::HotkeyUnavailable(e.to_string()))?;
+    } else {
+        app.global_shortcut()
+            .on_shortcut(hotkey.as_str(), |app, _, event| {
+                if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                    crate::window::toggle_panel(app);
+                }
+            })
+            .map_err(|e| crate::error::AppError::HotkeyUnavailable(e.to_string()))?;
+    }
+    Ok(())
+}
 
 fn open_url(app: &AppHandle, url: &str) -> AppResult<()> {
     use tauri_plugin_opener::OpenerExt;

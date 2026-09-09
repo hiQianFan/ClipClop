@@ -25,6 +25,7 @@ export type Settings = {
 
 export const getSettings = () => invoke<Settings>("get_settings");
 export const updateSettings = (settings: Settings) => invoke<Settings>("update_settings", { settings });
+export const setHotkeyRecording = (recording: boolean) => invoke<void>("set_hotkey_recording", { recording });
 export const recordUpdateCheck = () => invoke<string>("record_update_check");
 export const skipUpdateVersion = (version: string) => invoke<void>("skip_update_version", { version });
 export const openLogDir = () => invoke<void>("open_log_dir");

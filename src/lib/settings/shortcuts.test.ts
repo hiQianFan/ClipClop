@@ -15,21 +15,14 @@ describe("shortcut recording", () => {
       .toEqual({ valid: true, shortcut: "Ctrl+Alt+D" });
   });
 
-  it("rejects modifier-only and unmodified input", () => {
+  it("rejects modifier-only and accepts an unmodified key candidate", () => {
     expect(shortcutFromKeyboardEvent(keyEvent({ key: "Control", ctrlKey: true }), "windows").valid).toBe(false);
-    expect(shortcutFromKeyboardEvent(keyEvent({ code: "KeyC", key: "c" }), "windows").valid).toBe(false);
+    expect(shortcutFromKeyboardEvent(keyEvent({ code: "KeyC", key: "c" }), "windows")).toEqual({ valid: true, shortcut: "C" });
   });
 
-  it("rejects reserved system combinations", () => {
-    expect(validateShortcut("Command+C", "macos").valid).toBe(false);
-    expect(validateShortcut("Command+Q", "macos").valid).toBe(false);
-    expect(validateShortcut("Ctrl+V", "windows").valid).toBe(false);
-    expect(validateShortcut("Super+V", "windows").valid).toBe(false);
-    expect(validateShortcut("Alt+Space", "windows").valid).toBe(false);
-    expect(validateShortcut("Command+Tab", "macos").valid).toBe(false);
-    expect(validateShortcut("Control+Space", "macos").valid).toBe(false);
-    expect(validateShortcut("Alt+Tab", "windows").valid).toBe(false);
-    expect(validateShortcut("Super+L", "windows").valid).toBe(false);
+  it("leaves system availability to registration", () => {
+    expect(validateShortcut("Command+Q", "macos").valid).toBe(true);
+    expect(validateShortcut("Ctrl+V", "windows").valid).toBe(true);
   });
 
   it("rejects duplicate modifiers and unsupported main keys", () => {

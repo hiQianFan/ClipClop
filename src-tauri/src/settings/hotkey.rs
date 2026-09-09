@@ -4,7 +4,25 @@ pub enum HotkeyValidationError {
     MissingModifier,
     UnsupportedKey,
     DuplicateModifier,
-    Reserved,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+pub enum ShortcutSpec {
+    Combination(String),
+    Single(String),
+}
+
+impl ShortcutSpec {
+    pub fn parse(value: &str) -> Result<Self, HotkeyValidationError> {
+        validate_hotkey(value)?;
+        let parts: Vec<_> = value.split('+').collect();
+        if parts.len() == 1 {
+            Ok(Self::Single(value.into()))
+        } else {
+            Ok(Self::Combination(value.into()))
+        }
+    }
 }
 
 pub fn validate_hotkey(hotkey: &str) -> Result<(), HotkeyValidationError> {
@@ -16,8 +34,8 @@ pub fn validate_hotkey(hotkey: &str) -> Result<(), HotkeyValidationError> {
     let Some((key, modifiers)) = parts.split_last() else {
         return Err(HotkeyValidationError::MissingModifier);
     };
-    if modifiers.is_empty() || key.is_empty() || !supported_key(key) {
-        return Err(if modifiers.is_empty() {
+    if key.is_empty() || !supported_key(key) {
+        return Err(if modifiers.is_empty() && allowed_modifier(key) {
             HotkeyValidationError::MissingModifier
         } else {
             HotkeyValidationError::UnsupportedKey
@@ -35,40 +53,21 @@ pub fn validate_hotkey(hotkey: &str) -> Result<(), HotkeyValidationError> {
         return Err(HotkeyValidationError::DuplicateModifier);
     }
 
-    if is_reserved_hotkey(modifiers, key) {
-        return Err(HotkeyValidationError::Reserved);
-    }
-
     Ok(())
 }
 
-fn modifiers_match(actual: &[&str], expected: &[&str]) -> bool {
-    actual.len() == expected.len() && expected.iter().all(|item| actual.contains(item))
-}
-
-#[cfg(target_os = "macos")]
-fn is_reserved_hotkey(modifiers: &[&str], key: &str) -> bool {
-    (modifiers_match(modifiers, &["Command"])
-        && matches!(
+fn allowed_modifier(key: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        matches!(
             key,
-            "A" | "C" | "F" | "H" | "M" | "Q" | "S" | "Tab" | "V" | "W" | "X" | "Z" | "Space"
-        ))
-        || (modifiers_match(modifiers, &["Control"]) && key == "Space")
-        || (modifiers_match(modifiers, &["Alt"]) && key == "Space")
-        || (modifiers_match(modifiers, &["Command", "Shift"]) && key == "W")
-        || (modifiers_match(modifiers, &["Control", "Command"]) && key == "Q")
-        || (modifiers_match(modifiers, &["Alt", "Command"]) && key == "Escape")
-        || (modifiers_match(modifiers, &["Command", "Shift"]) && matches!(key, "3" | "4" | "5"))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn is_reserved_hotkey(modifiers: &[&str], key: &str) -> bool {
-    (modifiers_match(modifiers, &["Ctrl"])
-        && matches!(key, "A" | "C" | "F" | "S" | "V" | "W" | "X" | "Z" | "Space"))
-        || (modifiers_match(modifiers, &["Alt"]) && matches!(key, "F4" | "Space" | "Tab"))
-        || (modifiers_match(modifiers, &["Super"])
-            && matches!(key, "D" | "E" | "L" | "R" | "S" | "Tab" | "V"))
-        || (modifiers_match(modifiers, &["Ctrl", "Alt"]) && key == "Delete")
+            "Control" | "Ctrl" | "Alt" | "Shift" | "Command" | "Super"
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        matches!(key, "Ctrl" | "Alt" | "Shift" | "Super")
+    }
 }
 
 fn supported_key(key: &str) -> bool {
@@ -115,10 +114,7 @@ mod tests {
             validate_hotkey("Ctrl"),
             Err(HotkeyValidationError::MissingModifier)
         );
-        assert_eq!(
-            validate_hotkey("C"),
-            Err(HotkeyValidationError::MissingModifier)
-        );
+        assert_eq!(validate_hotkey("C"), Ok(()));
         assert_eq!(
             validate_hotkey("Ctrl+Ctrl+C"),
             Err(HotkeyValidationError::DuplicateModifier)
@@ -126,22 +122,20 @@ mod tests {
     }
 
     #[test]
-    fn rejects_reserved_system_hotkeys() {
-        #[cfg(target_os = "macos")]
-        {
-            assert!(validate_hotkey("Command+C").is_err());
-            assert!(validate_hotkey("Command+Q").is_err());
-            assert!(validate_hotkey("Command+V").is_err());
-            assert!(validate_hotkey("Command+Tab").is_err());
-            assert!(validate_hotkey("Control+Space").is_err());
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            assert!(validate_hotkey("Ctrl+C").is_err());
-            assert!(validate_hotkey("Super+V").is_err());
-            assert!(validate_hotkey("Alt+Tab").is_err());
-            assert!(validate_hotkey("Super+L").is_err());
-        }
-        assert!(validate_hotkey("Alt+Space").is_err());
+    fn leaves_system_availability_to_registration() {
+        assert!(validate_hotkey("Command+Q").is_ok());
+    }
+
+    #[test]
+    fn parses_single_and_combination_specs() {
+        assert_eq!(
+            ShortcutSpec::parse("C"),
+            Ok(ShortcutSpec::Single("C".into()))
+        );
+        assert_eq!(
+            ShortcutSpec::parse(DEFAULT_HOTKEY),
+            Ok(ShortcutSpec::Combination(DEFAULT_HOTKEY.into()))
+        );
     }
 }
+use serde::{Deserialize, Serialize};

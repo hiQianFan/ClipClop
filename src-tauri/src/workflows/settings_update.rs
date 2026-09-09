@@ -199,7 +199,6 @@ fn validate(settings: &Settings) -> AppResult<()> {
             HotkeyValidationError::MissingModifier => "HOTKEY_MISSING_MODIFIER",
             HotkeyValidationError::UnsupportedKey => "HOTKEY_UNSUPPORTED_KEY",
             HotkeyValidationError::DuplicateModifier => "HOTKEY_DUPLICATE_MODIFIER",
-            HotkeyValidationError::Reserved => "HOTKEY_RESERVED",
         };
         AppError::Hotkey(code)
     })
