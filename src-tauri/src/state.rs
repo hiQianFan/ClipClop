@@ -1,6 +1,6 @@
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -49,13 +49,13 @@ struct HistoryRuntimeState {
 
 #[derive(Clone)]
 pub struct HistoryRuntime {
-    state: Arc<Mutex<HistoryRuntimeState>>,
+    state: Arc<RwLock<HistoryRuntimeState>>,
 }
 
 impl HistoryRuntime {
     fn new(database: Arc<Database>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(HistoryRuntimeState {
+            state: Arc::new(RwLock::new(HistoryRuntimeState {
                 real: HistoryEnvironment::new(database, "external-preview"),
                 demo: None,
             })),
@@ -66,7 +66,10 @@ impl HistoryRuntime {
         &self,
         operation: impl FnOnce(&HistoryEnvironment) -> AppResult<T>,
     ) -> AppResult<T> {
-        let state = self.lock()?;
+        let state = self
+            .state
+            .read()
+            .map_err(|_| AppError::Storage("history runtime lock poisoned".into()))?;
         operation(state.demo.as_ref().unwrap_or(&state.real))
     }
 
@@ -122,9 +125,9 @@ impl HistoryRuntime {
         Ok(true)
     }
 
-    fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, HistoryRuntimeState>> {
+    fn lock(&self) -> AppResult<std::sync::RwLockWriteGuard<'_, HistoryRuntimeState>> {
         self.state
-            .lock()
+            .write()
             .map_err(|_| AppError::Storage("history runtime lock poisoned".into()))
     }
 }
@@ -220,6 +223,43 @@ mod tests {
         assert!(runtime.is_demo().unwrap());
         assert!(runtime.exit_demo(|_| Ok(())).unwrap());
         assert!(!runtime.is_demo().unwrap());
+    }
+
+    #[test]
+    fn history_queries_do_not_wait_for_asset_processing() {
+        let runtime = HistoryRuntime::new(Arc::new(Database::in_memory().unwrap()));
+        let active = runtime.clone();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let operation = std::thread::spawn(move || {
+            active.with_current(|_| {
+                entered_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+        });
+        entered_rx.recv().unwrap();
+        let query_runtime = runtime.clone();
+        let (queried_tx, queried_rx) = mpsc::channel();
+        let query = std::thread::spawn(move || {
+            queried_tx
+                .send(
+                    query_runtime
+                        .with_current(|environment| environment.history.query(&Default::default())),
+                )
+                .unwrap();
+        });
+        let result = queried_rx.recv_timeout(std::time::Duration::from_secs(2));
+        release_tx.send(()).unwrap();
+        operation.join().unwrap().unwrap();
+        query.join().unwrap();
+        assert_eq!(
+            result
+                .expect("query blocked by asset processing")
+                .unwrap()
+                .total,
+            0
+        );
     }
 
     #[test]
