@@ -108,6 +108,7 @@ pub struct ClipMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ClipSummary {
+    pub is_favorite: bool,
     pub id: String,
     pub content_type: ContentType,
     pub preview: String,
@@ -135,6 +136,8 @@ pub struct FlavorInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryQuery {
     #[serde(default)]
+    pub favorites_only: bool,
+    #[serde(default)]
     pub query: String,
     #[serde(default = "default_page")]
     pub page: u32,
@@ -151,6 +154,7 @@ pub struct HistoryQuery {
 impl Default for HistoryQuery {
     fn default() -> Self {
         Self {
+            favorites_only: false,
             query: String::new(),
             page: default_page(),
             page_size: default_page_size(),
@@ -186,6 +190,7 @@ mod tests {
     fn clip_detail_ipc_shape_is_stable() {
         let detail = ClipDetail {
             summary: ClipSummary {
+                is_favorite: false,
                 id: "clip-1".into(),
                 content_type: ContentType::File,
                 preview: "example.txt".into(),
@@ -213,6 +218,7 @@ mod tests {
             serde_json::to_value(detail).unwrap(),
             serde_json::json!({
                 "id": "clip-1",
+                "is_favorite": false,
                 "content_type": "file",
                 "preview": "example.txt",
                 "source_app": { "id": "com.example.app", "name": "Example" },

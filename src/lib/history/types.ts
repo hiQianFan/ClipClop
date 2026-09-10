@@ -14,6 +14,7 @@ export type HistoryFacets = {
 };
 
 export type HistoryFilters = {
+  favorites_only?: boolean;
   content_type: ContentType | null;
   source_id: string | null;
   time_range: "any" | "day" | "week" | "month";
@@ -28,6 +29,7 @@ export type ClipMetadata = {
 };
 
 export type ClipSummary = {
+  is_favorite?: boolean;
   id: string;
   content_type: ContentType;
   preview: string;

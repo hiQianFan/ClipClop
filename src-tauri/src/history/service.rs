@@ -30,6 +30,10 @@ impl HistoryService {
         self.database.query_history(request)
     }
 
+    pub fn clip_page(&self, id: &str, page_size: u32) -> AppResult<u32> {
+        self.database.clip_page(id, page_size)
+    }
+
     pub fn facets(&self, request: &HistoryQuery, source_query: &str) -> AppResult<HistoryFacets> {
         self.database.history_facets(request, source_query)
     }
@@ -63,6 +67,11 @@ impl HistoryService {
         self.lifecycle
             .lock()
             .map_err(|_| crate::error::AppError::Storage("history lifecycle lock poisoned".into()))
+    }
+
+    pub fn set_favorite(&self, id: &str, favorite: bool) -> AppResult<()> {
+        let _guard = self.lock_lifecycle()?;
+        self.database.set_favorite(id, favorite)
     }
 
     pub fn delete(&self, id: &str) -> AppResult<()> {

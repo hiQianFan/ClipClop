@@ -6,7 +6,7 @@ use crate::error::{AppError, AppResult};
 use super::database::timestamp;
 
 pub(super) const SCHEMA: &str = include_str!("../../schema.sql");
-pub(super) const SCHEMA_VERSION: u32 = 8;
+pub(super) const SCHEMA_VERSION: u32 = 9;
 
 pub(super) fn initialize(connection: &Connection) -> AppResult<()> {
     let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -31,12 +31,19 @@ pub(super) fn initialize(connection: &Connection) -> AppResult<()> {
             migrate_v7_to_v8(connection)?;
         }
         7 => migrate_v7_to_v8(connection)?,
+        8 => {}
         SCHEMA_VERSION => {}
         unsupported => {
             return Err(AppError::Storage(format!(
                 "unsupported development database schema {unsupported}; delete the database and restart"
             )));
         }
+    }
+    if (4..=8).contains(&version) {
+        let transaction = connection.unchecked_transaction()?;
+        transaction.execute("ALTER TABLE clips ADD COLUMN favorited_at TEXT", [])?;
+        transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        transaction.commit()?;
     }
     Ok(())
 }
@@ -88,7 +95,7 @@ fn migrate_v5_to_v6(connection: &Connection) -> AppResult<()> {
         "CREATE INDEX idx_clips_order ON clips(sort_at DESC, id DESC)",
         [],
     )?;
-    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    transaction.pragma_update(None, "user_version", 6)?;
     transaction.commit()?;
     Ok(())
 }
@@ -103,7 +110,7 @@ fn migrate_v6_to_v7(connection: &Connection) -> AppResult<()> {
          INSERT INTO clips_fts (clip_id, plain_text, preview, source_name)
          SELECT id, plain_text, preview, source_name FROM clips;",
     )?;
-    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    transaction.pragma_update(None, "user_version", 7)?;
     transaction.commit()?;
     Ok(())
 }
@@ -114,7 +121,7 @@ fn migrate_v7_to_v8(connection: &Connection) -> AppResult<()> {
         "UPDATE clips SET content_type = 'text' WHERE content_type = 'code'",
         [],
     )?;
-    transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    transaction.pragma_update(None, "user_version", 8)?;
     transaction.commit()?;
     Ok(())
 }

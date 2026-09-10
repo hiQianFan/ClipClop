@@ -18,17 +18,18 @@ pub mod window;
 pub mod workflows;
 
 use commands::{
-    cancel_update_download, clear_history, close_permission_guide, copy_clip, copy_file_path, delete_clip,
+    cancel_update_download, clear_history, close_permission_guide, copy_clip, delete_clip,
     discard_downloaded_update, enter_demo_mode, exit_demo_mode, get_auto_paste_permission_status,
-    get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_history_facets,
-    get_onboarding_state, get_preview_capability, get_runtime_mode, get_settings,
-    get_source_app_icon, hide_panel, install_downloaded_update, open_auto_paste_settings,
-    open_clip_link, open_file_preview_settings, open_log_dir, open_permission_guide,
-    open_quicklook_install_page, open_release_page, open_repository, open_website, paste_clip,
-    perform_pager_haptic, preview_clip, preview_onboarding_example, query_history, quit_app,
-    record_update_check, reveal_current_app, save_onboarding_state, set_hotkey_recording,
-    set_language_preference, set_quick_selection, show_full_panel, skip_update_version,
-    start_current_app_drag, start_update_download, update_settings, HotkeyRecordingState,
+    get_clip, get_clip_asset, get_clip_file_asset, get_clip_page, get_clip_thumbnail,
+    get_history_facets, get_onboarding_state, get_preview_capability, get_runtime_mode,
+    get_settings, get_source_app_icon, hide_panel, install_downloaded_update,
+    open_auto_paste_settings, open_clip_link, open_file_preview_settings, open_log_dir,
+    open_permission_guide, open_quicklook_install_page, open_release_page, open_repository,
+    open_website, paste_clip, perform_pager_haptic, preview_clip, preview_onboarding_example,
+    query_history, quit_app, record_update_check, reveal_current_app, save_onboarding_state,
+    set_clip_favorite, set_hotkey_recording, set_language_preference, set_quick_selection,
+    show_full_panel, skip_update_version, start_current_app_drag, start_update_download,
+    update_settings, HotkeyRecordingState,
 };
 use settings::{validate_hotkey, Settings, DEFAULT_HOTKEY, SETTINGS_KEY};
 use state::AppState;
@@ -231,6 +232,7 @@ pub fn run() {
             query_history,
             get_history_facets,
             get_clip,
+            get_clip_page,
             get_clip_asset,
             get_clip_file_asset,
             get_clip_thumbnail,
@@ -243,9 +245,9 @@ pub fn run() {
             show_full_panel,
             set_quick_selection,
             delete_clip,
+            set_clip_favorite,
             clear_history,
             copy_clip,
-            copy_file_path,
             paste_clip,
             get_settings,
             update_settings,

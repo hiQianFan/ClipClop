@@ -134,9 +134,10 @@ impl Database {
         page_values.push(Value::Integer(request.page_size.into()));
         page_values.push(Value::Integer(offset.into()));
         let sql = format!(
-            "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json, c.last_used_at
+            "SELECT c.id, c.content_type, c.preview, c.source_id, c.source_name, c.created_at, c.byte_size, c.metadata_json, c.last_used_at, c.favorited_at IS NOT NULL
              FROM clips c{where_clause}
-             ORDER BY c.sort_at DESC, c.id DESC LIMIT ? OFFSET ?"
+             ORDER BY {} DESC, c.id DESC LIMIT ? OFFSET ?",
+            if request.favorites_only { "c.favorited_at" } else { "c.sort_at" }
         );
         let mut statement = connection.prepare(&sql)?;
         let items = statement
@@ -149,6 +150,19 @@ impl Database {
             total,
             total_pages: total.div_ceil(request.page_size as u64) as u32,
         })
+    }
+
+    pub fn clip_page(&self, id: &str, page_size: u32) -> AppResult<u32> {
+        if !(1..=100).contains(&page_size) {
+            return Err(AppError::Validation(
+                "page_size must be between 1 and 100".into(),
+            ));
+        }
+        self.connection()?.query_row(
+            "SELECT (SELECT COUNT(*) FROM clips c WHERE (c.sort_at, c.id) > (target.sort_at, target.id)) / ?2 + 1 FROM clips target WHERE target.id = ?1",
+            params![id, page_size],
+            |row| row.get(0),
+        ).optional()?.ok_or(AppError::NotFound)
     }
 
     pub fn history_facets(
@@ -213,10 +227,10 @@ impl Database {
         let connection = self.connection()?;
         let (summary, plain_text) = connection
             .query_row(
-                "SELECT id, content_type, preview, source_id, source_name, created_at, byte_size, metadata_json, last_used_at, plain_text
+                "SELECT id, content_type, preview, source_id, source_name, created_at, byte_size, metadata_json, last_used_at, favorited_at IS NOT NULL, plain_text
                  FROM clips WHERE id = ?1",
                 [id],
-                |row| Ok((summary_from_row(row)?, row.get(9)?)),
+                |row| Ok((summary_from_row(row)?, row.get(10)?)),
             )
             .optional()?
             .ok_or(AppError::NotFound)?;
@@ -262,6 +276,17 @@ impl Database {
         )? > 0)
     }
 
+    pub fn set_favorite(&self, id: &str, favorite: bool) -> AppResult<()> {
+        let changed = self.connection()?.execute(
+            "UPDATE clips SET favorited_at = CASE WHEN ?2 THEN COALESCE(favorited_at, ?3) ELSE NULL END WHERE id = ?1",
+            params![id, favorite, timestamp(Utc::now())],
+        )?;
+        if changed == 0 {
+            return Err(AppError::NotFound);
+        }
+        Ok(())
+    }
+
     pub fn cleanup_candidate_ids(
         &self,
         cutoff: Option<DateTime<Utc>>,
@@ -270,15 +295,15 @@ impl Database {
         let connection = self.connection()?;
         let mut ids = std::collections::BTreeSet::new();
         if let Some(cutoff) = cutoff {
-            let mut statement =
-                connection.prepare("SELECT id FROM clips WHERE last_used_at < ?1")?;
+            let mut statement = connection
+                .prepare("SELECT id FROM clips WHERE favorited_at IS NULL AND last_used_at < ?1")?;
             for id in statement.query_map([timestamp(cutoff)], |row| row.get::<_, String>(0))? {
                 ids.insert(id?);
             }
         }
         if let Some(limit) = limit {
             let mut statement = connection.prepare(
-                "SELECT id FROM clips ORDER BY sort_at DESC, id DESC LIMIT -1 OFFSET ?1",
+                "SELECT id FROM clips WHERE favorited_at IS NULL ORDER BY sort_at DESC, id DESC LIMIT -1 OFFSET ?1",
             )?;
             for id in statement.query_map([limit], |row| row.get::<_, String>(0))? {
                 ids.insert(id?);
@@ -323,8 +348,8 @@ impl Database {
     pub fn clear(&self) -> AppResult<u64> {
         let mut connection = self.connection()?;
         let transaction = connection.transaction()?;
-        transaction.execute("DELETE FROM clips_fts", [])?;
-        let changed = transaction.execute("DELETE FROM clips", [])?;
+        transaction.execute("DELETE FROM clips_fts WHERE clip_id IN (SELECT id FROM clips WHERE favorited_at IS NULL)", [])?;
+        let changed = transaction.execute("DELETE FROM clips WHERE favorited_at IS NULL", [])?;
         transaction.commit()?;
         Ok(changed as u64)
     }
@@ -336,6 +361,9 @@ fn query_conditions(
     include_source: bool,
 ) -> (Vec<&'static str>, Vec<Value>) {
     let mut conditions = Vec::new();
+    if request.favorites_only {
+        conditions.push("c.favorited_at IS NOT NULL");
+    }
     let mut values = Vec::new();
     for term in request.query.split_whitespace() {
         if term.chars().count() >= 3 {
@@ -401,6 +429,7 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<ClipSummary> {
     let last_used_at_text: String = row.get(8)?;
     let metadata_text: String = row.get(7)?;
     Ok(ClipSummary {
+        is_favorite: row.get(9)?,
         id: row.get(0)?,
         content_type: ContentType::from_str(&content_type_text).map_err(conversion_error)?,
         preview: row.get(2)?,
@@ -452,6 +481,56 @@ mod tests {
             content_hash: format!("hash-{text}"),
             created_at,
         }
+    }
+
+    #[test]
+    fn favorites_survive_recapture_retention_and_clear() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("favorites.db");
+        let database = Database::open(&path).unwrap();
+        let old = sample("favorite text", Utc::now() - Duration::days(40));
+        let id = database.capture_clip(&old).unwrap();
+        let other = database
+            .capture_clip(&sample("recent text", Utc::now()))
+            .unwrap();
+        database.set_favorite(&id, true).unwrap();
+        assert_eq!(database.capture_clip(&old).unwrap(), id);
+        assert!(database.get_clip(&id).unwrap().summary.is_favorite);
+        assert_eq!(
+            database
+                .query_history(&HistoryQuery::default())
+                .unwrap()
+                .items[0]
+                .id,
+            other
+        );
+        let request = HistoryQuery {
+            favorites_only: true,
+            query: "text".into(),
+            ..Default::default()
+        };
+        assert_eq!(database.query_history(&request).unwrap().items[0].id, id);
+        assert_eq!(database.history_facets(&request, "").unwrap().type_total, 1);
+        assert_eq!(
+            database
+                .cleanup_candidate_ids(Some(Utc::now()), Some(0))
+                .unwrap(),
+            vec![other]
+        );
+        assert_eq!(database.clear().unwrap(), 1);
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        assert!(database.get_clip(&id).unwrap().summary.is_favorite);
+        database.set_favorite(&id, false).unwrap();
+        assert_eq!(database.query_history(&request).unwrap().total, 0);
+        assert_eq!(
+            database.cleanup_candidate_ids(None, Some(0)).unwrap(),
+            vec![id]
+        );
+        assert!(matches!(
+            database.set_favorite("missing", true),
+            Err(AppError::NotFound)
+        ));
     }
 
     #[test]
@@ -605,6 +684,30 @@ mod tests {
     }
 
     #[test]
+    fn clip_page_follows_current_history_order() {
+        let database = Database::in_memory().unwrap();
+        let now = Utc::now();
+        let mut ids = Vec::new();
+        for index in 0..12 {
+            ids.push(
+                database
+                    .capture_clip(&sample(
+                        &format!("clip {index}"),
+                        now - Duration::seconds(index),
+                    ))
+                    .unwrap(),
+            );
+        }
+        assert_eq!(database.clip_page(&ids[10], 10).unwrap(), 2);
+        assert!(database.touch_clip(&ids[10], true).unwrap());
+        assert_eq!(database.clip_page(&ids[10], 10).unwrap(), 1);
+        assert!(matches!(
+            database.clip_page("missing", 10),
+            Err(AppError::NotFound)
+        ));
+    }
+
+    #[test]
     fn cleanup_candidates_combine_time_and_count_without_duplicates() {
         let database = Database::in_memory().unwrap();
         let now = Utc::now();
@@ -714,7 +817,7 @@ mod tests {
             .filter(|line| {
                 !matches!(
                     line.trim(),
-                    "last_used_at TEXT NOT NULL," | "sort_at TEXT NOT NULL,"
+                    "last_used_at TEXT NOT NULL," | "sort_at TEXT NOT NULL," | "favorited_at TEXT,"
                 )
             })
             .collect::<Vec<_>>()
@@ -750,7 +853,7 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         let old_schema = SCHEMA
             .lines()
-            .filter(|line| line.trim() != "sort_at TEXT NOT NULL,")
+            .filter(|line| !matches!(line.trim(), "sort_at TEXT NOT NULL," | "favorited_at TEXT,"))
             .collect::<Vec<_>>()
             .join("\n")
             .replace(

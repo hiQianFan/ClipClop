@@ -30,10 +30,24 @@ pub fn get_history_facets(
 }
 
 #[tauri::command]
+pub fn get_clip_page(state: State<'_, AppState>, id: String, page_size: u32) -> AppResult<u32> {
+    state
+        .history
+        .with_current(|environment| environment.history.clip_page(&id, page_size))
+}
+
+#[tauri::command]
 pub fn get_clip(state: State<'_, AppState>, id: String) -> AppResult<ClipDetail> {
     state
         .history
         .with_current(|environment| environment.history.get(&id))
+}
+
+#[tauri::command]
+pub fn set_clip_favorite(state: State<'_, AppState>, id: String, favorite: bool) -> AppResult<()> {
+    state
+        .history
+        .with_current(|environment| environment.history.set_favorite(&id, favorite))
 }
 
 #[tauri::command]
@@ -124,21 +138,4 @@ pub fn show_full_panel(
 #[tauri::command]
 pub fn set_quick_selection(state: State<'_, QuickSelectionState>, id: Option<String>) {
     state.set(id);
-}
-
-#[tauri::command]
-pub fn copy_file_path(state: State<'_, AppState>, id: String, index: usize) -> AppResult<()> {
-    state.history.with_current(|environment| {
-        let detail = environment.history.get(&id)?;
-        let path = crate::history::normalized_file_path(&detail, index)
-            .ok_or_else(|| crate::error::AppError::Validation("invalid file selection".into()))?;
-        crate::clipboard::SystemClipboard::write(
-            vec![crate::history::Flavor {
-                format: "text/plain".into(),
-                payload: path.to_string_lossy().as_bytes().to_vec(),
-            }],
-            true,
-            false,
-        )
-    })
 }

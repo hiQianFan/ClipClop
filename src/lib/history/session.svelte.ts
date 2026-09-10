@@ -57,7 +57,7 @@ export class HistorySession {
         ? this.selectedId
         : nextPage.items[0]?.id ?? null;
       const nextSummary = nextPage.items.find(({ id }) => id === nextId);
-      if (nextSummary && this.#details.get(nextSummary.id)?.last_used_at !== nextSummary.last_used_at) {
+      if (nextSummary && (this.#details.get(nextSummary.id)?.last_used_at !== nextSummary.last_used_at || this.#details.get(nextSummary.id)?.is_favorite !== nextSummary.is_favorite)) {
         this.#details.delete(nextSummary.id);
       }
       await this.select(nextId);

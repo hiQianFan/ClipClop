@@ -10,6 +10,7 @@ CREATE TABLE clips (
   created_at TEXT NOT NULL,
   last_used_at TEXT NOT NULL,
   sort_at TEXT NOT NULL,
+  favorited_at TEXT,
   content_hash TEXT NOT NULL,
   byte_size INTEGER NOT NULL DEFAULT 0,
   metadata_json TEXT NOT NULL DEFAULT '{}'

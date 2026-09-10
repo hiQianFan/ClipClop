@@ -5,6 +5,7 @@ function historyRequest(query: string, page: number, filters?: HistoryFilters, p
   const days = filters?.time_range === "day" ? 1 : filters?.time_range === "week" ? 7 : filters?.time_range === "month" ? 30 : 0;
   return {
     query, page, page_size: pageSize,
+    favorites_only: filters?.favorites_only ?? false,
     content_type: filters?.content_type ?? null,
     source_id: filters?.source_id ?? null,
     since: days ? new Date(Date.now() - days * 86_400_000).toISOString() : null,
@@ -115,6 +116,10 @@ export function getRuntimeMode(): Promise<RuntimeMode> { return invoke("get_runt
 export function enterDemoMode(): Promise<RuntimeMode> { return invoke("enter_demo_mode"); }
 export function exitDemoMode(): Promise<RuntimeMode> { return invoke("exit_demo_mode"); }
 
-export function copyFilePath(id: string, index: number): Promise<void> {
-  return invoke("copy_file_path", { id, index });
+export function setClipFavorite(id: string, favorite: boolean): Promise<void> {
+  return invoke("set_clip_favorite", { id, favorite });
+}
+
+export function getClipPage(id: string): Promise<number> {
+  return invoke("get_clip_page", { id, pageSize: 10 });
 }
