@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts } from "./presentation";
+import { fileLocation, cacheSet, clipPreview, detailText, fileName, formatBytes, metadataFacts } from "./presentation";
 import type { ClipDetail } from "./types";
 
 const labels = { dimensions: "Dimensions", size: "Size", file: "File", files: "Files", hostname: "Domain", type: "Type", characters: "Characters", folder: "Folder" };
@@ -101,5 +101,17 @@ describe("clip view helpers", () => {
     expect(metadataFacts(detail("file", { files: ["a", "b"], file_sizes: [null, null] }), 0, [], labels, String)).toEqual([
       { label: "Files", value: "2" },
     ]);
+  });
+});
+
+describe("file locations", () => {
+  it("handles native paths, roots, UNC and encoded file URLs", () => {
+    expect(fileLocation("/tmp/a.png")).toEqual({ path: "/tmp/a.png", name: "a.png", directory: "/tmp/" });
+    expect(fileLocation("C:\\Temp\\a.png").directory).toBe("C:\\Temp\\");
+    expect(fileLocation("C:\\").name).toBe("C:");
+    expect(fileLocation("/").directory).toBe("/");
+    expect(fileLocation("file:///C:/Temp/a%20b.png").path).toBe("C:/Temp/a b.png");
+    expect(fileLocation("file://server/share/a.png").directory).toBe("//server/share/");
+    expect(fileLocation("file:///tmp/%ZZ").name).toBe("%ZZ");
   });
 });

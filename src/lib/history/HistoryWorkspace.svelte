@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { canPreviewClip, copyClip, enterDemoMode, exitDemoMode, getHistoryFacets, getPreviewCapability, getRuntimeMode, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability, type RuntimeMode } from "$lib/history/api";
+  import { canPreviewClip, copyClip, copyFilePath, enterDemoMode, exitDemoMode, getHistoryFacets, getPreviewCapability, getRuntimeMode, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability, type RuntimeMode } from "$lib/history/api";
   import type { ContentType, HistorySourceOption } from "$lib/history/types";
   import { canExpand, filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
@@ -245,6 +245,12 @@
 
   async function pastePlainSelected() {
     await pasteSelected(true);
+  }
+
+  async function copySelectedPath() {
+    if (!session.selectedId) return;
+    try { await copyFilePath(session.selectedId, fileIndex); }
+    catch (reason) { error = localizedError(reason); }
   }
 
   async function copyOnly(plainText = false) {
@@ -776,6 +782,7 @@
   />
 
   <ClipPreview
+    oncopypath={() => void copySelectedPath()}
     detail={session.detail}
     selectedId={session.selectedId}
     page={session.page}

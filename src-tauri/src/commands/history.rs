@@ -125,3 +125,20 @@ pub fn show_full_panel(
 pub fn set_quick_selection(state: State<'_, QuickSelectionState>, id: Option<String>) {
     state.set(id);
 }
+
+#[tauri::command]
+pub fn copy_file_path(state: State<'_, AppState>, id: String, index: usize) -> AppResult<()> {
+    state.history.with_current(|environment| {
+        let detail = environment.history.get(&id)?;
+        let path = crate::history::normalized_file_path(&detail, index)
+            .ok_or_else(|| crate::error::AppError::Validation("invalid file selection".into()))?;
+        crate::clipboard::SystemClipboard::write(
+            vec![crate::history::Flavor {
+                format: "text/plain".into(),
+                payload: path.to_string_lossy().as_bytes().to_vec(),
+            }],
+            true,
+            false,
+        )
+    })
+}

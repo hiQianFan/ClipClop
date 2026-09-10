@@ -114,3 +114,7 @@ export type RuntimeMode = "real" | "demo";
 export function getRuntimeMode(): Promise<RuntimeMode> { return invoke("get_runtime_mode"); }
 export function enterDemoMode(): Promise<RuntimeMode> { return invoke("enter_demo_mode"); }
 export function exitDemoMode(): Promise<RuntimeMode> { return invoke("exit_demo_mode"); }
+
+export function copyFilePath(id: string, index: number): Promise<void> {
+  return invoke("copy_file_path", { id, index });
+}

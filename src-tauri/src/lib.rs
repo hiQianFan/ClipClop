@@ -18,7 +18,7 @@ pub mod window;
 pub mod workflows;
 
 use commands::{
-    cancel_update_download, clear_history, close_permission_guide, copy_clip, delete_clip,
+    cancel_update_download, clear_history, close_permission_guide, copy_clip, copy_file_path, delete_clip,
     discard_downloaded_update, enter_demo_mode, exit_demo_mode, get_auto_paste_permission_status,
     get_clip, get_clip_asset, get_clip_file_asset, get_clip_thumbnail, get_history_facets,
     get_onboarding_state, get_preview_capability, get_runtime_mode, get_settings,
@@ -245,6 +245,7 @@ pub fn run() {
             delete_clip,
             clear_history,
             copy_clip,
+            copy_file_path,
             paste_clip,
             get_settings,
             update_settings,

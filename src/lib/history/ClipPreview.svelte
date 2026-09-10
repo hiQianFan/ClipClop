@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { File, MonitorSmartphone } from "@lucide/svelte";
+  import { Copy, File, MonitorSmartphone } from "@lucide/svelte";
   import { Tabs } from "bits-ui";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
   import { shortcutSpokenLabel, type ShortcutPlatform } from "$lib/settings/shortcuts";
-  import { clipPreview, detailText, fileName, filePaths, metadataFacts } from "./presentation";
+  import { clipPreview, detailText, fileLocation, fileName, filePaths, metadataFacts } from "./presentation";
   import type { ClipDetail, HistoryPage } from "./types";
 
   let {
@@ -28,6 +28,7 @@
     onfilekeydown,
     onfilefocus,
     onopenorigin,
+    oncopypath = () => {},
     onfileaccess = () => {},
     oninert,
   }: {
@@ -51,11 +52,13 @@
     onfilekeydown: (event: KeyboardEvent) => void;
     onfilefocus: () => void;
     onopenorigin: () => void;
+    oncopypath?: () => void;
     onfileaccess?: () => void;
     oninert: () => void;
   } = $props();
   const shortcutPlatform = $derived<ShortcutPlatform>(previousFileShortcut.startsWith("Command") ? "macos" : "windows");
   const selectedFilePath = $derived(detail?.content_type === "file" ? filePaths(detail)[fileIndex] ?? detail.preview : "");
+  const location = $derived(fileLocation(selectedFilePath));
 </script>
 
 <section role="group" class:pending class="preview" aria-live="polite" aria-busy={pending} onpointerdown={(event) => { if (!(event.target as Element).closest("button, a, input, [role='tab']")) oninert(); }}>
@@ -91,6 +94,12 @@
         <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
       </nav>
     {/if}
+    <div class="path-bar">
+      {#if detail.content_type === "file"}
+        <div class="path-text" title={location.path}><strong>{location.name}</strong><span>{location.directory}</span></div>
+        <button class="copy-path" aria-label={t("history.copyPath")} title={t("history.copyPath")} onclick={oncopypath}><Copy size={16} aria-hidden="true" /></button>
+      {/if}
+    </div>
     <div class="preview-meta">
       <div class="meta-summary">
         <div class="meta-source">
@@ -128,6 +137,12 @@
   .preview-body.text-preview pre { max-height:none; overflow:visible; }
   pre { max-width:100%; max-height:100%; margin:0; overflow:hidden; color:var(--text-1); font:var(--fs-body)/var(--lh-relaxed) var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
   .preview-meta { height:72px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
+  .path-bar { height:48px; flex:none; display:flex; align-items:center; gap:8px; padding:4px 20px; border-top:1px solid var(--hairline); color:var(--text-3); font:var(--fs-caption)/18px var(--mono); overflow:hidden; }
+  .path-text { min-width:0; flex:1; display:flex; flex-direction:column; user-select:text; }
+  .copy-path { flex:none; width:32px; height:32px; display:grid; place-items:center; color:var(--text-2); background:transparent; }
+  .copy-path:hover { background:var(--bg-hover); }
+  .path-bar strong,.path-bar span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .path-bar strong { color:var(--text-2); font-weight:500; }
   .meta-summary { min-width:0; width:100%; display:grid; grid-template-columns:minmax(0, 1fr) 220px; align-items:center; gap:20px; }
   .meta-source { min-width:0; display:flex; align-items:center; gap:8px; }
   .source-details { min-width:0; display:flex; flex-direction:column; gap:2px; color:var(--text-2); font:var(--fs-ui)/var(--lh-tight) var(--mono); }

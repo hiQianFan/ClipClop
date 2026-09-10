@@ -86,6 +86,21 @@ export function fileName(path: string, fallback = "") {
   return normalized.split(/[\\/]/).pop() || normalized || fallback;
 }
 
+export function fileLocation(value: string) {
+  let path = value;
+  if (/^file:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      path = decodeURIComponent(url.pathname);
+      if (url.hostname && url.hostname !== "localhost") path = `//${url.hostname}${path}`;
+      else if (/^\/[a-z]:\//i.test(path)) path = path.slice(1);
+    } catch { /* Keep malformed URLs readable. */ }
+  }
+  const trimmed = path.replace(/[\\/]+$/, "") || path;
+  const index = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return { path, name: trimmed.slice(index + 1) || trimmed, directory: index < 0 ? "" : trimmed.slice(0, index + 1) };
+}
+
 export function clipPreview(
   item: Pick<ClipSummary, "content_type" | "preview">,
   fileFallback = "",
