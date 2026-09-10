@@ -7,6 +7,9 @@ const host = vi.hoisted(() => ({
   restoreBrowsePosition: true,
   settingsError: false,
   queryHistory: vi.fn(),
+  getClipPage: vi.fn(),
+  setClipFavorite: vi.fn(),
+  pasteClip: vi.fn(),
   platform: "windows" as "windows" | "macos",
   listeners: new Map<string, (event: { payload: unknown }) => void>(),
 }));
@@ -23,13 +26,14 @@ const settings = () => ({
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async (name: string, callback: (event: { payload: unknown }) => void) => { host.listeners.set(name, callback); return () => host.listeners.delete(name); }) }));
 vi.mock("./api", () => ({
   canPreviewClip: () => false,
+  setClipFavorite: host.setClipFavorite,
   copyClip: vi.fn(), deleteClip: vi.fn(), getClip: vi.fn(async (id: string) => detail(id)),
   getClipAsset: vi.fn(), getClipFileAsset: vi.fn(), getClipThumbnail: vi.fn(async () => ({ data_url: null, byte_size: null, access_denied: false, is_directory: false })),
   getHistoryFacets: vi.fn(async () => ({ type_total: 0, type_counts: {}, sources: [] })),
   getPreviewCapability: vi.fn(async () => ({ provider: "unavailable", reason: "not_installed", version: null })),
   getRuntimeMode: vi.fn(async () => "real"), enterDemoMode: vi.fn(async () => "demo"), exitDemoMode: vi.fn(async () => "real"),
-  getSourceAppIcon: vi.fn(), hidePanel: vi.fn(), openClipLink: vi.fn(), pasteClip: vi.fn(),
-  performPagerHaptic: vi.fn(), previewClip: vi.fn(), queryHistory: host.queryHistory,
+  getSourceAppIcon: vi.fn(), hidePanel: vi.fn(), openClipLink: vi.fn(), pasteClip: host.pasteClip,
+  performPagerHaptic: vi.fn(), previewClip: vi.fn(), queryHistory: host.queryHistory, getClipPage: host.getClipPage,
 }));
 vi.mock("$lib/settings/api", () => ({
   getSettings: vi.fn(async () => {
@@ -65,6 +69,9 @@ beforeEach(() => {
   host.settingsError = false;
   host.platform = "windows";
   host.listeners.clear();
+  host.pasteClip.mockReset();
+  host.getClipPage.mockReset().mockResolvedValue(1);
+  host.setClipFavorite.mockReset().mockResolvedValue(undefined);
   host.queryHistory.mockReset().mockImplementation(async (_query, target) => page(target));
 });
 afterEach(cleanup);
@@ -112,5 +119,52 @@ describe("closing settings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await waitFor(() => expect(screen.getByRole("option", { selected: true }).textContent).toContain("older"));
     expect(host.queryHistory).not.toHaveBeenCalled();
+  });
+});
+
+describe("favorites", () => {
+  it("switches scope, keeps history position, and removes the selected favorite without pasting", async () => {
+    let saved = false;
+    host.setClipFavorite.mockImplementation(async (_id, value) => { saved = value; });
+    host.queryHistory.mockImplementation(async (_query, target, filters) => ({
+      ...page(target),
+      items: filters.favorites_only ? (saved ? [{ ...item("older"), is_favorite: true }] : []) : [{ ...item(target === 1 ? "latest" : "older"), is_favorite: saved }],
+      total: filters.favorites_only ? Number(saved) : 11,
+      total_pages: filters.favorites_only ? Number(saved) : 2,
+    }));
+    render(HistoryWorkspace);
+    await screen.findByRole("option");
+    await fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await waitFor(() => expect(screen.getByRole("option").textContent).toContain("older"));
+    await fireEvent.click(screen.getByRole("button", { name: "Add to favorites" }));
+    await waitFor(() => expect(host.setClipFavorite).toHaveBeenCalledWith("older", true));
+    await screen.findByRole("button", { name: "Remove from favorites" });
+    await fireEvent.click(screen.getByRole("button", { name: "Favorites" }));
+    await waitFor(() => expect(screen.getByRole("listbox").getAttribute("aria-busy")).toBe("false"));
+    expect(screen.getByPlaceholderText("Search favorites…")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "All" }));
+    await waitFor(() => expect(screen.getByRole("option").getAttribute("aria-posinset")).toBe("11"));
+    await fireEvent.click(screen.getByRole("button", { name: "Favorites" }));
+    await waitFor(() => expect(screen.getByRole("listbox").getAttribute("aria-busy")).toBe("false"));
+    await fireEvent.click(screen.getByRole("button", { name: "Remove from favorites" }));
+    await screen.findByText("No favorites yet");
+    expect(host.setClipFavorite).toHaveBeenLastCalledWith("older", false);
+    expect(host.pasteClip).not.toHaveBeenCalled();
+  });
+
+  it("panel routes from favorites to the target item page in all history", async () => {
+    host.queryHistory.mockImplementation(async (_query, target, filters) => ({
+      ...page(target),
+      items: filters.favorites_only ? [{ ...item("favorite"), is_favorite: true }] : [item(target === 1 ? "latest" : "older")],
+    }));
+    host.getClipPage.mockResolvedValue(2);
+    render(HistoryWorkspace);
+    await screen.findByRole("option");
+    await fireEvent.click(screen.getByRole("button", { name: "Favorites" }));
+    await waitFor(() => expect(screen.getByRole("option").textContent).toContain("favorite"));
+    host.listeners.get("main_panel_shown")?.({ payload: { selectedId: "older", settings: false, permissionGuide: false } });
+    await waitFor(() => expect(screen.getByRole("option", { selected: true }).textContent).toContain("older"));
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    expect(host.getClipPage).toHaveBeenCalledWith("older");
   });
 });

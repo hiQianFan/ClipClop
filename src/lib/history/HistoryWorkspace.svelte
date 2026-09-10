@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { canPreviewClip, copyClip, copyFilePath, enterDemoMode, exitDemoMode, getHistoryFacets, getPreviewCapability, getRuntimeMode, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability, type RuntimeMode } from "$lib/history/api";
+  import { canPreviewClip, getClipPage, setClipFavorite, copyClip, enterDemoMode, exitDemoMode, getHistoryFacets, getPreviewCapability, getRuntimeMode, hidePanel, openClipLink, pasteClip, previewClip, type PreviewCapability, type RuntimeMode } from "$lib/history/api";
   import type { ContentType, HistorySourceOption } from "$lib/history/types";
-  import { canExpand, filePaths } from "$lib/history/presentation";
+  import { filePaths } from "$lib/history/presentation";
   import { HistorySession } from "$lib/history/session.svelte";
   import { PreviewSession } from "$lib/history/preview-session.svelte";
   import { exitsSearch, routeWindowKey } from "$lib/history/keyboard";
@@ -32,7 +32,6 @@
   let trimWhitespace = $state(false);
   let restoreBrowsePosition = $state(false);
   let preserveSearchConditions = $state(false);
-  let expandedId = $state<string | null>(null);
   let error = $state("");
   let pastePermissionRequired = $state(false);
   let menuOpen = $state(false);
@@ -181,7 +180,7 @@
     } else {
       void preview.loadPageThumbnails(session.page.items);
     }
-    await applySelectedDetail(false);
+    void applySelectedDetail(false);
     return true;
   }
 
@@ -207,12 +206,10 @@
   }
 
   async function select(id: string | null, readSelectedFile = false) {
-    const selectionChanged = session.selectedId !== id;
-    if (selectionChanged) expandedId = null;
     resetPreviewState();
     await session.select(id);
     if (session.errorReason) error = localizedError(session.errorReason);
-    await applySelectedDetail(readSelectedFile);
+    void applySelectedDetail(readSelectedFile);
   }
 
   async function applySelectedDetail(readSelectedFile: boolean) {
@@ -225,9 +222,10 @@
     pastePermissionRequired = false;
     try {
       await preview.loadSelection(id, next, readOriginalFile);
+      if (session.detail !== next || session.selectedId !== id) return;
       if (next.content_type === "image") void preview.prefetchAdjacentImages(session.page.items, id);
     } catch (reason) {
-      error = localizedError(reason);
+      if (session.detail === next && session.selectedId === id) error = localizedError(reason);
     }
   }
 
@@ -247,19 +245,13 @@
     await pasteSelected(true);
   }
 
-  async function copySelectedPath() {
-    if (!session.selectedId) return;
-    try { await copyFilePath(session.selectedId, fileIndex); }
-    catch (reason) { error = localizedError(reason); }
-  }
-
   async function copyOnly(plainText = false) {
     if (!session.selectedId) return;
     if (plainText && session.detail?.plain_text == null) return;
     pastePermissionRequired = false;
     try {
       const moved = await copyClip(session.selectedId, plainText);
-      await refresh(moved ? 1 : session.page.page, moved);
+      await refresh(moved && !session.filters.favorites_only ? 1 : session.page.page, moved && !session.filters.favorites_only);
     } catch (reason) { error = localizedError(reason); }
     menuOpen = false;
     enterBrowse();
@@ -345,6 +337,40 @@
     }, 120);
   }
 
+  let favoritePending = $state(false);
+  const scopePositions = new Map<boolean, { page: number; id: string | null; query: string; filters: typeof session.filters }>();
+
+  async function changeScope(favorites: boolean) {
+    if (Boolean(session.filters.favorites_only) === favorites) return;
+    scopePositions.set(Boolean(session.filters.favorites_only), { page: session.page.page, id: session.selectedId, query: session.query, filters: { ...session.filters } });
+    const saved = scopePositions.get(favorites);
+    session.filters = saved?.filters ?? { content_type: null, source_id: null, time_range: "any", favorites_only: favorites };
+    session.query = saved?.query ?? "";
+    session.selectedId = saved?.id ?? null;
+    if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+    listbox?.closeFilters();
+    await refresh(saved?.page ?? 1);
+    void syncFacets();
+  }
+
+  async function toggleFavorite(id: string | null = session.selectedId) {
+    const item = session.page.items.find((item) => item.id === id);
+    if (!item || favoritePending) return;
+    favoritePending = true;
+    try {
+      await setClipFavorite(item.id, !item.is_favorite);
+      session.evict(item.id);
+      if (session.filters.favorites_only && session.selectedId === item.id) {
+        const index = session.page.items.indexOf(item);
+        session.selectedId = session.page.items[index + 1]?.id ?? session.page.items[index - 1]?.id ?? null;
+      }
+      await refresh();
+      void syncFacets();
+      enterBrowse();
+    } catch (reason) { error = localizedError(reason); }
+    finally { favoritePending = false; }
+  }
+
   function onFiltersChange() {
     void refresh(1);
     void syncFacets();
@@ -424,11 +450,12 @@
 
   async function switchRuntime(action: () => Promise<RuntimeMode>) {
     runtimeMode = await action();
+    scopePositions.clear();
+    session.filters.favorites_only = false;
     clearContentCaches();
     session.query = "";
     session.clearFilters();
     activeSourceQuery = "";
-    expandedId = null;
     view = "history";
     mode = "browse";
     await syncFacets();
@@ -461,14 +488,6 @@
 
   function selectFromList(id: string) {
     listbox?.focus();
-    const item = session.page.items.find((candidate) => candidate.id === id);
-    if (session.selectedId === id && item && canExpand(item)) {
-      if (session.detail?.content_type === "file") {
-        void preview.loadFile(id, fileIndex);
-      }
-      expandedId = expandedId === id ? null : id;
-      return;
-    }
     void select(id, true);
   }
 
@@ -486,7 +505,6 @@
         session.query = "";
         session.clearFilters();
         activeSourceQuery = "";
-        expandedId = null;
         mode = "browse";
       }
     } catch { /* A transient mode check must not block the requested panel route. */ }
@@ -534,8 +552,17 @@
     view = "history";
     session.query = "";
     session.clearFilters();
-    session.selectedId = id;
-    await refreshAndFocus(1);
+    session.filters.favorites_only = false;
+    activeSourceQuery = "";
+    try {
+      const targetPage = await getClipPage(id);
+      session.selectedId = id;
+      await refreshAndFocus(targetPage);
+      void syncFacets();
+    } catch (reason) {
+      await select(null);
+      error = localizedError(reason);
+    }
   }
 
   // Keep page, selection and search; just refresh the current page for freshness and
@@ -558,12 +585,7 @@
     if (onKeydown(event)) return;
     const index = session.page.items.findIndex((item) => item.id === session.selectedId);
     const selectIndex = (next: number) => void select(session.page.items[Math.max(0, Math.min(next, session.page.items.length - 1))]?.id ?? null, true);
-    const selected = session.page.items.find((item) => item.id === session.selectedId);
-    if ((event.metaKey || event.ctrlKey) && selected && canExpand(selected) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-      event.preventDefault();
-      void selectFile(fileIndex + (event.key === "ArrowLeft" ? -1 : 1));
-    }
-    else if (event.key === "ArrowDown") { event.preventDefault(); void moveSelection(1); }
+    if (event.key === "ArrowDown") { event.preventDefault(); void moveSelection(1); }
     else if (event.key === "ArrowUp") { event.preventDefault(); void moveSelection(-1); }
     else if (event.key === "Home") { event.preventDefault(); selectIndex(0); }
     else if (event.key === "End") { event.preventDefault(); selectIndex(session.page.items.length - 1); }
@@ -571,8 +593,7 @@
     else if (event.key === "PageUp" && session.page.page > 1) { event.preventDefault(); listbox?.turnPage(-1); }
     else if (event.key === "ArrowLeft") {
       event.preventDefault();
-      if (expandedId === session.selectedId) expandedId = null;
-      else if (session.page.page > 1) listbox?.turnPage(-1);
+      if (session.page.page > 1) listbox?.turnPage(-1);
     }
     else if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -760,8 +781,6 @@
     {typeCounts}
     page={session.page}
     selectedId={session.selectedId}
-    {expandedId}
-    {fileIndex}
     loading={session.loading}
     {error}
     thumbnailUrls={preview.thumbnailUrls}
@@ -771,18 +790,19 @@
     onsearchfocus={() => mode = "search"}
     onsearchkeydown={onSearchKeydown}
     onfilterschange={onFiltersChange}
+    onscopechange={(favorites) => void changeScope(favorites)}
+    onfavorite={(id) => void toggleFavorite(id)}
+    {favoritePending}
     onsourcequery={onSourceQuery}
     onclearsearch={clearSearchConditions}
     onlistfocus={() => mode = "browse"}
     onselect={selectFromList}
     onpaste={() => void pasteSelected()}
-    onfile={(index) => { mode = "file-tablist"; void selectFile(index); }}
     onkeydown={onListKeydown}
     onpage={(page) => void refreshAndFocus(page)}
   />
 
   <ClipPreview
-    oncopypath={() => void copySelectedPath()}
     detail={session.detail}
     selectedId={session.selectedId}
     page={session.page}
@@ -809,6 +829,9 @@
 
   <HistoryActionBar
     selected={Boolean(session.selectedId)}
+    favorite={Boolean(session.page.items.find((item) => item.id === session.selectedId)?.is_favorite)}
+    {favoritePending}
+    onfavorite={() => void toggleFavorite()}
     canPreview={canPreviewSelected()}
     isLink={session.detail?.content_type === "link"}
     hasPlainText={session.detail?.plain_text != null}

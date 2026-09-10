@@ -41,6 +41,7 @@ describe("ClipPreview file tabs", () => {
       onfilekeydown() {}, onfilefocus() {}, onopenorigin() {}, oninert() {},
     } });
     expect(container.querySelector("img.asset.thumbnail")?.getAttribute("src")).toBe("thumbnail");
+    expect(container.querySelector(".path-bar")).toBeNull();
   });
 
   it("presents copied image files as visual content without repeating their path", () => {
@@ -93,6 +94,8 @@ describe("ClipPreview file tabs", () => {
     expect(container.textContent).toContain("First copied");
     expect(container.textContent).toContain("Last used");
     expect(container.querySelector(".file-path")?.textContent).toBe("/tmp/one.txt");
+    expect(container.querySelector(".path-bar")?.textContent).toContain("one.txt");
+    expect(screen.queryByRole("button", { name: /path/i })).toBeNull();
     expect(container.querySelector(".meta-file")).toBeNull();
   });
 

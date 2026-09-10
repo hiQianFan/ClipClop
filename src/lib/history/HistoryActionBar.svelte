@@ -6,6 +6,9 @@
 
   let {
     selected,
+    favorite = false,
+    favoritePending = false,
+    onfavorite,
     canPreview,
     isLink,
     hasPlainText,
@@ -32,6 +35,9 @@
     onrestorefocus,
   }: {
     selected: boolean;
+    favorite?: boolean;
+    favoritePending?: boolean;
+    onfavorite?: () => void;
     canPreview: boolean;
     isLink: boolean;
     hasPlainText: boolean;
@@ -103,6 +109,7 @@
             <DropdownMenu.Item onclick={oncopy}><span>{t("history.copy")}</span></DropdownMenu.Item>
             {#if hasPlainText}<DropdownMenu.Item onclick={oncopyplain}><span>{t("history.copyPlain")}</span><ShortcutHint shortcut={isMac ? "Command+Shift+C" : "Ctrl+Shift+C"} platform={isMac ? "macos" : "windows"} /></DropdownMenu.Item>{/if}
             <DropdownMenu.Separator class="menu-separator" />
+            <DropdownMenu.Item disabled={favoritePending} onclick={onfavorite}><span>{t(favorite ? "history.unfavorite" : "history.favorite")}</span></DropdownMenu.Item>
             <DropdownMenu.Item class="danger" onclick={requestDelete}><span>{t("history.deleteFrom")}</span><ShortcutHint shortcut={deleteShortcut} platform={isMac ? "macos" : "windows"} /></DropdownMenu.Item>
           </DropdownMenu.ContentStatic>
         </div>

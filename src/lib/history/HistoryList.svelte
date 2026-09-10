@@ -3,12 +3,12 @@
   import { cubicOut } from "svelte/easing";
   import { fade } from "svelte/transition";
   import { Popover } from "bits-ui";
-  import { ArrowLeft, ArrowRight, ChevronRight, File, Image, Search, SlidersHorizontal } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, File, Image, Search, Star, SlidersHorizontal } from "@lucide/svelte";
   import { formatNumber, t } from "$lib/i18n/index.svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
   import type { StaticMessageKey } from "$lib/i18n/index.svelte";
   import PageScrubber from "./PageScrubber.svelte";
-  import { canExpand, clipPreview, fileName, groupedFiles } from "./presentation";
+  import { clipPreview } from "./presentation";
   import type { ContentType, HistoryFilters, HistoryPage, HistorySourceOption } from "./types";
 
   let {
@@ -19,8 +19,6 @@
     typeTotal,
     typeCounts,
     selectedId,
-    expandedId,
-    fileIndex,
     loading,
     error,
     thumbnailUrls,
@@ -35,10 +33,15 @@
     onlistfocus,
     onselect,
     onpaste,
-    onfile,
     onkeydown,
     onpage,
+    onfavorite,
+    onscopechange,
+    favoritePending = false,
   }: {
+    onfavorite?: (id: string) => void;
+    onscopechange?: (favorites: boolean) => void;
+    favoritePending?: boolean;
     page: HistoryPage;
     query: string;
     filters: HistoryFilters;
@@ -46,8 +49,6 @@
     typeTotal: number;
     typeCounts: Partial<Record<ContentType, number>>;
     selectedId: string | null;
-    expandedId: string | null;
-    fileIndex: number;
     loading: boolean;
     error: string;
     thumbnailUrls: Record<string, string>;
@@ -62,7 +63,6 @@
     onlistfocus: () => void;
     onselect: (id: string) => void;
     onpaste: () => void;
-    onfile: (index: number) => void;
     onkeydown: (event: KeyboardEvent) => void;
     onpage: (page: number) => void;
   } = $props();
@@ -112,7 +112,7 @@
 <section class="left">
   <form class="search" onsubmit={(event) => { event.preventDefault(); onsearch(); }}>
     <span aria-hidden="true"><Search size={15} /></span>
-    <input bind:this={searchInput} bind:value={query} oninput={onsearch} onfocus={onsearchfocus} onkeydown={onsearchkeydown} aria-label={t("history.searchLabel")} placeholder={t("history.searchPlaceholder")} />
+    <input bind:this={searchInput} bind:value={query} oninput={onsearch} onfocus={onsearchfocus} onkeydown={onsearchkeydown} aria-label={filters.favorites_only ? t("history.searchFavorites") : t("history.searchLabel")} placeholder={filters.favorites_only ? t("history.searchFavorites") : t("history.searchPlaceholder")} />
     <Popover.Root bind:open={filterOpen}>
       <Popover.Trigger class={`filter-trigger${activeFilterCount ? " active" : ""}`} aria-label={activeFilterCount ? t("filter.active", { count: activeFilterCount }) : t("filter.open")}>
         <SlidersHorizontal size={14} aria-hidden="true" />
@@ -140,6 +140,10 @@
       </Popover.Portal>
     </Popover.Root>
   </form>
+  <div class="scope-switch" role="group" aria-label={t("history.scope")}>
+    <button type="button" aria-pressed={!filters.favorites_only} onkeydown={(event) => { if (event.key === " ") event.stopPropagation(); }} onclick={() => onscopechange?.(false)}>{t("filter.all")}</button>
+    <button type="button" aria-pressed={Boolean(filters.favorites_only)} onkeydown={(event) => { if (event.key === " ") event.stopPropagation(); }} onclick={() => onscopechange?.(true)}>{t("history.favorites")}</button>
+  </div>
   <div bind:this={listbox} class:full={page.items.length > 0} class="list" role="listbox" aria-label={t("history.list")} aria-busy={loading} tabindex="0" aria-activedescendant={selectedId ? `clip-${selectedId}` : undefined} onpointerdown={() => listbox.focus()} onfocus={onlistfocus} onkeydown={onkeydown}>
     {#if loading && page.items.length === 0}
       <div bind:this={emptyAnchor} class="empty" tabindex="-1">{t("history.loading")}</div>
@@ -152,13 +156,13 @@
           <span>{t("history.noMatchesHelp")}</span>
           <button type="button" onclick={onclearsearch}>{t("history.clearSearchConditions")}</button>
         {:else}
-          <strong>{t("history.emptyTitle")}</strong>
-          <span>{t("history.emptyHelp")}</span>
+          <strong>{t(filters.favorites_only ? "history.emptyFavorites" : "history.emptyTitle")}</strong>
+          <span>{t(filters.favorites_only ? "history.emptyFavoritesHelp" : "history.emptyHelp")}</span>
         {/if}
       </div>
     {:else}
       {#each page.items as item, index (item.id)}
-        <div class:expanded={canExpand(item) && expandedId === item.id} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
+        <div class:selected={item.id === selectedId} class="clip-item" animate:flip={{ duration: reducedMotion || !rowReorderMotion ? 0 : 180, easing: cubicOut }} out:fade={{ duration: reducedMotion || !rowReorderMotion ? 0 : 90 }}>
           <div id={`clip-${item.id}`} class:selected={item.id === selectedId} class="row" role="option" tabindex="-1" aria-selected={item.id === selectedId} aria-posinset={(page.page - 1) * page.page_size + index + 1} aria-setsize={page.total} ondblclick={onpaste} onclick={() => onselect(item.id)} onkeydown={onkeydown}>
             <span class="num">{formatNumber(index === 9 ? 0 : index + 1)}</span>
             <span class:swatch={item.content_type === "color"} class:media={item.content_type === "image" || item.content_type === "file"} class="lead" style:background={item.content_type === "color" ? item.preview : undefined}>
@@ -167,15 +171,10 @@
               {:else if item.content_type === "file"}<File size={16} aria-hidden="true" />{/if}
             </span>
             {#if item.content_type !== "image"}<span class="snippet">{clipPreview(item, t("meta.file"))}</span>{/if}
-            {#if canExpand(item)}<span class="disclosure" aria-hidden="true"><ChevronRight size={16} /></span>{/if}
           </div>
-          {#if canExpand(item) && expandedId === item.id}
-            <div class="row-details" role="group" in:fade={{ duration: reducedMotion ? 0 : 120 }} out:fade={{ duration: reducedMotion ? 0 : 90 }}>
-              {#each groupedFiles(item) as path, index}
-                <button tabindex="-1" class:selected={index === fileIndex} class="row-child" onclick={(event) => { event.stopPropagation(); onfile(index); }}>{fileName(path, t("meta.file"))}</button>
-              {/each}
-            </div>
-          {/if}
+          <button type="button" class="favorite" class:saved={item.is_favorite} disabled={favoritePending} tabindex="-1" aria-label={t(item.is_favorite ? "history.unfavorite" : "history.favorite")} title={t(item.is_favorite ? "history.unfavorite" : "history.favorite")} aria-pressed={Boolean(item.is_favorite)} onpointerdown={(event) => event.preventDefault()} ondblclick={(event) => event.stopPropagation()} onclick={() => onfavorite?.(item.id)}>
+            <Star size={14} fill={item.is_favorite ? "currentColor" : "none"} aria-hidden="true" />
+          </button>
         </div>
       {/each}
       {#each Array(page.page_size - page.items.length) as _}
@@ -227,10 +226,19 @@
   .empty-state button { min-height:30px; margin-top:4px; padding:0 10px; border-radius:var(--radius-md); color:var(--text-1); background:var(--bg-hover); font:600 var(--fs-ui)/var(--lh-snug) -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
   .empty-state button:hover { background:var(--bg-selected); }
   .empty-state button:focus-visible { outline:2px solid var(--text-1); outline-offset:2px; }
-  .clip-item { width:100%; }
-  .list.full .clip-item:not(.expanded), .list-slot { flex:1 0 44px; }
-  .list.full .clip-item:not(.expanded) .row { height:100%; }
-  .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:var(--radius-lg); color:var(--text-1); background:transparent; text-align:left; cursor:default; }
+  .scope-switch { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; padding:4px 6px; flex:none; border-bottom:1px solid var(--hairline); }
+  .scope-switch button { min-height:28px; border-radius:var(--radius-md); background:transparent; color:var(--text-2); font-size:var(--fs-ui); font-weight:600; }
+  .scope-switch button:hover { background:var(--bg-hover); }
+  .scope-switch button[aria-pressed="true"] { background:var(--bg-selected); color:var(--text-1); }
+  .scope-switch button:focus-visible, .favorite:focus-visible { outline:2px solid var(--text-1); outline-offset:-2px; }
+  .clip-item { width:100%; position:relative; }
+  .favorite { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:28px; height:28px; display:grid; place-items:center; border-radius:var(--radius-sm); color:var(--text-2); background:transparent; opacity:0; }
+  .clip-item:hover .favorite, .clip-item.selected .favorite, .favorite.saved, .favorite:focus-visible { opacity:1; }
+  .favorite:hover { background:var(--bg-hover); color:var(--text-1); }
+  @media (hover:none) { .favorite { opacity:1; } }
+  .list.full .clip-item, .list-slot { flex:1 1 0; min-height:0; }
+  .list.full .clip-item .row { height:100%; min-height:0; padding-block:0; }
+  .row { width:100%; min-height:44px; display:flex; align-items:center; gap:8px; padding:7px 38px 7px 8px; border-radius:var(--radius-lg); color:var(--text-1); background:transparent; text-align:left; cursor:default; }
   .row:hover { background:var(--bg-hover); }
   .list:focus .row.selected { background:var(--bg-selected); }
   .row.selected { background:color-mix(in srgb, var(--bg-selected) 55%, transparent); }
@@ -241,11 +249,6 @@
   .lead.media { overflow:hidden; background:var(--bg-raised); }
   .lead.media img { width:100%; height:100%; object-fit:cover; }
   .snippet { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:var(--fs-body)/var(--lh-normal) var(--mono); }
-  .disclosure { width:16px; flex:none; display:flex; justify-content:center; color:var(--text-3); transition:transform var(--dur-mid) var(--ease-out); }
-  .clip-item.expanded .disclosure { transform:rotate(90deg); }
-  .row-details { margin:0 8px 4px 50px; padding:3px 8px 7px; }
-  .row-child { width:100%; overflow:hidden; padding:4px 6px; border-radius:var(--radius-sm); color:var(--text-2); background:transparent; font:var(--fs-meta)/var(--lh-snug) var(--mono); text-align:left; text-overflow:ellipsis; white-space:nowrap; }
-  .row-child:hover, .row-child.selected { background:var(--bg-hover); color:var(--text-1); }
   .pager { grid-column:1; grid-row:3; display:grid; grid-template-columns:36px minmax(70px,1fr) auto 36px; align-items:center; gap:16px; padding:0 14px; border-top:1px solid var(--hairline); border-right:1px solid var(--hairline); color:var(--text-2); font:var(--fs-ui) var(--mono); }
   .page-count { min-width:34px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .pager button { width:36px; height:30px; display:grid; place-items:center; padding:0; border:1px solid var(--hairline); border-radius:var(--radius-sm); color:var(--text-2); background:transparent; }

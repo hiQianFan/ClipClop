@@ -38,6 +38,13 @@ afterEach(async () => {
 });
 
 describe("HistoryActionBar actions", () => {
+  it("removes a favorite through the existing action menu", async () => {
+    const onfavorite = vi.fn();
+    render(HistoryActionBar, { props: { ...props, favorite: true, onfavorite } });
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Remove from favorites" }));
+    expect(onfavorite).toHaveBeenCalledOnce();
+  });
+
   it("opens the action menu on click release rather than pointer down", async () => {
     const onmenuopenchange = vi.fn();
     render(HistoryActionBar, { props: { ...props, menuOpen: false, onmenuopenchange } });

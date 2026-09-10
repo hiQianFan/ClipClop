@@ -69,14 +69,6 @@ export function metadataFacts(
   return facts.slice(0, 2);
 }
 
-export function groupedFiles(item: ClipSummary) {
-  return item.content_type === "file" ? item.metadata.files ?? [] : [];
-}
-
-export function canExpand(item: ClipSummary) {
-  return groupedFiles(item).length > 1;
-}
-
 export function filePaths(record: ClipDetail) {
   return record.metadata.files ?? [];
 }

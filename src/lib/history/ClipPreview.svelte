@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Copy, File, MonitorSmartphone } from "@lucide/svelte";
+  import { File, MonitorSmartphone } from "@lucide/svelte";
   import { Tabs } from "bits-ui";
   import { formatDateTime, formatNumber, t } from "$lib/i18n/index.svelte";
   import ShortcutHint from "$lib/components/ShortcutHint.svelte";
@@ -28,7 +28,6 @@
     onfilekeydown,
     onfilefocus,
     onopenorigin,
-    oncopypath = () => {},
     onfileaccess = () => {},
     oninert,
   }: {
@@ -52,7 +51,6 @@
     onfilekeydown: (event: KeyboardEvent) => void;
     onfilefocus: () => void;
     onopenorigin: () => void;
-    oncopypath?: () => void;
     onfileaccess?: () => void;
     oninert: () => void;
   } = $props();
@@ -94,12 +92,11 @@
         <span class="file-nav-count" aria-live="polite">{formatNumber(fileIndex + 1)}/{formatNumber(filePaths(detail).length)}</span>
       </nav>
     {/if}
-    <div class="path-bar">
-      {#if detail.content_type === "file"}
+    {#if detail.content_type === "file"}
+      <div class="path-bar">
         <div class="path-text" title={location.path}><strong>{location.name}</strong><span>{location.directory}</span></div>
-        <button class="copy-path" aria-label={t("history.copyPath")} title={t("history.copyPath")} onclick={oncopypath}><Copy size={16} aria-hidden="true" /></button>
-      {/if}
-    </div>
+      </div>
+    {/if}
     <div class="preview-meta">
       <div class="meta-summary">
         <div class="meta-source">
@@ -139,8 +136,6 @@
   .preview-meta { height:72px; flex:none; display:flex; align-items:center; padding:8px 20px; border-top:1px solid var(--hairline); }
   .path-bar { height:48px; flex:none; display:flex; align-items:center; gap:8px; padding:4px 20px; border-top:1px solid var(--hairline); color:var(--text-3); font:var(--fs-caption)/18px var(--mono); overflow:hidden; }
   .path-text { min-width:0; flex:1; display:flex; flex-direction:column; user-select:text; }
-  .copy-path { flex:none; width:32px; height:32px; display:grid; place-items:center; color:var(--text-2); background:transparent; }
-  .copy-path:hover { background:var(--bg-hover); }
   .path-bar strong,.path-bar span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .path-bar strong { color:var(--text-2); font-weight:500; }
   .meta-summary { min-width:0; width:100%; display:grid; grid-template-columns:minmax(0, 1fr) 220px; align-items:center; gap:20px; }
