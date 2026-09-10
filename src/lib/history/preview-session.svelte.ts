@@ -74,7 +74,10 @@ export class PreviewSession {
     }
   }
 
+  #selectedFileId = "";
+
   async loadFile(id: string, index: number) {
+    this.#selectedFileId = id;
     const fileVersion = ++this.#fileVersion;
     this.assetUrl = null;
     this.fileAccessDenied = false;
@@ -188,6 +191,11 @@ export class PreviewSession {
     this.fileAccessDenied = index !== null && asset.access_denied;
     if (index === null) return;
     this.fileThumbnailUrls[index] = asset.data_url;
+    if (index === 0 && asset.data_url) {
+      const id = this.#selectedFileId;
+      cacheSet(this.#thumbnails, id, asset.data_url);
+      this.thumbnailUrls = { ...this.thumbnailUrls, [id]: asset.data_url };
+    }
     if (asset.byte_size !== null) this.fileByteSizes[index] = asset.byte_size;
     this.fileDirectories[index] = asset.is_directory ?? false;
   }

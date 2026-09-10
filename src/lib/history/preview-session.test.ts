@@ -81,6 +81,15 @@ describe("PreviewSession", () => {
     await expect(file).resolves.toBeUndefined();
   });
 
+  it("reuses an explicitly loaded file preview in the list", async () => {
+    vi.useFakeTimers();
+    const preview = new PreviewSession(api({ getClipFileAsset: vi.fn(async () => resource("file-preview", 1)) }));
+    const pending = preview.loadFile("clip-1", 0);
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(preview.thumbnailUrls["clip-1"]).toBe("file-preview");
+  });
+
   it("keeps only the latest selected file result", async () => {
     vi.useFakeTimers();
     const preview = new PreviewSession(api({
