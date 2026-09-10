@@ -125,7 +125,7 @@
   :global(.actions .action-menu-trigger:active), :global(.actions .action-menu-trigger.expanded:active) { background:var(--bg-selected); }
   button:disabled { opacity:.45; }
   .menu-wrap { position:relative; }
-  .menu-wrap :global(.menu) { position:absolute; right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .menu-wrap :global(.menu) { position:absolute; z-index:var(--z-menu); right:0; bottom:38px; width:260px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
   .menu-wrap :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; transition:background-color var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out),filter var(--dur-fast) var(--ease-out); }
   .menu-wrap :global(.menu [role="menuitem"] > span) { min-width:0; }
   .menu-wrap :global(.menu [role="menuitem"]:hover), .menu-wrap :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }

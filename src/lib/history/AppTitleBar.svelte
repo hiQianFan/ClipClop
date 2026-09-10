@@ -84,7 +84,7 @@
   .brand :global(.app-menu-trigger:active), .brand :global(.app-menu-trigger.expanded) { border-color:var(--hairline); background:var(--bg-selected); }
   .brand-mark { width:14px; height:14px; flex:none; background:currentColor; mask:url("/clipclop-mark.svg") center/contain no-repeat; -webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat; }
   .settings-title { color:var(--text-1); font-size:var(--fs-emphasis); font-weight:600; }
-  .app-menu-wrap :global(.menu) { position:absolute; top:30px; left:0; width:180px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
+  .app-menu-wrap :global(.menu) { position:absolute; z-index:var(--z-menu); top:30px; left:0; width:180px; padding:6px; border:1px solid var(--hairline); border-radius:var(--radius-lg); background:var(--bg-raised); box-shadow:var(--menu-shadow); }
   .app-menu-wrap :global(.menu [role="menuitem"]) { width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:9px 10px; border-radius:var(--radius-md); color:var(--text-1); background:transparent; line-height:var(--lh-snug); text-align:left; transition:background-color var(--dur-fast) var(--ease-out),opacity var(--dur-fast) var(--ease-out),filter var(--dur-fast) var(--ease-out); }
   .app-menu-wrap :global(.menu [role="menuitem"] > span) { min-width:0; }
   .app-menu-wrap :global(.menu [role="menuitem"]:hover), .app-menu-wrap :global(.menu [role="menuitem"][data-highlighted]) { background:var(--bg-hover); }
