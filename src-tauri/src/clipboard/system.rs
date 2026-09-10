@@ -149,38 +149,20 @@ pub fn start_watcher(
 
 fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
     let mut flavors = Vec::new();
-    // ponytail: clipboard-rs has no metadata-only size probe. Checking common raw
-    // formats avoids decoding known oversized images; native per-platform probes
-    // are only warranted if an unsupported producer causes measured memory issues.
-    for format in [
-        "public.png",
-        "PNG",
-        "image/png",
-        "public.tiff",
-        "TIFF",
-        "image/tiff",
-        "CF_DIB",
-        "CF_DIBV5",
-        "image/bmp",
-    ] {
-        if context
-            .get_buffer(format)
-            .is_ok_and(|payload| payload.len() > MAX_CAPTURE_BYTES)
-        {
-            return Err(AppError::Validation(format!(
-                "clipboard image exceeds {} MiB",
-                MAX_CAPTURE_BYTES / 1024 / 1024
-            )));
-        }
-    }
-    let image = clipboard_image(context);
-    // Photos also advertises protected file promises for copied images. Prefer
-    // the image payload so capture does not trigger a Photos access prompt.
-    let files = image
-        .is_none()
+    // Only explicit file URLs take priority on macOS; do not resolve Photos promises.
+    let read_files = !cfg!(target_os = "macos")
+        || context
+            .available_formats()
+            .is_ok_and(|formats| formats.iter().any(|f| f == "public.file-url"));
+    let files = read_files
         .then(|| context.get_files().ok())
         .flatten()
-        .filter(|items| !items.is_empty());
+        .filter(|files| !files.is_empty());
+    let image = if files.is_none() {
+        clipboard_image_checked(context)?
+    } else {
+        None
+    };
     let text = context.get_text().ok().filter(|value| !value.is_empty());
     let html = text
         .as_ref()
@@ -287,6 +269,36 @@ fn read_clip(context: &ClipboardContext) -> AppResult<Option<NewClip>> {
     }))
 }
 
+fn clipboard_image_checked(
+    context: &ClipboardContext,
+) -> AppResult<Option<clipboard_rs::RustImageData>> {
+    // ponytail: clipboard-rs has no metadata-only size probe. Checking common raw
+    // formats avoids decoding known oversized images; native per-platform probes
+    // are only warranted if an unsupported producer causes measured memory issues.
+    for format in [
+        "public.png",
+        "PNG",
+        "image/png",
+        "public.tiff",
+        "TIFF",
+        "image/tiff",
+        "CF_DIB",
+        "CF_DIBV5",
+        "image/bmp",
+    ] {
+        if context
+            .get_buffer(format)
+            .is_ok_and(|payload| payload.len() > MAX_CAPTURE_BYTES)
+        {
+            return Err(AppError::Validation(format!(
+                "clipboard image exceeds {} MiB",
+                MAX_CAPTURE_BYTES / 1024 / 1024
+            )));
+        }
+    }
+    Ok(clipboard_image(context))
+}
+
 fn clipboard_image(context: &ClipboardContext) -> Option<clipboard_rs::RustImageData> {
     [
         "public.png",
@@ -347,6 +359,24 @@ fn clipboard_error(error: impl std::fmt::Display) -> AppError {
 mod tests {
     use super::*;
     use clipboard_rs::common::ContentData;
+
+    #[test]
+    fn restores_multiple_file_paths() {
+        let files = vec!["/tmp/a b.png", "C:\\Temp\\中文.txt"];
+        let contents = clipboard_contents(
+            vec![Flavor {
+                format: "text/uri-list".into(),
+                payload: serde_json::to_vec(&files).unwrap(),
+            }],
+            false,
+            false,
+        )
+        .unwrap();
+        match &contents[0] {
+            ClipboardContent::Files(actual) => assert_eq!(actual, &files),
+            _ => panic!("expected files"),
+        }
+    }
 
     #[test]
     fn classifies_common_text_hints() {
