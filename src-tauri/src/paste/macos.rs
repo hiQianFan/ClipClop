@@ -5,6 +5,10 @@ use appkit_nsworkspace_bindings::{INSRunningApplication, INSWorkspace, NSWorkspa
 use objc::{class, msg_send, runtime::Object, sel, sel_impl};
 use std::{
     ffi::c_void,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -44,28 +48,58 @@ pub(super) fn capture_target() -> Option<PasteTarget> {
     }
 }
 
-pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
+pub(super) fn paste(
+    handle: &tauri::AppHandle,
+    target: PasteTarget,
+    session: Arc<AtomicU64>,
+    expected_session: u64,
+) -> PasteOutcome {
     let PasteTarget::Mac { pid } = target;
     let started = Instant::now();
     log::info!(
         "automatic paste restoring target: target_pid={pid}, frontmost_pid={:?}",
         frontmost_pid()
     );
-    let app: *mut Object = unsafe {
-        msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid]
+    let activation_session = session.clone();
+    let activation = crate::window::on_main(handle, move |handle| {
+        if activation_session.load(Ordering::Acquire) != expected_session
+            || !crate::window::panels_are_hidden(handle)
+        {
+            return Err(PasteOutcome::CopiedFocusFailed);
+        }
+        let app: *mut Object = unsafe {
+            msg_send![class!(NSRunningApplication), runningApplicationWithProcessIdentifier: pid]
+        };
+        if app.is_null() || unsafe { msg_send![app, isTerminated] } {
+            return Err(PasteOutcome::CopiedTargetLost);
+        }
+        match activation_needed(pid, frontmost_pid(), std::process::id() as i32) {
+            Some(false) => Ok(false),
+            Some(true) => {
+                let requested: bool =
+                    unsafe { msg_send![app, activateWithOptions: ACTIVATE_IGNORING_OTHER_APPS] };
+                if requested {
+                    Ok(true)
+                } else {
+                    Err(PasteOutcome::CopiedFocusFailed)
+                }
+            }
+            None => Err(PasteOutcome::CopiedFocusFailed),
+        }
+    });
+    let activation_requested = match activation {
+        Ok(Ok(requested)) => requested,
+        Ok(Err(outcome)) => return outcome,
+        Err(_) => return PasteOutcome::CopiedFocusFailed,
     };
-    if app.is_null() || unsafe { msg_send![app, isTerminated] } {
-        log::warn!("automatic paste target unavailable: target_pid={pid}");
-        return PasteOutcome::CopiedTargetLost;
-    }
-
-    // A non-activating panel can leave the target reported as frontmost while its
-    // key window is still recovering. Always request activation, require a stable
-    // frontmost result, then allow the original first responder to settle.
-    let activation_requested: bool =
-        unsafe { msg_send![app, activateWithOptions: ACTIVATE_IGNORING_OTHER_APPS] };
+    let mut cancelled = false;
     let stable = wait_until_stable(
-        || frontmost_pid() == Some(pid),
+        || {
+            let foreground = frontmost_pid();
+            cancelled |= session.load(Ordering::Acquire) != expected_session
+                || activation_needed(pid, foreground, std::process::id() as i32).is_none();
+            !cancelled && foreground == Some(pid)
+        },
         REQUIRED_STABLE_POLLS,
         TARGET_FOCUS_TIMEOUT,
     );
@@ -89,20 +123,36 @@ pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
         return PasteOutcome::CopiedFocusFailed;
     }
 
-    if !can_inject() {
-        log::warn!("automatic paste event access denied: target_pid={pid}");
-        return PasteOutcome::CopiedPermissionRequired;
-    }
+    let outcome = crate::window::on_main(handle, move |handle| {
+        if session.load(Ordering::Acquire) != expected_session
+            || !crate::window::panels_are_hidden(handle)
+            || frontmost_pid() != Some(pid)
+        {
+            return PasteOutcome::CopiedFocusFailed;
+        }
+        if !can_inject() {
+            return PasteOutcome::CopiedPermissionRequired;
+        }
+        if send_command_v() {
+            PasteOutcome::Pasted
+        } else {
+            PasteOutcome::CopiedInjectionFailed
+        }
+    })
+    .unwrap_or(PasteOutcome::CopiedFocusFailed);
+    log::info!(
+        "automatic paste completed: target_pid={pid}, outcome={outcome:?}, elapsed_ms={}",
+        started.elapsed().as_millis()
+    );
+    outcome
+}
 
-    if send_command_v() {
-        log::info!(
-            "automatic paste event posted: target_pid={pid}, elapsed_ms={}",
-            started.elapsed().as_millis()
-        );
-        PasteOutcome::Pasted
-    } else {
-        log::warn!("automatic paste event injection failed: target_pid={pid}");
-        PasteOutcome::CopiedInjectionFailed
+// Only restore from our own explicitly activated UI, never from another external app.
+fn activation_needed(target: i32, foreground: Option<i32>, own: i32) -> Option<bool> {
+    match foreground {
+        Some(pid) if pid == target => Some(false),
+        Some(pid) if pid == own => Some(true),
+        _ => None,
     }
 }
 
@@ -142,4 +192,17 @@ fn send_command_v() -> bool {
         CFRelease(source);
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::activation_needed;
+
+    #[test]
+    fn activation_preserves_the_target_and_respects_external_switches() {
+        assert_eq!(activation_needed(10, Some(10), 20), Some(false));
+        assert_eq!(activation_needed(10, Some(20), 20), Some(true));
+        assert_eq!(activation_needed(10, Some(30), 20), None);
+        assert_eq!(activation_needed(10, None, 20), None);
+    }
 }

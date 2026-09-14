@@ -1,6 +1,6 @@
 use std::{
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -58,6 +58,7 @@ pub(super) enum PasteTarget {
 pub struct PasteController {
     target: Arc<Mutex<Option<PasteTarget>>>,
     in_flight: Arc<AtomicBool>,
+    session: Arc<AtomicU64>,
 }
 
 impl Default for PasteController {
@@ -65,11 +66,16 @@ impl Default for PasteController {
         Self {
             target: Arc::new(Mutex::new(None)),
             in_flight: Arc::new(AtomicBool::new(false)),
+            session: Arc::new(AtomicU64::new(0)),
         }
     }
 }
 
 impl PasteController {
+    pub(crate) fn begin_panel_session(&self) {
+        self.session.fetch_add(1, Ordering::AcqRel);
+    }
+
     pub(crate) fn capture_target(&self) {
         let target = platform::capture_target();
         if let Ok(mut stored) = self.target.lock() {
@@ -81,18 +87,41 @@ impl PasteController {
         if self.in_flight.swap(true, Ordering::AcqRel) {
             return None;
         }
-        Some(InFlightGuard(&self.in_flight))
+        Some(InFlightGuard {
+            in_flight: &self.in_flight,
+            session: self.session.load(Ordering::Acquire),
+            target: self.target.lock().ok().and_then(|target| *target),
+        })
     }
 
     pub(crate) fn can_inject(&self) -> bool {
         platform::can_inject()
     }
 
-    pub(crate) fn paste_to_target(&self, _guard: InFlightGuard<'_>) -> PasteOutcome {
-        let target = self.target.lock().ok().and_then(|target| *target);
-        let Some(target) = target else {
+    pub(crate) fn is_current(&self, guard: &InFlightGuard<'_>) -> bool {
+        self.session_is_current(guard.session)
+    }
+
+    pub(crate) fn session_is_current(&self, session: u64) -> bool {
+        self.session.load(Ordering::Acquire) == session
+    }
+
+    pub(crate) fn paste_to_target(
+        &self,
+        _app: &tauri::AppHandle,
+        guard: InFlightGuard<'_>,
+    ) -> PasteOutcome {
+        if !self.is_current(&guard) {
+            return PasteOutcome::CopiedFocusFailed;
+        }
+        let Some(target) = guard.target else {
             return PasteOutcome::CopiedTargetLost;
         };
+        #[cfg(target_os = "macos")]
+        {
+            platform::paste(_app, target, self.session.clone(), guard.session)
+        }
+        #[cfg(not(target_os = "macos"))]
         platform::paste(target)
     }
 }
@@ -106,11 +135,15 @@ pub(crate) fn injection_permission() -> InjectionPermission {
     }
 }
 
-pub(crate) struct InFlightGuard<'a>(&'a AtomicBool);
+pub(crate) struct InFlightGuard<'a> {
+    in_flight: &'a AtomicBool,
+    pub(crate) session: u64,
+    target: Option<PasteTarget>,
+}
 
 impl Drop for InFlightGuard<'_> {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
+        self.in_flight.store(false, Ordering::Release);
     }
 }
 
@@ -176,6 +209,12 @@ mod tests {
     }
 
     #[test]
+    fn stable_wait_rejects_a_target_that_never_becomes_ready() {
+        assert!(!wait_until_stable(|| false, 3, Duration::ZERO));
+        assert!(!wait_until_stable(|| true, 3, Duration::ZERO));
+    }
+
+    #[test]
     fn paste_outcomes_use_stable_snake_case_values() {
         assert_eq!(
             serde_json::to_string(&PasteOutcome::CopiedFocusFailed).unwrap(),
@@ -194,5 +233,17 @@ mod tests {
         assert!(controller.try_begin().is_none());
         drop(permit);
         assert!(controller.try_begin().is_some());
+    }
+
+    #[test]
+    fn reopening_a_panel_invalidates_pending_paste_even_for_the_same_target() {
+        let controller = PasteController::default();
+        controller.begin_panel_session();
+        let permit = controller.try_begin().unwrap();
+        assert!(controller.is_current(&permit));
+        controller.begin_panel_session();
+        assert!(!controller.is_current(&permit));
+        drop(permit);
+        assert!(controller.is_current(&controller.try_begin().unwrap()));
     }
 }

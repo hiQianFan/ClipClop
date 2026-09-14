@@ -227,6 +227,20 @@ pub fn run() {
                     use tauri_nspanel::{StyleMask, WebviewWindowExt};
                     let panel = panel_window.to_panel::<ClipboardPanel>()?;
                     panel.set_style_mask(StyleMask::empty().nonactivating_panel().into());
+                    // Conversion skips NSPanel initialization. setStyleMask alone
+                    // does not synchronize WindowServer's prevents-activation tag.
+                    // Without it, mouse clicks still activate ClipClop.
+                    let native = panel.as_panel();
+                    unsafe {
+                        use tauri_nspanel::objc2::{msg_send, sel};
+                        let supported: bool =
+                            msg_send![native, respondsToSelector: sel!(_setPreventsActivation:)];
+                        if supported {
+                            let _: () = msg_send![native, _setPreventsActivation: true];
+                        } else {
+                            log::warn!("panel {label}: mouse activation protection unavailable");
+                        }
+                    }
                 }
                 let panel = panel_window.clone();
                 let app = app.handle().clone();

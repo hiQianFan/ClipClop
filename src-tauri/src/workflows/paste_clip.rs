@@ -32,11 +32,29 @@ pub fn paste_clip(
     if !paste.can_inject() {
         return Ok(PasteOutcome::CopiedPermissionRequired);
     }
-    if let Err(error) = window::hide_panel(app, window_label, HideReason::Paste) {
+    if !paste.is_current(&permit) {
+        return Ok(PasteOutcome::CopiedFocusFailed);
+    }
+    #[cfg(target_os = "macos")]
+    let hidden = {
+        let paste = paste.clone();
+        let session = permit.session;
+        let label = window_label.to_string();
+        window::on_main(app, move |app| {
+            if !paste.session_is_current(session) {
+                return Err(tauri::Error::FailedToReceiveMessage);
+            }
+            window::hide_panel(app, &label, HideReason::Paste)
+        })
+        .and_then(|result| result)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let hidden = window::hide_panel(app, window_label, HideReason::Paste);
+    if let Err(error) = hidden {
         log::warn!("failed to hide panel before paste: {error}");
         return Ok(PasteOutcome::CopiedFocusFailed);
     }
-    let outcome = paste.paste_to_target(permit);
+    let outcome = paste.paste_to_target(app, permit);
     if outcome != PasteOutcome::Pasted {
         log::warn!("automatic paste degraded to clipboard-only: {outcome:?}");
     }

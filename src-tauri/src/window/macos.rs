@@ -7,6 +7,82 @@ use tauri_nspanel::{
 
 const QUICK_MARGIN: f64 = 6.0;
 
+// AppKit work must finish before a background paste can proceed. Cancel work that
+// has not started if the main thread cannot service it within the focus deadline.
+pub(crate) fn on_main<T: Send + 'static>(
+    app: &tauri::AppHandle,
+    action: impl FnOnce(&tauri::AppHandle) -> T + Send + 'static,
+) -> tauri::Result<T> {
+    if MainThreadMarker::new().is_some() {
+        return Ok(action(app));
+    }
+    let pending = std::sync::Arc::new(std::sync::Mutex::new(Some(action)));
+    let work = pending.clone();
+    let app_for_main = app.clone();
+    let (send, receive) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        let action = work
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        if let Some(action) = action {
+            let _ = send.send(action(&app_for_main));
+        }
+    })?;
+    receive
+        .recv_timeout(crate::paste::TARGET_FOCUS_TIMEOUT)
+        .map_err(|_| {
+            pending
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .take();
+            tauri::Error::FailedToReceiveMessage
+        })
+}
+
+pub(super) fn hide_native_panel(app: &tauri::AppHandle, label: &str) -> tauri::Result<()> {
+    use tauri_nspanel::ManagerExt;
+    let panel = app
+        .get_webview_panel(label)
+        .map_err(|_| tauri::Error::FailedToReceiveMessage)?;
+    panel.hide();
+    let native = panel.as_panel();
+    log::info!(
+        "panel handoff: label={label}, key={}, visible={}",
+        native.isKeyWindow(),
+        native.isVisible()
+    );
+    if native.isKeyWindow() || native.isVisible() {
+        return Err(tauri::Error::FailedToReceiveMessage);
+    }
+    Ok(())
+}
+
+pub(crate) fn panels_are_hidden(app: &tauri::AppHandle) -> bool {
+    use tauri_nspanel::ManagerExt;
+    [super::MAIN_LABEL, super::QUICK_LABEL]
+        .into_iter()
+        .all(|label| {
+            app.get_webview_panel(label)
+                .is_ok_and(|panel| !panel.as_panel().isKeyWindow() && !panel.as_panel().isVisible())
+        })
+}
+
+pub(super) fn quicklook_has_focus() -> bool {
+    use objc::{class, msg_send};
+    unsafe {
+        let exists: bool = msg_send![class!(QLPreviewPanel), sharedPreviewPanelExists];
+        if !exists {
+            return false;
+        }
+        let panel: *mut objc::runtime::Object =
+            msg_send![class!(QLPreviewPanel), sharedPreviewPanel];
+        let visible: bool = msg_send![panel, isVisible];
+        let key: bool = msg_send![panel, isKeyWindow];
+        visible && key
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Rect {
     x: f64,
@@ -165,7 +241,6 @@ pub(super) fn layout_main_panel(app: &tauri::AppHandle, label: &str) -> bool {
 }
 
 pub(super) fn show_as_panel(app: &tauri::AppHandle, label: &str) -> bool {
-    use objc::{class, msg_send};
     use tauri_nspanel::{CollectionBehavior, ManagerExt};
 
     let Ok(panel) = app.get_webview_panel(label) else {
@@ -177,13 +252,14 @@ pub(super) fn show_as_panel(app: &tauri::AppHandle, label: &str) -> bool {
             .full_screen_auxiliary()
             .into(),
     );
-    unsafe {
-        let application: *mut objc::runtime::Object =
-            msg_send![class!(NSApplication), sharedApplication];
-        let _: () = msg_send![application, activateIgnoringOtherApps: true];
-    }
-    panel.make_key_and_order_front();
-    true
+    // Keep the external application active while this panel receives keyboard input.
+    panel.show_and_make_key();
+    let focused = panel.as_panel().isKeyWindow();
+    log::info!(
+        "show_panel: label={label}, key={focused}, app_active={}",
+        application_is_active()
+    );
+    focused
 }
 
 pub(super) fn hide_preview(app: &tauri::AppHandle) {
@@ -211,6 +287,16 @@ pub(crate) fn prepare_quicklook_level(app: &tauri::AppHandle) -> tauri::Result<(
         unsafe {
             let preview: *mut objc::runtime::Object =
                 msg_send![class!(QLPreviewPanel), sharedPreviewPanel];
+            // Quick Look shares the nonactivating clipboard session. A regular
+            // panel cannot reliably take key focus while our app is inactive.
+            let style: usize = msg_send![preview, styleMask];
+            let _: () = msg_send![preview, setStyleMask: style | (1usize << 7)];
+            let supported: bool =
+                msg_send![preview, respondsToSelector: sel!(_setPreventsActivation:)];
+            if supported {
+                let _: () = msg_send![preview, _setPreventsActivation: true];
+            }
+            let _: () = msg_send![preview, setHidesOnDeactivate: false];
             let _: () = msg_send![preview, setLevel: panel_level + 1];
             let actual_level: isize = msg_send![preview, level];
             debug_assert!(actual_level > panel_level);

@@ -129,10 +129,11 @@ pub(crate) fn open_full_panel(
     settings: bool,
     permission_guide: bool,
 ) {
+    // Show first so the quick panel still owns the original external target.
+    show(app, MAIN_LABEL, None);
     if app.state::<PanelLifecycleState>().is_shown(QUICK_LABEL) {
         let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
     }
-    show(app, MAIN_LABEL, None);
     emit_main_request(
         app,
         MainPanelRequest {
@@ -170,6 +171,15 @@ fn toggle_from_tray(
 }
 
 fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPosition<f64>>) {
+    #[cfg(target_os = "macos")]
+    if tauri_nspanel::objc2::MainThreadMarker::new().is_none() {
+        let app_for_main = app.clone();
+        if let Err(error) = macos::on_main(app, move |_| show(&app_for_main, label, _anchor)) {
+            log::warn!("show_panel: main-thread dispatch failed: {error}");
+        }
+        return;
+    }
+    app.state::<AppState>().paste.begin_panel_session();
     let lifecycle = app.state::<PanelLifecycleState>();
     if !lifecycle.is_shown(MAIN_LABEL) && !lifecycle.is_shown(QUICK_LABEL) {
         app.state::<AppState>().paste.capture_target();
@@ -210,42 +220,50 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
     }
 
     #[cfg(target_os = "macos")]
-    if macos::show_as_panel(app, label) {
-        if let Err(error) = window.set_focus() {
-            log::warn!("show_panel: webview focus request failed: {error}");
+    {
+        // Tauri's window set_focus also activates NSApplication on macOS.
+        if macos::show_as_panel(app, label) {
+            let webview: &tauri::Webview = window.as_ref();
+            if let Err(error) = webview.set_focus() {
+                log::warn!("show_panel: webview responder request failed: {error}");
+            }
+            lifecycle.mark_focused(label);
+        } else {
+            log::warn!("show_panel: native panel did not acquire keyboard focus");
         }
-        lifecycle.mark_focused(label);
         if label == QUICK_LABEL {
             let _ = window.emit("quick_panel_shown", ());
         }
-        return;
     }
 
-    if let Err(error) = window.show() {
-        lifecycle.mark_hidden(label);
-        log::error!("show_panel: failed to show window: {error}");
-        return;
-    }
-
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "macos"))]
     {
-        let outcome = windows::focus_foreground(&window);
-        if outcome.has_focus() {
-            lifecycle.mark_focused(label);
-            log::info!("show_panel: foreground acquired ({outcome:?})");
-        } else {
-            log::warn!("show_panel: foreground request did not succeed ({outcome:?})");
+        if let Err(error) = window.show() {
+            lifecycle.mark_hidden(label);
+            log::error!("show_panel: failed to show window: {error}");
+            return;
         }
-    }
 
-    #[cfg(not(target_os = "windows"))]
-    match window.set_focus() {
-        Ok(()) => lifecycle.mark_focused(label),
-        Err(error) => log::warn!("show_panel: focus request failed: {error}"),
-    }
+        #[cfg(target_os = "windows")]
+        {
+            let outcome = windows::focus_foreground(&window);
+            if outcome.has_focus() {
+                lifecycle.mark_focused(label);
+                log::info!("show_panel: foreground acquired ({outcome:?})");
+            } else {
+                log::warn!("show_panel: foreground request did not succeed ({outcome:?})");
+            }
+        }
 
-    if label == QUICK_LABEL {
-        let _ = window.emit("quick_panel_shown", ());
+        #[cfg(not(target_os = "windows"))]
+        match window.set_focus() {
+            Ok(()) => lifecycle.mark_focused(label),
+            Err(error) => log::warn!("show_panel: focus request failed: {error}"),
+        }
+
+        if label == QUICK_LABEL {
+            let _ = window.emit("quick_panel_shown", ());
+        }
     }
 }
 
@@ -325,25 +343,36 @@ pub(crate) fn hide_panel(
     label: &str,
     reason: HideReason,
 ) -> Result<(), tauri::Error> {
-    let Some(window) = app.get_webview_window(label) else {
-        return Ok(());
-    };
-
     #[cfg(target_os = "macos")]
-    macos::hide_preview(app);
+    {
+        let label = label.to_string();
+        macos::on_main(app, move |app| {
+            macos::hide_preview(app);
+            macos::hide_native_panel(app, &label)?;
+            app.state::<PanelLifecycleState>().mark_hidden(&label);
+            app.state::<PreviewState>().set_active(false);
+            log::info!("{label} panel hidden ({reason:?})");
+            Ok(())
+        })?
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let Some(window) = app.get_webview_window(label) else {
+            return Ok(());
+        };
 
-    window.hide()?;
-    app.state::<PanelLifecycleState>().mark_hidden(label);
-    app.state::<PreviewState>().set_active(false);
-    log::info!("{label} panel hidden ({reason:?})");
-    Ok(())
+        window.hide()?;
+        app.state::<PanelLifecycleState>().mark_hidden(label);
+        app.state::<PreviewState>().set_active(false);
+        log::info!("{label} panel hidden ({reason:?})");
+        Ok(())
+    }
 }
 
 pub(crate) fn toggle_panel(app: &tauri::AppHandle) {
     let lifecycle = app.state::<PanelLifecycleState>();
     if lifecycle.is_shown(QUICK_LABEL) {
         let selected_id = app.state::<QuickSelectionState>().get();
-        let _ = hide_panel(app, QUICK_LABEL, HideReason::Shortcut);
         open_full_panel(app, selected_id, false, false);
     } else if lifecycle.is_shown(MAIN_LABEL) {
         if let Err(error) = hide_panel(app, MAIN_LABEL, HideReason::Shortcut) {
@@ -384,11 +413,7 @@ pub(crate) fn handle_focus_event(app: &tauri::AppHandle, panel: &WebviewWindow, 
                 return;
             }
             #[cfg(target_os = "macos")]
-            if !macos::application_is_active() {
-                // Quick Look belongs to this application, while TextEdit and
-                // other "Open with" targets deactivate it. Hide immediately.
-                app_for_main.state::<PreviewState>().set_active(false);
-            } else if app_for_main.state::<PreviewState>().is_active() {
+            if macos::quicklook_has_focus() {
                 return;
             }
             #[cfg(not(target_os = "macos"))]
@@ -456,7 +481,8 @@ pub(crate) fn restore_topmost_after_preview_transition(app: &tauri::AppHandle) {
 
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{
-    install_deactivation_observer, install_quicklook_key_handler, prepare_quicklook_level,
+    install_deactivation_observer, install_quicklook_key_handler, on_main, panels_are_hidden,
+    prepare_quicklook_level,
 };
 
 #[cfg(test)]

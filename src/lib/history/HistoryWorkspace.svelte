@@ -238,7 +238,8 @@
       error = localizedPasteOutcome(outcome);
     } catch (reason) { pastePermissionRequired = false; error = localizedError(reason); }
     menuOpen = false;
-    enterBrowse();
+    // Paste can finish after the native panel has handed input back to another app.
+    enterBrowse(document.hasFocus());
   }
 
   async function pastePlainSelected() {

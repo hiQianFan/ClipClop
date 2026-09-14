@@ -58,6 +58,27 @@ vi.mock("$lib/updater/store.svelte", () => ({
 
 import HistoryWorkspace from "./HistoryWorkspace.svelte";
 
+it("does not schedule list focus after paste hands input to another app", async () => {
+  render(HistoryWorkspace);
+  const list = await screen.findByRole("listbox");
+  await waitFor(() => expect(document.activeElement).toBe(list));
+  const focused = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+  const frames = vi.spyOn(window, "requestAnimationFrame");
+  host.pasteClip.mockImplementation(async () => {
+    list.blur();
+    return "pasted";
+  });
+  try {
+    await fireEvent.keyDown(list, { key: "Enter" });
+    expect(host.pasteClip).toHaveBeenCalled();
+    expect(frames).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(list);
+  } finally {
+    focused.mockRestore();
+    frames.mockRestore();
+  }
+});
+
 const item = (id: string): ClipSummary => ({ id, content_type: "text", preview: id, source_app: null, created_at: "2026-01-01T00:00:00Z", last_used_at: "2026-01-01T00:00:00Z", byte_size: 1, metadata: {} });
 const detail = (id: string): ClipDetail => ({ ...item(id), plain_text: id, flavors: [] });
 const page = (number: number): HistoryPage => ({ items: [item(number === 1 ? "latest" : "older")], page: number, page_size: 10, total: 11, total_pages: 2 });
