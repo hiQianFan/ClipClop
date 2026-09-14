@@ -17,6 +17,8 @@ use super::migrations::{SCHEMA, SCHEMA_VERSION};
 
 pub struct Database {
     connection: Mutex<Connection>,
+    // Kept until after the SQLite connection closes. Never unlink a live lock file.
+    _lock: Option<std::fs::File>,
 }
 
 impl Database {
@@ -25,19 +27,37 @@ impl Database {
             std::fs::create_dir_all(parent)
                 .map_err(|error| AppError::Storage(error.to_string()))?;
         }
-        let connection = Connection::open(path)?;
-        Self::from_connection(connection)
+        let lock = std::fs::File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path.with_extension("db.lock"))
+            .map_err(super::backup::storage_error)?;
+        lock.try_lock().map_err(|error| match error {
+            std::fs::TryLockError::WouldBlock => AppError::DatabaseInUse,
+            std::fs::TryLockError::Error(error) => super::backup::storage_error(error),
+        })?;
+        let mut connection = Connection::open(path)?;
+        connection.pragma_update(None, "foreign_keys", "ON")?;
+        super::migrations::initialize(&mut connection, Some(path))?;
+        connection.pragma_update(None, "journal_mode", "WAL")?;
+        Ok(Self {
+            connection: Mutex::new(connection),
+            _lock: Some(lock),
+        })
     }
 
     pub fn in_memory() -> AppResult<Self> {
         Self::from_connection(Connection::open_in_memory()?)
     }
 
-    fn from_connection(connection: Connection) -> AppResult<Self> {
-        connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
-        super::migrations::initialize(&connection)?;
+    fn from_connection(mut connection: Connection) -> AppResult<Self> {
+        connection.pragma_update(None, "foreign_keys", "ON")?;
+        super::migrations::initialize(&mut connection, None)?;
         Ok(Self {
             connection: Mutex::new(connection),
+            _lock: None,
         })
     }
 
@@ -882,10 +902,116 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_current_development_schema() {
+    fn rejects_unsupported_legacy_schema_without_suggesting_data_loss() {
         let connection = Connection::open_in_memory().unwrap();
         connection.pragma_update(None, "user_version", 2).unwrap();
         let error = Database::from_connection(connection).err().unwrap();
-        assert!(error.to_string().contains("delete the database"));
+        assert!(matches!(error, AppError::DatabaseInvalid(_)));
+        assert!(!error.to_string().contains("delete the database"));
+    }
+
+    #[test]
+    fn compatible_future_database_preserves_unknown_data_and_favorites() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        super::super::migrations::initialize(&mut connection, None).unwrap();
+        connection.execute_batch("ALTER TABLE clips ADD COLUMN future_note TEXT DEFAULT 'keep me'; PRAGMA user_version=11;").unwrap();
+        let database = Database::from_connection(connection).unwrap();
+        let old = sample("favorite", Utc::now() - Duration::days(60));
+        let id = database.capture_clip(&old).unwrap();
+        database.set_favorite(&id, true).unwrap();
+        database.capture_clip(&old).unwrap();
+        database.touch_clip(&id, false).unwrap();
+        assert!(database
+            .cleanup_candidate_ids(Some(Utc::now()), Some(0))
+            .unwrap()
+            .is_empty());
+        assert_eq!(database.clear().unwrap(), 0);
+        assert_eq!(database.get_clip(&id).unwrap().summary.id, id);
+        let connection = database.connection().unwrap();
+        assert_eq!(
+            connection
+                .query_row("SELECT future_note FROM clips", [], |row| row
+                    .get::<_, String>(0))
+                .unwrap(),
+            "keep me"
+        );
+        assert_eq!(
+            connection
+                .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
+                .unwrap(),
+            11
+        );
+    }
+
+    #[test]
+    fn upgrade_backup_includes_wal_and_reopen_does_not_backup_again() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("clips.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(include_str!("fixtures/v9.sql"))
+            .unwrap();
+        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; INSERT INTO settings VALUES('sentinel','123');").unwrap();
+        assert!(path.with_extension("db-wal").exists());
+        let database = Database::open(&path).unwrap();
+        assert_eq!(database.get_setting::<u32>("sentinel").unwrap(), Some(123));
+        let backups: Vec<_> = std::fs::read_dir(path.with_extension("backups"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(backups.len(), 1);
+        let snapshot = Connection::open(&backups[0]).unwrap();
+        assert_eq!(
+            snapshot
+                .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
+                .unwrap(),
+            9
+        );
+        assert_eq!(
+            snapshot
+                .query_row(
+                    "SELECT value_json FROM settings WHERE key='sentinel'",
+                    [],
+                    |row| row.get::<_, String>(0)
+                )
+                .unwrap(),
+            "123"
+        );
+        drop(snapshot);
+        drop(database);
+        drop(connection);
+        let _database = Database::open(&path).unwrap();
+        assert_eq!(
+            std::fs::read_dir(path.with_extension("backups"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn backup_failure_leaves_schema_untouched_and_lock_is_released() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("clips.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(include_str!("fixtures/v9.sql"))
+            .unwrap();
+        std::fs::write(path.with_extension("backups"), "not a directory").unwrap();
+        assert!(Database::open(&path).is_err());
+        assert_eq!(
+            connection
+                .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
+                .unwrap(),
+            9
+        );
+        std::fs::remove_file(path.with_extension("backups")).unwrap();
+        let first = Database::open(&path).unwrap();
+        assert!(matches!(
+            Database::open(&path),
+            Err(AppError::DatabaseInUse)
+        ));
+        drop(first);
+        assert!(Database::open(&path).is_ok());
     }
 }

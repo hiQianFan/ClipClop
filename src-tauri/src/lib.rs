@@ -10,6 +10,7 @@ pub mod onboarding;
 pub mod paste;
 pub mod preview;
 pub mod settings;
+mod startup;
 pub mod state;
 pub mod storage;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -91,6 +92,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if !is_autostart_launch(&args) {
+                if app.try_state::<startup::StartupFailure>().is_some() {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    return;
+                }
                 window::show_panel_on_main_thread(app);
             }
         }))
@@ -141,22 +149,35 @@ pub fn run() {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             }
 
-            let data_dir = app.path().app_data_dir()?;
-            let database_existed = data_dir.join("clipclop.db").exists();
-            log::info!("opening database at {}", data_dir.display());
-            let database = Database::open(&data_dir.join("clipclop.db"))?;
-            let mut startup_settings: Settings =
-                database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
-            if let Err(message) = validate_hotkey(&startup_settings.hotkey) {
-                log::warn!(
+            let prepared = (|| -> error::AppResult<_> {
+                let data_dir = app
+                    .path()
+                    .app_data_dir()
+                    .map_err(|error| error::AppError::Storage(error.to_string()))?;
+                let database_existed = data_dir.join("clipclop.db").exists();
+                log::info!("opening database at {}", data_dir.display());
+                let database = Database::open(&data_dir.join("clipclop.db"))?;
+                let mut startup_settings: Settings =
+                    database.get_setting(SETTINGS_KEY)?.unwrap_or_default();
+                if let Err(message) = validate_hotkey(&startup_settings.hotkey) {
+                    log::warn!(
                     "stored global shortcut is invalid; restoring the platform default: {message:?}"
                 );
-                startup_settings.hotkey = DEFAULT_HOTKEY.into();
-                database.set_setting(SETTINGS_KEY, &startup_settings)?;
-            }
+                    startup_settings.hotkey = DEFAULT_HOTKEY.into();
+                    database.set_setting(SETTINGS_KEY, &startup_settings)?;
+                }
+                let app_state = AppState::new(database);
+                app_state.onboarding.initialize(database_existed)?;
+                Ok((app_state, startup_settings))
+            })();
+            let (app_state, mut startup_settings) = match prepared {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    startup::show_failure(app, error);
+                    return Ok(());
+                }
+            };
             let startup_hotkey = startup_settings.hotkey.clone();
-            let app_state = AppState::new(database);
-            app_state.onboarding.initialize(database_existed)?;
             app.manage(app_state);
             app.manage(window::PanelLifecycleState::default());
             app.manage(window::QuickSelectionState::default());
@@ -229,6 +250,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            startup::get_startup_failure,
             query_history,
             get_history_facets,
             get_clip,

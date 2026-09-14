@@ -9,6 +9,12 @@ pub enum AppError {
     Validation(String),
     #[error("Storage operation failed: {0}")]
     Storage(String),
+    #[error("Database schema {version} requires storage version {required} or newer; upgrade ClipClop. Your data has been preserved.")]
+    DatabaseTooNew { version: u32, required: u32 },
+    #[error("Database structure is not supported: {0}. Your data has been preserved.")]
+    DatabaseInvalid(String),
+    #[error("The database is in use by another ClipClop instance. Close it and try again.")]
+    DatabaseInUse,
     #[error("Clipboard operation failed: {0}")]
     Clipboard(String),
     #[error("Platform integration failed: {0}")]
@@ -33,6 +39,9 @@ impl Serialize for AppError {
             Self::NotFound => "NOT_FOUND",
             Self::Validation(_) => "VALIDATION_ERROR",
             Self::Storage(_) => "STORAGE_ERROR",
+            Self::DatabaseTooNew { .. } => "DATABASE_TOO_NEW",
+            Self::DatabaseInvalid(_) => "DATABASE_INVALID",
+            Self::DatabaseInUse => "DATABASE_IN_USE",
             Self::Clipboard(_) => "CLIPBOARD_ERROR",
             Self::Platform(_) => "PLATFORM_ERROR",
             Self::Hotkey(code) => code,

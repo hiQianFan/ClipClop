@@ -1,4 +1,14 @@
 export const en = {
+  "startup.title": "ClipClop could not open your data",
+  "startup.tooNew": "Your database requires a newer version of ClipClop. Install an updated build to continue.",
+  "startup.inUse": "Another ClipClop instance is using this database. Close it, then restart this app.",
+  "startup.storage": "The database or settings could not be loaded. Check the logs for storage, permission, or migration errors before trying again.",
+  "startup.preserved": "Your data has not been deleted. Clipboard capture and automatic cleanup are stopped. Do not delete the database to fix this error.",
+  "startup.versions": "Database schema: {database} · Required storage support: {required}",
+  "startup.download": "Open download page",
+  "startup.logs": "Open logs",
+  "startup.quit": "Quit",
+  "startup.actionFailed": "This action failed. You can download ClipClop at clipclop.io.",
   "history.favorites": "Favorites",
   "history.favorite": "Add to favorites",
   "history.unfavorite": "Remove from favorites",
@@ -409,6 +419,16 @@ export const en = {
 export type Catalog = { [K in keyof typeof en]: string };
 
 export const zhCN = {
+  "startup.title": "ClipClop 无法打开你的数据",
+  "startup.tooNew": "当前数据库需要更新版本的 ClipClop。请安装更新的构建版本后继续使用。",
+  "startup.inUse": "另一个 ClipClop 实例正在使用此数据库。请关闭它，再重新启动本应用。",
+  "startup.storage": "无法加载数据库或设置。请查看日志中的存储、权限或迁移错误，处理后重试。",
+  "startup.preserved": "你的数据没有被删除。剪贴板捕获和自动清理已停止，请勿通过删除数据库来解决此错误。",
+  "startup.versions": "数据库结构版本：{database} · 需要的存储支持版本：{required}",
+  "startup.download": "打开下载页面",
+  "startup.logs": "打开日志",
+  "startup.quit": "退出",
+  "startup.actionFailed": "操作失败，你可以访问 clipclop.io 下载应用。",
   "permission.restart": "重启应用",
   "permission.unsaved": "重启前保存设置？",
   "permission.discard": "放弃并重启",

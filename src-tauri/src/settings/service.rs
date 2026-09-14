@@ -27,7 +27,13 @@ impl SettingsService {
 
     pub fn set_internal(&self, settings: &Settings) -> AppResult<()> {
         let _guard = self.lock_mutation()?;
-        self.database.set_setting(SETTINGS_KEY, settings)
+        self.database
+            .update_setting(SETTINGS_KEY, |existing: &mut Settings| {
+                let extra = std::mem::take(&mut existing.extra);
+                *existing = settings.clone();
+                existing.extra = extra;
+            })?;
+        Ok(())
     }
 
     pub fn update_preserving_check_time(&self, mut settings: Settings) -> AppResult<Settings> {
@@ -36,6 +42,7 @@ impl SettingsService {
             .update_setting(SETTINGS_KEY, |existing: &mut Settings| {
                 settings.last_update_check = existing.last_update_check.clone();
                 settings.skipped_update_version = existing.skipped_update_version.clone();
+                settings.extra = existing.extra.clone();
                 *existing = settings.clone();
             })
     }
@@ -112,6 +119,27 @@ mod tests {
             saved["future_setting"],
             serde_json::json!({ "enabled": true })
         );
+    }
+
+    #[test]
+    fn stale_form_and_internal_snapshots_cannot_overwrite_unknown_settings() {
+        let service = SettingsService::new(Arc::new(Database::in_memory().unwrap()));
+        let mut stale = Settings::default();
+        stale
+            .extra
+            .insert("future_setting".into(), serde_json::json!("stale"));
+        let mut current = serde_json::to_value(Settings::default()).unwrap();
+        current["future_setting"] = serde_json::json!({"enabled":true});
+        current["new_setting"] = serde_json::json!(123);
+        service
+            .database
+            .set_setting(SETTINGS_KEY, &current)
+            .unwrap();
+        let saved = service.update_preserving_check_time(stale.clone()).unwrap();
+        assert_eq!(saved.extra["future_setting"], current["future_setting"]);
+        assert_eq!(saved.extra["new_setting"], current["new_setting"]);
+        service.set_internal(&stale).unwrap();
+        assert_eq!(service.get_stored().unwrap().extra, saved.extra);
     }
 
     #[test]

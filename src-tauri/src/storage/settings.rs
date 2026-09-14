@@ -31,7 +31,9 @@ impl Database {
     where
         T: serde::de::DeserializeOwned + serde::Serialize + Default,
     {
-        let connection = self.connection()?;
+        let mut guard = self.connection()?;
+        let connection =
+            guard.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let json: Option<String> = connection
             .query_row(
                 "SELECT value_json FROM settings WHERE key = ?1",
@@ -49,6 +51,7 @@ impl Database {
              ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
             params![key, serde_json::to_string(&value)?],
         )?;
+        connection.commit()?;
         Ok(value)
     }
 }
