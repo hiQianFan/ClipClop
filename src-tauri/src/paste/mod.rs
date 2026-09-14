@@ -121,7 +121,11 @@ impl PasteController {
         {
             platform::paste(_app, target, self.session.clone(), guard.session)
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        {
+            platform::paste(target, self.session.clone(), guard.session)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         platform::paste(target)
     }
 }

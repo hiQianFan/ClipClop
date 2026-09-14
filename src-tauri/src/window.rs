@@ -5,6 +5,9 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+#[cfg(target_os = "windows")]
+pub(crate) use windows::nonactivating::enabled as windows_nonactivating_enabled;
+
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -171,6 +174,16 @@ fn toggle_from_tray(
 }
 
 fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPosition<f64>>) {
+    #[cfg(target_os = "windows")]
+    if windows::nonactivating::enabled() {
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || show_impl(&app2, label, _anchor));
+        return;
+    }
+    show_impl(app, label, _anchor);
+}
+
+fn show_impl(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPosition<f64>>) {
     #[cfg(target_os = "macos")]
     if tauri_nspanel::objc2::MainThreadMarker::new().is_none() {
         let app_for_main = app.clone();
@@ -238,6 +251,16 @@ fn show(app: &tauri::AppHandle, label: &'static str, _anchor: Option<PhysicalPos
 
     #[cfg(not(target_os = "macos"))]
     {
+        #[cfg(target_os = "windows")]
+        if windows::nonactivating::enabled() {
+            if let Err(error) = windows::nonactivating::show(&window) {
+                lifecycle.mark_hidden(label);
+                log::error!("nonactivating panel could not be shown: {error}");
+            } else if label == QUICK_LABEL {
+                let _ = window.emit("quick_panel_shown", ());
+            }
+            return;
+        }
         if let Err(error) = window.show() {
             lifecycle.mark_hidden(label);
             log::error!("show_panel: failed to show window: {error}");
@@ -361,6 +384,8 @@ pub(crate) fn hide_panel(
             return Ok(());
         };
 
+        #[cfg(target_os = "windows")]
+        windows::nonactivating::stop(&window);
         window.hide()?;
         app.state::<PanelLifecycleState>().mark_hidden(label);
         app.state::<PreviewState>().set_active(false);
