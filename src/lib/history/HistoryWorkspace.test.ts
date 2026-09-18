@@ -51,11 +51,12 @@ vi.mock("$lib/onboarding/api", () => ({
   getAutoPastePermissionStatus: vi.fn(async () => ({ status: "ready", app_location: "applications", app_path: "/Applications/ClipClop.app" })),
   openAutoPasteSettings: vi.fn(), revealCurrentApp: vi.fn(), shouldRestartAfterPermissionCheck: vi.fn(() => false),
 }));
-vi.mock("$lib/updater/api", () => ({ DEVELOPMENT_VERSION: "0.0.0-dev", listReleaseNotes: vi.fn(async () => []), openLatestRelease: vi.fn() }));
+vi.mock("$lib/updater/api", () => ({ DEVELOPMENT_VERSION: "0.0.0-dev", listReleaseNotes: vi.fn(async () => ({ releases: [], hasMore: false })), openLatestRelease: vi.fn() }));
 vi.mock("$lib/updater/store.svelte", () => ({
   updateStore: { appVersion: "0.8.6", update: null, phase: "idle", progress: null, busy: false, errorSource: null, displayStatus: null, skippedVersion: null, hydrate: vi.fn(), check: vi.fn(), download: vi.fn(), cancel: vi.fn(), install: vi.fn(), skip: vi.fn(), retry: vi.fn() },
 }));
 
+import { deleteClip } from "./api";
 import HistoryWorkspace from "./HistoryWorkspace.svelte";
 
 it("does not schedule list focus after paste hands input to another app", async () => {
@@ -188,4 +189,28 @@ describe("favorites", () => {
     expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(host.getClipPage).toHaveBeenCalledWith("older");
   });
+});
+
+it("keeps a failed deletion open for retry and blocks duplicate submissions", async () => {
+  let rejectDelete!: (reason: Error) => void;
+  vi.mocked(deleteClip).mockReset().mockImplementationOnce(() => new Promise((_, reject) => { rejectDelete = reject; })).mockResolvedValueOnce(undefined);
+  render(HistoryWorkspace);
+  const list = await screen.findByRole("listbox");
+  await waitFor(() => expect(document.activeElement).toBe(list));
+  await fireEvent.keyDown(list, { key: "Delete", ctrlKey: true });
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Delete" })));
+  const remove = screen.getByRole("button", { name: "Delete" });
+  await fireEvent.click(remove);
+  expect((remove as HTMLButtonElement).disabled).toBe(true);
+  await fireEvent.click(remove);
+  await fireEvent.keyDown(window, { key: "Escape" });
+  expect(screen.getByRole("alertdialog")).toBeTruthy();
+  expect(deleteClip).toHaveBeenCalledTimes(1);
+  rejectDelete(new Error("disk busy"));
+  await screen.findByRole("alert");
+  expect((remove as HTMLButtonElement).disabled).toBe(false);
+  await fireEvent.click(remove);
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(deleteClip).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(document.activeElement).toBe(list));
 });

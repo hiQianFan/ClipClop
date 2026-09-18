@@ -43,6 +43,8 @@
   let onboarding = $state<OnboardingState | null>(null);
   let onboardingMode = $state<"first_run" | "quick_start">("first_run");
   let deletePending = $state(false);
+  let deleting = $state(false);
+  let deleteError = $state("");
   let rowReorderMotion = $state(false);
   let reducedMotion = $state(false);
   let listbox = $state<HistoryList>();
@@ -259,24 +261,26 @@
   }
 
   async function removeSelected() {
-    if (!session.selectedId) return;
+    if (!session.selectedId || deleting) return;
+    deleting = true;
+    deleteError = "";
     const deletedId = session.selectedId;
-    resetPreviewState();
     try {
       rowReorderMotion = true;
       await session.deleteSelected();
+      deletePending = false;
+      resetPreviewState();
       evictClip(deletedId);
       await applySelectedDetail(false);
       await tick();
       enterBrowse();
     }
     catch (reason) {
-      error = localizedError(reason);
-      await applySelectedDetail(false);
-      mode = "browse";
-      requestAnimationFrame(focusConfirmationInvoker);
+      if (deletePending) deleteError = localizedError(reason);
+      else { error = localizedError(reason); enterBrowse(); }
     }
     finally {
+      deleting = false;
       requestAnimationFrame(() => rowReorderMotion = false);
     }
     menuOpen = false;
@@ -288,11 +292,13 @@
       ? document.activeElement instanceof HTMLElement ? document.activeElement : null
       : invoker;
     menuOpen = false;
+    deleteError = "";
     deletePending = true;
     mode = "confirmation";
   }
 
   function cancelDelete() {
+    if (deleting) return;
     deletePending = false;
     mode = "browse";
   }
@@ -303,7 +309,6 @@
   }
 
   function confirmDelete() {
-    deletePending = false;
     void removeSelected();
   }
 
@@ -841,6 +846,8 @@
     permissionRecovery={pastePermissionRequired}
     {menuOpen}
     {deletePending}
+    {deleting}
+    {deleteError}
     {actionMenuShortcut}
     {deleteShortcut}
     onmenuopenchange={setActionMenuOpen}
@@ -865,7 +872,7 @@
 </main>
 
 <style>
-  .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px 1fr 48px; background:var(--bg-shell); border-radius:var(--radius-xl); box-shadow:var(--panel-shadow); overflow:hidden; }
+  .panel { width:calc(100vw - 40px); height:calc(100vh - 40px); margin:20px; display:grid; grid-template-columns:300px 1fr; grid-template-rows:42px minmax(0,1fr) auto; background:var(--bg-shell); border-radius:var(--radius-xl); box-shadow:var(--panel-shadow); overflow:hidden; }
   .root-loading{grid-column:1/-1;grid-row:1/-1;display:grid;place-items:center;color:var(--text-2);font-size:var(--fs-body)}
   @media (min-width:840px) { .panel { grid-template-columns:320px 1fr; } }
   @media (max-width:680px) { .panel { grid-template-columns:280px 1fr; } }

@@ -64,6 +64,7 @@ vi.mock("$lib/updater/store.svelte", () => ({
   },
 }));
 
+import { clearHistory } from "$lib/history/api";
 import SettingsView from "./SettingsView.svelte";
 
 const settings = () => ({
@@ -317,4 +318,23 @@ describe("software update status rail", () => {
       expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     });
   }
+});
+
+it("keeps clear failures in the modal for retry and restores focus after cancel", async () => {
+  vi.mocked(clearHistory).mockRejectedValueOnce(new Error("disk busy")).mockResolvedValueOnce(1);
+  const oncleared = vi.fn();
+  render(SettingsView, { props: { initialTab: "history", onclose() {}, oncleared, onquickstart() {} } });
+  const trigger = await screen.findByRole("button", { name: "Clear unfavorited history" });
+  await fireEvent.click(trigger);
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" })));
+  await fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  await screen.findByRole("alert");
+  expect(screen.getByRole("alertdialog")).toBeTruthy();
+  expect(oncleared).not.toHaveBeenCalled();
+  await fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  await waitFor(() => expect(oncleared).toHaveBeenCalledOnce());
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  await fireEvent.click(trigger);
+  await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(trigger));
 });

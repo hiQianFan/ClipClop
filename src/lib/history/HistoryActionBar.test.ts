@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import HistoryActionBar from "./HistoryActionBar.svelte";
 
@@ -69,10 +69,22 @@ describe("HistoryActionBar actions", () => {
     expect(visible.container.textContent).toContain("Paste as plain text");
   });
 
-  it("replaces actions with the existing delete confirmation", () => {
-    const view = render(HistoryActionBar, { props: { ...props, deletePending: true } });
-    expect(view.container.textContent).toContain("Delete this item from ClipClop?");
-    expect(view.container.querySelector(".action-menu-trigger")).toBeNull();
+  it("opens a modal confirmation with delete focused and keeps the toolbar mounted", async () => {
+    const view = render(HistoryActionBar, { props: { ...props, menuOpen: false, deletePending: true } });
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this item from ClipClop?" });
+    expect(dialog.textContent).toContain("This will not delete the original file or change the system clipboard.");
+    expect(view.container.contains(dialog)).toBe(false);
+    expect(view.container.querySelector(".action-menu-trigger")).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Delete" })));
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const remove = screen.getByRole("button", { name: "Delete" });
+    await fireEvent.keyDown(cancel, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(remove);
+    await fireEvent.keyDown(remove, { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(cancel);
+    await view.rerender({ ...props, menuOpen: false, deletePending: true, deleting: true });
+    await fireEvent.keyDown(dialog, { key: "ArrowRight" });
+    expect(document.activeElement).not.toBe(remove);
   });
 
   it("offers an action when automatic paste permission is missing", async () => {
@@ -100,7 +112,7 @@ describe("HistoryActionBar actions", () => {
   it("wires deletion cancellation and confirmation", async () => {
     const oncanceldelete = vi.fn();
     const onconfirmdelete = vi.fn();
-    const cancelView = render(HistoryActionBar, { props: { ...props, deletePending: true, oncanceldelete, onconfirmdelete } });
+    const cancelView = render(HistoryActionBar, { props: { ...props, menuOpen: false, deletePending: true, oncanceldelete, onconfirmdelete } });
     await fireEvent.click(screen.getByRole("button", { name: /Cancel/ }));
     cancelView.unmount();
     render(HistoryActionBar, { props: { ...props, deletePending: true, oncanceldelete, onconfirmdelete } });

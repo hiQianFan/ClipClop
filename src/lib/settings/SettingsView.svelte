@@ -7,6 +7,7 @@
   import { clearHistory } from "$lib/history/api";
   import { applyTheme, getSettings, openLogDir, openRepository, openWebsite, previewTheme, updateSettings, type LanguagePreference, type Settings, type Theme } from "./api";
   import AppSelect from "$lib/components/AppSelect.svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import ActionToolbar from "$lib/components/ActionToolbar.svelte";
   import { currentPlatform, type ShortcutPlatform } from "./shortcuts";
   import { DEVELOPMENT_VERSION } from "$lib/updater/api";
@@ -28,6 +29,8 @@
   let savePromise: Promise<boolean> | null = null;
   const appVersion = $derived(updateStore.appVersion);
   let confirmClear = $state(false);
+  let clearing = $state(false);
+  let clearError = $state("");
   let confirmDemo = $state(false);
   let enteringDemo = $state(false);
   let demoError = $state("");
@@ -39,7 +42,6 @@
   let navButtons = $state<Array<HTMLButtonElement | null>>(Array(tabs.length).fill(null));
   let sectionHeading = $state<HTMLHeadingElement>();
   let clearTrigger = $state<HTMLButtonElement>();
-  let confirmClearButton = $state<HTMLButtonElement | null>(null);
   const normalizeTab = (value: Tab): Tab => value === "permissions" && platform !== "macos" ? "general" : value;
   const retentionItems = $derived([
     ...[1, 7, 30, 90].map((count) => ({ value: String(count), label: t("settings.days", { count: formatNumber(count) }) })),
@@ -183,10 +185,12 @@
   }
 
   function requestClear() {
+    clearError = "";
     confirmClear = true;
   }
 
   function cancelClear() {
+    if (clearing) return;
     confirmClear = false;
   }
 
@@ -202,9 +206,13 @@
   }
 
   async function removeAll() {
+    if (clearing) return;
+    clearing = true;
+    clearError = "";
     try {
       await clearHistory(); confirmClear = false; status = t("settings.cleared"); oncleared();
-    } catch (reason) { confirmClear = false; status = t("settings.clearFailed", { error: localizedError(reason) }); }
+    } catch (reason) { clearError = t("settings.clearFailed", { error: localizedError(reason) }); }
+    finally { clearing = false; }
   }
 
   async function enterDemo() {
@@ -316,13 +324,11 @@
     </Tabs.Content>
     {/each}
   </Tabs.Root>
-  <AlertDialog.Root open={confirmClear} onOpenChange={(open) => confirmClear = open}>
-    <ActionToolbar class="settings-toolbar">
-      {#if confirmClear}
-        <AlertDialog.Content class="clear-confirmation" aria-label={t("settings.clearConfirm")} preventScroll={false} onOpenAutoFocus={(event) => { event.preventDefault(); confirmClearButton?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); clearTrigger?.focus(); }}><strong>{t("settings.clearConfirm")}</strong><AlertDialog.Cancel class="toolbar-button secondary pressable" onclick={cancelClear}>{t("common.cancel")}</AlertDialog.Cancel><AlertDialog.Action bind:ref={confirmClearButton} class="toolbar-button destructive pressable" onclick={() => void removeAll()}>{t("settings.clear")}</AlertDialog.Action></AlertDialog.Content>
-      {/if}
-    </ActionToolbar>
-  </AlertDialog.Root>
+  <ActionToolbar class="settings-toolbar" />
+  <ConfirmDialog open={confirmClear} title={t("settings.clearConfirm")} description={t("settings.clearConfirmHelp")}
+    action={t("settings.clear")} busy={clearing} error={clearError}
+    onopenchange={(open) => { if (open) requestClear(); else cancelClear(); }}
+    onconfirm={() => void removeAll()} onrestorefocus={() => clearTrigger?.focus()} />
   <AlertDialog.Root open={confirmDemo} onOpenChange={(open) => { confirmDemo = open; if (!open) demoError = ""; }}>
     <AlertDialog.Portal>
       <AlertDialog.Overlay class="dialog-overlay" />
@@ -356,8 +362,6 @@
   .settings-shell :global(.settings-content>label){min-height:68px;padding-block:12px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--hairline)}
   .settings-shell :global(.settings-content>label>select){flex:none}
   .settings-shell :global(.settings-content.updates-content){overflow:hidden;padding-bottom:0}
-  .settings-shell :global(.clear-confirmation){width:100%;display:flex;align-items:center;justify-content:flex-end;gap:10px}
-  .settings-shell :global(.clear-confirmation strong){min-width:0;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .header-drag{min-width:24px;flex:1;align-self:stretch}
   .settings-header{gap:10px}
   .header-status{max-width:50%;margin-left:0;color:var(--text-2)}
