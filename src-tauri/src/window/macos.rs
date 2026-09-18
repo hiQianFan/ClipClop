@@ -243,6 +243,7 @@ pub(super) fn layout_main_panel(app: &tauri::AppHandle, label: &str) -> bool {
 pub(super) fn show_as_panel(app: &tauri::AppHandle, label: &str) -> bool {
     use tauri_nspanel::{CollectionBehavior, ManagerExt};
 
+    install_deactivation_observer(app);
     let Ok(panel) = app.get_webview_panel(label) else {
         return false;
     };
@@ -323,12 +324,28 @@ pub(crate) fn install_deactivation_observer(app: &tauri::AppHandle) {
     static INSTALL: Once = Once::new();
     let app = app.clone();
     INSTALL.call_once(|| {
+        // Nonactivating panels never activate NSApplication, so clicking the
+        // already-active app (or Finder desktop) need not produce a resign-active
+        // notification. Global mouse monitors receive OTHER apps' events only:
+        // clicks within our panels and Quick Look must not dismiss the session.
+        let mouse_app = app.clone();
+        let mouse = RcBlock::new(move |_event: std::ptr::NonNull<NSEvent>| {
+            dismiss_panels(&mouse_app);
+        });
+        use tauri_nspanel::objc2_app_kit::NSEventMask;
+        if let Some(monitor) = NSEvent::addGlobalMonitorForEventsMatchingMask_handler(
+            NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown | NSEventMask::OtherMouseDown,
+            &mouse,
+        ) {
+            // One monitor for the process lifetime, installed once on the main
+            // thread. No keyboard monitoring or suppression of the external click.
+            std::mem::forget(monitor);
+        } else {
+            log::warn!("external-click monitor unavailable");
+        }
         let name = NSNotificationName::from_str("NSApplicationDidResignActiveNotification");
         let block = RcBlock::new(move |_notification: std::ptr::NonNull<NSNotification>| {
-            // Dismiss the native panel explicitly before hiding our webviews.
-            hide_preview(&app);
-            let _ = super::hide_panel(&app, super::MAIN_LABEL, super::HideReason::Blur);
-            let _ = super::hide_panel(&app, super::QUICK_LABEL, super::HideReason::Blur);
+            dismiss_panels(&app);
         });
         let center = NSNotificationCenter::defaultCenter();
         let observer = unsafe {
@@ -342,6 +359,19 @@ pub(crate) fn install_deactivation_observer(app: &tauri::AppHandle) {
         // NSNotificationCenter retains the observer for the application's lifetime.
         drop(observer);
     });
+}
+
+fn dismiss_panels(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let lifecycle = app.state::<super::PanelLifecycleState>();
+    for label in [super::MAIN_LABEL, super::QUICK_LABEL] {
+        if lifecycle.is_shown(label) {
+            // hide_panel also hides Quick Look and clears preview state.
+            if let Err(error) = super::hide_panel(app, label, super::HideReason::Blur) {
+                log::warn!("failed to dismiss {label} after external interaction: {error}");
+            }
+        }
+    }
 }
 
 unsafe extern "C" fn handle_quicklook_key(
