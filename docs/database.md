@@ -1,6 +1,6 @@
 # Database compatibility
 
-The application version is currently 0.11.1. Storage versions are separate:
+The application version is currently 0.12.0. Storage versions are separate:
 this change migrates schema 4–9 to schema 10 and introduces the compatibility
 contract. Previously shipped binaries do not understand this contract and
 must be updated once. Do not publish changed database behavior under an

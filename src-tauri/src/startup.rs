@@ -69,7 +69,7 @@ mod tests {
                 version: 12,
                 required: 11,
             },
-            "0.11.1".into(),
+            "0.12.0".into(),
         );
         let value = serde_json::to_value(failure).unwrap();
         assert_eq!(value["kind"], "too_new");
@@ -77,7 +77,7 @@ mod tests {
         assert_eq!(value["required_version"], 11);
         let failure = StartupFailure::new(
             &AppError::Storage("private diagnostic".into()),
-            "0.11.1".into(),
+            "0.12.0".into(),
         );
         assert!(!serde_json::to_string(&failure)
             .unwrap()

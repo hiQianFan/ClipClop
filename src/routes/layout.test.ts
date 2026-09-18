@@ -27,7 +27,7 @@ afterEach(cleanup);
 
 describe("startup database gate", () => {
   it("shows recovery actions without mounting history or loading settings and updates", async () => {
-    host.invoke.mockResolvedValue({ kind: "too_new", app_version: "0.11.1", database_version: 12, required_version: 11 });
+    host.invoke.mockResolvedValue({ kind: "too_new", app_version: "0.12.0", database_version: 12, required_version: 11 });
     render(Layout, { children });
     await screen.findByText(/Your database requires a newer version/);
     expect(screen.queryByText("History mounted")).toBeNull();
