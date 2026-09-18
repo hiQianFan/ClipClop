@@ -10,11 +10,14 @@ R2 writes.
 - `https://clipclop.io/download/macos` redirects to the latest DMG.
 - `https://clipclop.io/download/windows` redirects to the latest NSIS installer.
 - `https://clipclop.io/latest.json` is the stable Tauri updater endpoint.
+- `https://clipclop.io/releases.json` is the public release-history feed for App settings and the website changelog.
 - `https://clipclop.io/releases/v<version>/` contains immutable, versioned release files.
 
 The release workflow uploads every artifact before replacing `downloads.json`
-and `latest.json`. Versioned objects are cached for one year as immutable;
-metadata and redirects use `no-cache`.
+and `latest.json`, then publishes the GitHub release and refreshes
+`releases.json`. Versioned objects are cached for one year as immutable;
+metadata and redirects use `no-cache`; `releases.json` uses a five-minute
+public cache.
 
 ## Repository boundary
 
@@ -24,7 +27,9 @@ uploads use the bucket-scoped
 `CLOUDFLARE_RELEASES_R2_ACCESS_KEY_ID` and
 `CLOUDFLARE_RELEASES_R2_SECRET_ACCESS_KEY` secrets in `production-release`.
 The release workflow uploads and verifies versioned files before replacing
-`downloads.json` and `latest.json`; keep this ordering atomic.
+`downloads.json` and `latest.json`; keep this ordering atomic. `releases.json`
+is generated from public GitHub Releases after publication, and a separate
+scheduled/manual sync workflow refreshes it after release-note edits.
 
 `clipclop.mapin.net` is not a supported compatibility endpoint and has no
 redirect or proxy contract.

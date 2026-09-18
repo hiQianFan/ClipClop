@@ -313,3 +313,14 @@ jobs:
             --draft=false \
             --prerelease=false \
             --title "ClipClop v$RELEASE_VERSION"
+      - name: Sync public releases JSON
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_RELEASES_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_RELEASES_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          R2_ENDPOINT: https://${{ vars.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          node scripts/generate-releases-json.mjs .release-assets/releases.json
+          aws s3 cp .release-assets/releases.json s3://clipclop-releases/releases.json --endpoint-url "$R2_ENDPOINT" --content-type application/json --cache-control "public, max-age=300"

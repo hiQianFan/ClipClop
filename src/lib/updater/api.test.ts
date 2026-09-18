@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { compareVersions, isTransientNetworkError, shouldAutoCheck } from "./api";
+import { describe, expect, it, vi } from "vitest";
+import { compareVersions, isTransientNetworkError, shouldAutoCheck, listReleaseNotes } from "./api";
 
 const NOW = Date.parse("2026-07-19T12:00:00Z");
 
@@ -66,4 +66,56 @@ describe("isTransientNetworkError", () => {
   it("does not retry unknown non-network errors", () => {
     expect(isTransientNetworkError(new Error("permission denied"))).toBe(false);
   });
+});
+
+it("loads releases once, slices local pages, retries failures, and resets the cache on refresh", async () => {
+  const releases = Array.from({ length: 12 }, (_, index) => ({
+    version: `v1.${index}.0`, publishedAt: "2026-09-17T00:00:00Z", notes: `Notes ${index}`, notesHtml: null, url: `https://github.com/hiQianFan/ClipClop/releases/tag/v1.${index}.0`, isLatest: index === 0,
+  }));
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, releases })))
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ schemaVersion: 1, releases: releases.slice(0, 1) })));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const first = await listReleaseNotes(1, true);
+    expect(fetcher.mock.calls[0][0]).toBe("https://clipclop.io/releases.json");
+    expect(first.hasMore).toBe(true);
+    expect(first.releases[0].isLatest).toBe(true);
+    expect(await listReleaseNotes(1)).toBe(first);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const last = await listReleaseNotes(2);
+    expect(last.hasMore).toBe(false);
+    expect(last.releases).toHaveLength(2);
+    expect(await listReleaseNotes(2)).toBe(last);
+    await expect(listReleaseNotes(1, true)).rejects.toThrow("offline");
+    expect(await listReleaseNotes(1)).toEqual({ releases: [releases[0]], hasMore: false });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("rejects invalid release feeds as unavailable", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ schemaVersion: 2, releases: [] }))));
+  try {
+    await expect(listReleaseNotes(1, true)).rejects.toMatchObject({ code: "RELEASE_UNAVAILABLE" });
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("rejects releases outside the website feed contract", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ schemaVersion: 1, releases: [
+    { version: "v1.0.0", publishedAt: "invalid", notes: "", url: "https://github.com/hiQianFan/ClipClop/releases/tag/v1.0.0" },
+  ] }))));
+  try {
+    await expect(listReleaseNotes(1, true)).rejects.toMatchObject({ code: "RELEASE_UNAVAILABLE" });
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("falls back to Markdown when release HTML is unsafe", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ schemaVersion: 1, releases: [
+    { version: "v1.0.0", publishedAt: "2026-09-17T00:00:00Z", notes: "Safe text", notesHtml: "<img src=x onerror=alert(1)>", url: "https://github.com/hiQianFan/ClipClop/releases/tag/v1.0.0" },
+  ] }))));
+  try {
+    const page = await listReleaseNotes(1, true);
+    expect(page.releases[0].notesHtml).toBeNull();
+  } finally { vi.unstubAllGlobals(); }
 });

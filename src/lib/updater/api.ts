@@ -91,16 +91,73 @@ export type AvailableUpdate = {
 };
 
 export type ReleaseNote = { version: string; publishedAt: string; notes: string; notesHtml: string | null; url: string; isLatest: boolean };
-const RELEASES_API = "https://api.github.com/repos/hiQianFan/ClipClop/releases?per_page=30";
+export type ReleasePage = { releases: ReleaseNote[]; hasMore: boolean };
+const RELEASE_NOTES_PAGE_SIZE = 10;
+const RELEASES_FEED = "https://clipclop.io/releases.json";
+type ReleasesFeed = { schemaVersion?: unknown; releases?: unknown };
+const releasePages = new Map<number, Promise<ReleasePage>>();
+let releaseFeed: Promise<ReleaseNote[]> | null = null;
 
-export async function listReleaseNotes(): Promise<ReleaseNote[]> {
-  const response = await fetch(RELEASES_API, { cache: "no-store", headers: { Accept: "application/vnd.github.html+json" } });
-  if (!response.ok) throw new Error(`GitHub releases request failed (${response.status})`);
-  const releases = await response.json() as Array<{ tag_name?: string; published_at?: string; body?: string; body_html?: string; html_url?: string; draft?: boolean }>;
-  return releases.filter((release) => !release.draft && release.tag_name && release.published_at).map((release, index) => ({
-    // GitHub sanitizes Markdown when returning body_html through this media type.
-    version: release.tag_name!, publishedAt: release.published_at!, notes: release.body?.trim() ?? "", notesHtml: release.body_html?.trim() || null, url: release.html_url ?? RELEASE_URL, isLatest: index === 0,
-  }));
+export function listReleaseNotes(page = 1, refresh = false): Promise<ReleasePage> {
+  if (refresh) { releasePages.clear(); releaseFeed = null; }
+  const cached = releasePages.get(page);
+  if (cached) return cached;
+  const request = fetchReleasePage(page).catch((error) => {
+    logUpdaterFailure("release notes", error);
+    if (releasePages.get(page) === request) releasePages.delete(page);
+    throw error;
+  });
+  releasePages.set(page, request);
+  return request;
+}
+
+async function fetchReleasePage(page: number): Promise<ReleasePage> {
+  const releases = await loadReleaseFeed();
+  const offset = Math.max(0, page - 1) * RELEASE_NOTES_PAGE_SIZE;
+  return { releases: releases.slice(offset, offset + RELEASE_NOTES_PAGE_SIZE), hasMore: offset + RELEASE_NOTES_PAGE_SIZE < releases.length };
+}
+
+async function loadReleaseFeed(): Promise<ReleaseNote[]> {
+  releaseFeed ??= fetchReleaseFeed().catch((error) => {
+    if (releaseFeed) releaseFeed = null;
+    throw error;
+  });
+  return releaseFeed;
+}
+
+function readReleaseFeed(data: ReleasesFeed): ReleaseNote[] {
+  if (data.schemaVersion !== 1 || !Array.isArray(data.releases)) throw Object.assign(new Error("Invalid releases feed"), { code: "RELEASE_UNAVAILABLE" });
+  return data.releases.map((item, index): ReleaseNote => {
+    if (!item || typeof item !== "object") throw Object.assign(new Error("Invalid release"), { code: "RELEASE_UNAVAILABLE" });
+    const release = item as Partial<ReleaseNote>;
+    if (typeof release.version !== "string" || typeof release.publishedAt !== "string" || typeof release.notes !== "string" || typeof release.url !== "string") {
+      throw Object.assign(new Error("Invalid release"), { code: "RELEASE_UNAVAILABLE" });
+    }
+    if (!Number.isFinite(Date.parse(release.publishedAt)) || !release.url.startsWith(`${RELEASE_URL}/tag/`)) {
+      throw Object.assign(new Error("Invalid release"), { code: "RELEASE_UNAVAILABLE" });
+    }
+    const notesHtml = typeof release.notesHtml === "string" && isSafeReleaseHtml(release.notesHtml) ? release.notesHtml : null;
+    return {
+      version: release.version,
+      publishedAt: release.publishedAt,
+      notes: release.notes,
+      notesHtml,
+      url: release.url,
+      isLatest: release.isLatest === true || index === 0,
+    };
+  });
+}
+
+function isSafeReleaseHtml(html: string) {
+  return !/<script|<iframe|<form|<img|\son[a-z]+\s*=|(?:href|src)\s*=\s*["']?\s*javascript:/i.test(html);
+}
+
+async function fetchReleaseFeed(): Promise<ReleaseNote[]> {
+  const response = await fetch(RELEASES_FEED, { cache: "no-store" });
+  if (!response.ok) {
+    throw Object.assign(new Error(`Releases feed request failed (${response.status})`), { code: "RELEASE_UNAVAILABLE" });
+  }
+  return readReleaseFeed(await response.json() as ReleasesFeed);
 }
 
 export type UpdateCheckResult =
