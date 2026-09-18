@@ -662,8 +662,6 @@ dependencies = [
  "thiserror 2.0.18",
  "url",
  "uuid",
- "webview2-com",
- "windows 0.61.3",
  "windows-sys 0.61.2",
 ]
 

@@ -1,10 +1,4 @@
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::time::Duration;
 
 use super::{wait_until, PasteOutcome, PasteTarget, TARGET_FOCUS_TIMEOUT};
 use windows_sys::Win32::{
@@ -43,7 +37,7 @@ pub(super) fn capture_target() -> Option<PasteTarget> {
     }
 }
 
-pub(super) fn paste(target: PasteTarget, session: Arc<AtomicU64>, expected: u64) -> PasteOutcome {
+pub(super) fn paste(target: PasteTarget) -> PasteOutcome {
     let PasteTarget::Windows { hwnd, pid } = target;
     let hwnd = hwnd as HWND;
     if !valid_target(hwnd, pid) {
@@ -51,18 +45,11 @@ pub(super) fn paste(target: PasteTarget, session: Arc<AtomicU64>, expected: u64)
     }
 
     unsafe {
-        if session.load(Ordering::Acquire) != expected {
-            return PasteOutcome::CopiedFocusFailed;
-        }
-        if crate::window::windows_nonactivating_enabled() && GetForegroundWindow() != hwnd {
-            return PasteOutcome::CopiedFocusFailed;
-        }
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);
         }
-        if GetForegroundWindow() != hwnd
-            && (SetForegroundWindow(hwnd) == 0
-                || !wait_until(|| GetForegroundWindow() == hwnd, TARGET_FOCUS_TIMEOUT))
+        if SetForegroundWindow(hwnd) == 0
+            || !wait_until(|| GetForegroundWindow() == hwnd, TARGET_FOCUS_TIMEOUT)
         {
             return PasteOutcome::CopiedFocusFailed;
         }
@@ -70,13 +57,6 @@ pub(super) fn paste(target: PasteTarget, session: Arc<AtomicU64>, expected: u64)
 
     if !wait_until(modifiers_released, MODIFIER_RELEASE_TIMEOUT) {
         return PasteOutcome::CopiedInjectionFailed;
-    }
-
-    if session.load(Ordering::Acquire) != expected
-        || !valid_target(hwnd, pid)
-        || unsafe { GetForegroundWindow() } != hwnd
-    {
-        return PasteOutcome::CopiedFocusFailed;
     }
 
     if send_ctrl_v() {

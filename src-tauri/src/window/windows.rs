@@ -1,7 +1,5 @@
 use tauri::WebviewWindow;
 
-pub(crate) mod nonactivating;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ActivationOutcome {
     AlreadyForeground,
