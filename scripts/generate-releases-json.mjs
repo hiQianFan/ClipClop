@@ -44,7 +44,7 @@ export function buildReleaseFeed(input, generatedAt = new Date().toISOString()) 
 }
 
 async function fetchAllReleases() {
-  const headers = { Accept: "application/vnd.github.html+json", "User-Agent": "clipclop-release-sync" };
+  const headers = { Accept: "application/vnd.github.full+json", "User-Agent": "clipclop-release-sync" };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const releases = [];
   for (let page = 1; page <= MAX_PAGES; page += 1) {

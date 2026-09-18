@@ -13,9 +13,9 @@ const { preview, getSettings, updateSettings, listReleaseNotes, openRepository, 
   },
   updateSettings: vi.fn(async (settings) => settings),
   getSettings: vi.fn(),
-  listReleaseNotes: vi.fn(async () => [{
+  listReleaseNotes: vi.fn(async () => ({ hasMore: false, releases: [{
     version: "0.7.3", publishedAt: "2026-08-30T00:00:00Z", notes: "Changes", notesHtml: null, isLatest: true,
-  }]),
+  }] })),
   openRepository: vi.fn(),
   openWebsite: vi.fn(),
   platform: { value: "windows" as "windows" | "macos" },
