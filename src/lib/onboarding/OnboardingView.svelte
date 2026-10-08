@@ -507,13 +507,14 @@
   .capability-note{margin-top:14px}
   .error{position:absolute;bottom:8px;margin:0;color:var(--danger);font-size:var(--fs-ui)}
   /* 工具栏 */
-  footer{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px;border-top:1px solid var(--hairline)}
-  footer button{min-height:30px;padding:7px 12px;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui)}
+  footer{grid-column:1/-1;grid-row:3;min-height:49px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:8px 16px;border-top:1px solid var(--hairline)}
+  footer button{min-height:32px;padding:0 12px;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent;font-size:var(--fs-ui);line-height:var(--lh-tight);white-space:nowrap}
   footer .finish{grid-column:3;justify-self:end;display:inline-flex;align-items:center;justify-content:center;gap:6px}
   footer .finish :global(.finish-spinner){animation:finish-spin .8s linear infinite}
-  .step-button{display:flex;align-items:center;gap:5px;border:1px solid var(--hairline)}
+  .step-button{display:inline-flex;align-items:center;gap:5px}
   .step-button.previous{justify-self:start}
-  .step-button.next{grid-column:3;justify-self:end}
+  .step-button.next{grid-column:3;justify-self:end;color:var(--action-on);background:var(--action);font-weight:650}
+  .step-button.next:hover:not(:disabled){color:var(--action-on);background:var(--action-hover)}
   .step-progress{grid-column:2;color:var(--text-3);font:500 var(--fs-meta)/1 var(--mono);font-variant-numeric:tabular-nums}
   button:hover:not(:disabled){background:var(--bg-hover)}
   button:disabled{opacity:.4}
