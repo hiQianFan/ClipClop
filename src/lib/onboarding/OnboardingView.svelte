@@ -314,6 +314,7 @@
 <header class="titlebar">
   <span class="brand"><span class="brand-mark" aria-hidden="true"></span>ClipClop</span>
   <div class="drag" data-tauri-drag-region></div>
+  {#if !isLastStep}<button class="skip" onclick={() => void finish()} disabled={finishing}>{t("onboarding.skip")}</button>{/if}
   <DropdownMenu.Root bind:open={languageMenuOpen}>
   <div class="language-menu-wrap">
     <DropdownMenu.Trigger bind:ref={languageButton} class={`language-trigger${languageMenuOpen ? " open" : ""}`} aria-label={t("onboarding.language")} onclick={() => languageOpenFocus = "current"} onkeydown={onLanguageButtonKeydown}><Languages size={15} aria-hidden="true" /></DropdownMenu.Trigger>
@@ -444,6 +445,8 @@
   .brand{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:var(--fs-ui);font-weight:600}
   .brand-mark{width:14px;height:14px;background:currentColor;mask:url("/clipclop-mark.svg") center/contain no-repeat;-webkit-mask:url("/clipclop-mark.svg") center/contain no-repeat}
   .drag{flex:1;align-self:stretch}
+  .skip{height:24px;margin-right:4px;padding:0 8px;border:0;border-radius:var(--radius-md);color:var(--text-3);background:transparent;font-size:var(--fs-ui)}
+  .skip:hover:not(:disabled){color:var(--text-1)}
   .language-menu-wrap{position:relative}
   :global(.language-trigger){width:26px;height:24px;display:grid;place-items:center;padding:0;border:0;border-radius:var(--radius-md);color:var(--text-2);background:transparent}
   :global(.language-trigger:hover),:global(.language-trigger.open){color:var(--text-1);background:var(--bg-hover)}

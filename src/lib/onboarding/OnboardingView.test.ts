@@ -180,3 +180,13 @@ describe("Onboarding practice", () => {
     expect(invoke).toHaveBeenCalledWith("preview_onboarding_example", { example: "image", open: true });
   });
 });
+
+describe("Onboarding skip", () => {
+  it("finishes first run from the first step and marks onboarding complete", async () => {
+    const onfinish = vi.fn();
+    render(OnboardingView, { props: { initial: { ...initial, completed_revision: null }, mode: "first_run", onfinish } });
+    await fireEvent.click(screen.getByRole("button", { name: "Skip guide" }));
+    await waitFor(() => expect(onfinish).toHaveBeenCalledWith(false));
+    expect(invoke).toHaveBeenCalledWith("save_onboarding_state", expect.objectContaining({ onboarding: expect.objectContaining({ completed_revision: 1 }) }));
+  });
+});
