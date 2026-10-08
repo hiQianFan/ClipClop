@@ -159,6 +159,11 @@
     list?.focus();
   }
 
+  function keepListFocus(event: MouseEvent) {
+    // Clicking chrome or blank space would blur the list and flash the selected row.
+    if (!(event.target instanceof Element && event.target.closest("button, input, [tabindex]"))) event.preventDefault();
+  }
+
   function restoreAfterPointer() {
     requestAnimationFrame(() => list?.focus());
   }
@@ -179,7 +184,8 @@
 
 <svelte:window onkeydown={onWindowKeydown} onblur={clearWindowFocus} onfocus={restoreWindowFocus} />
 
-<main class="quick-shell">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<main class="quick-shell" onmousedown={keepListFocus}>
   <section class="quick-panel" aria-label={t("quick.title")}>
     <header>
       <span class="brand"><img src="/app-icon.png" alt="" /><strong>{t("quick.title")}</strong></span>
